@@ -95,9 +95,11 @@ Escalations and stops still write a full report so a human can pick up where the
   when no OS sandbox exists; `"strict"` also hides the home directory from repository commands
   except toolchain and cache directories, the temp directory and the run's prefix (credential
   paths stay denied even inside those; folder metadata stays visible because tools resolve their
-  own paths) and, with `sandbox-exec`, limits the install to package registries through an
-  allowlisting CONNECT proxy on 127.0.0.1 (`egress.ts`; refused hosts are recorded; bubblewrap's
-  network namespace cannot reach a host-side proxy, so there the install network stays open);
+  own paths) and limits the install to package registries through an allowlisting CONNECT proxy
+  (`egress.ts`; refused hosts are recorded). With `sandbox-exec` the proxy listens on the host's
+  127.0.0.1, which the sandbox allows; bubblewrap gives the install its own network namespace, so
+  there the proxy listens on a Unix socket in a folder bound into the sandbox and a small forwarder
+  inside offers it on the namespace's 127.0.0.1;
   `"none"` runs bare. The report says which happened. Commands the model discovers during orientation are
   accepted only as plain invocations of known tool runners: no shell operators, no inline code or
   preload flags, no paths outside the checkout, no installs or download-and-run forms. Outside strict mode the install

@@ -1,7 +1,11 @@
 import http from "node:http";
 import net from "node:net";
 import { describe, expect, it } from "vitest";
-import { hostAllowed, REGISTRY_HOSTS, startEgressProxy } from "../src/egress.ts";
+import { mkdtempSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { execShell } from "../src/exec.ts";
+import { forwardedCommand, hostAllowed, REGISTRY_HOSTS, startEgressProxy } from "../src/egress.ts";
 
 /** Sends a CONNECT through the proxy and returns the status line it answers with. */
 function connectThrough(proxyUrl: string, target: string): Promise<string> {
@@ -45,6 +49,35 @@ describe("startEgressProxy", () => {
       });
       expect(plain).toBe(403);
       expect(proxy.denied()).toEqual(expect.arrayContaining(["evil.example.com:443", "localhost:22", "evil.example.com:80"]));
+    } finally {
+      await proxy.close();
+      upstream.close();
+    }
+  });
+});
+
+describe("egress through a Unix socket and an in-sandbox forwarder", () => {
+  // bubblewrap gives the install its own network namespace; the proxy listens on a socket in a folder
+  // bound into the sandbox, and a forwarder inside the namespace offers it on 127.0.0.1.
+  it("runs the command behind a forwarder that reaches the proxy, and enforces the allowlist", async () => {
+    const upstream = net.createServer((s) => s.end("hello from upstream"));
+    await new Promise<void>((r) => upstream.listen(0, "127.0.0.1", () => r()));
+    const upstreamPort = (upstream.address() as net.AddressInfo).port;
+    const socketPath = path.join(mkdtempSync(path.join(os.tmpdir(), "gg-egress-")), "proxy.sock");
+    const proxy = await startEgressProxy(["localhost"], { allowedPorts: [443, upstreamPort], socketPath });
+    try {
+      const probe = [
+        "const net = require('net');",
+        "const u = new URL(process.env.HTTPS_PROXY);",
+        "const ask = (target) => new Promise((resolve) => { const s = net.connect(Number(u.port), u.hostname, () => s.write('CONNECT ' + target + ' HTTP/1.1\\r\\n\\r\\n')); s.once('data', (d) => { resolve(d.toString().split(' ')[1]); s.destroy(); }); s.on('error', () => resolve('error')); });",
+        `ask('localhost:${upstreamPort}').then((a) => ask('evil.example.com:443').then((b) => { console.log('allowed=' + a + ' evil=' + b); process.exit(7); }));`,
+      ].join(" ");
+      const { command, env } = forwardedCommand(`node -e "${probe.replace(/"/g, '\\"')}"`, socketPath, process.execPath);
+      const r = await execShell(command, { cwd: os.tmpdir(), env: { PATH: process.env["PATH"] ?? "", ...env }, timeoutMs: 30_000 });
+      expect(r.output).toContain("allowed=200 evil=403");
+      // The wrapped command's exit status comes through.
+      expect(r.exitCode).toBe(7);
+      expect(proxy.denied()).toContain("evil.example.com:443");
     } finally {
       await proxy.close();
       upstream.close();
