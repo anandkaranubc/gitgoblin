@@ -61,6 +61,12 @@ Code login. Each run costs money, capped by `--max-cost`. Known limits: `discove
 `publish` work with GitHub only; opportunity scores are still being calibrated; `contribute` has been
 tested on a small number of real repositories.
 
+## @gitgoblin/mcp 0.1.6 - 2026-10-23
+
+- Analysis keeps every text parser linear on hostile input. A crafted README heading, issue or
+  document can no longer make `analyze_repository` slow; until now one long heading line could keep
+  an analysis busy for minutes. The five-minute limit from 0.1.5 stays as a backstop.
+
 ## @gitgoblin/mcp 0.1.5 - 2026-10-23
 
 Replaces the withdrawn 0.1.4.
