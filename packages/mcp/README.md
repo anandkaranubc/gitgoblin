@@ -6,7 +6,7 @@ gitgoblin as a [Model Context Protocol](https://modelcontextprotocol.io) server.
 claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
 ```
 
-[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The server is listed in the official MCP Registry as `io.github.anandkaranubc/gitgoblin`. The package is not on npm yet; until it is, use the tarball from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.1) in place of `@gitgoblin/mcp` (`npx -y <tarball url>`), or run it from a clone with `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`. Claude Desktop users install the release's `gitgoblin.mcpb` directly.
+[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The server is listed in the official MCP Registry as `io.github.anandkaranubc/gitgoblin`. The package is not on npm yet; until it is, use the tarball from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.2) in place of `@gitgoblin/mcp` (`npx -y <tarball url>`), or run it from a clone with `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`. Claude Desktop users install the release's `gitgoblin.mcpb` directly.
 
 ## Tools
 
@@ -37,7 +37,7 @@ The repository is often chosen by a model, so the server treats it as hostile: g
 npm test -w @gitgoblin/mcp                                       # protocol tests with fakes, offline
 npm run typecheck -w @gitgoblin/mcp
 GITGOBLIN_E2E=1 npx vitest run --root packages/mcp test/e2e      # the real server over stdio, against GitHub
-npm run bundle -w @gitgoblin/mcp                                 # what `npm pack` ships: dist/gitgoblin-mcp.mjs
+npm run bundle -w @gitgoblin/mcp                                 # what `npm pack` ships: dist/gitgoblin-mcp.mjs and its THIRD_PARTY_NOTICES.md
 npm run mcpb -w @gitgoblin/mcp                                   # the Claude Desktop bundle: dist/gitgoblin.mcpb
 ```
 
