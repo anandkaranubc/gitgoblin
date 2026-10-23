@@ -1,15 +1,20 @@
 import { readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { DiscoveryQuery, DiscoveryResult, Goal, RepoRef } from "@gitgoblin/core";
-import { GOAL_DESCRIPTIONS, GOALS, parseRepoRef } from "@gitgoblin/core";
-import { type DiscoveryEngine, GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
+import { GOAL_DESCRIPTIONS, GOALS, parseRepoRef, sameRepo } from "@gitgoblin/core";
+import type { Effort, Reporter, RunResult } from "@gitgoblin/engine";
+import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/intel";
+import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
 import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
+import { engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
+import { formatRuns, listRuns, readRun } from "./runs.ts";
+import { type IntelModule, type ModuleLoader, isNotInstalled, loadEngine, loadIntel } from "./siblings.ts";
 
 /** What the CLI needs from the engine; tests inject a fake. */
 export interface Engine {
@@ -22,7 +27,7 @@ export interface Runtime {
   openCache(): HttpCache;
   cachePath(): string;
   /** Imports a sibling package that may not be installed; undefined when it is not. */
-  loadModule(name: string): Promise<Record<string, unknown> | undefined>;
+  loadModule: ModuleLoader;
   /** Asks the person at the terminal a question and returns their answer. */
   ask(question: string): Promise<string>;
   stdout(text: string): void;
@@ -52,8 +57,10 @@ const defaultRuntime: Runtime = {
   async loadModule(name) {
     try {
       return (await import(name)) as Record<string, unknown>;
-    } catch {
-      return undefined;
+    } catch (error) {
+      if (isNotInstalled(error, name)) return undefined;
+      const detail = (error instanceof Error ? error.message : String(error)).split("\n")[0];
+      throw new Error(`${name} is installed but failed to load: ${detail}`);
     }
   },
   async ask(question) {
@@ -72,19 +79,15 @@ const defaultRuntime: Runtime = {
   env: process.env,
 };
 
-type Dict = Record<string, unknown>;
-
-function asDict(value: unknown): Dict {
-  return value && typeof value === "object" ? (value as Dict) : {};
-}
+const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
 
 async function confirm(runtime: Runtime, question: string): Promise<boolean> {
   const answer = (await runtime.ask(`${question} [y/N] `)).trim().toLowerCase();
   return answer === "y" || answer === "yes";
 }
 
-/** Discovery's view of a repository, passed to intel and the engine as hints. */
-async function discoveryHints(runtime: Runtime, ref: RepoRef, goal: Goal): Promise<Dict | undefined> {
+/** Discovery's view of a repository, passed to intel as hints it validates rather than trusts. */
+async function discoveryHints(runtime: Runtime, ref: RepoRef, goal: Goal): Promise<AnalysisOptions["hints"]> {
   const session = await runtime.createEngine({ onProgress: () => {} });
   try {
     const result = await session.engine.explain(ref, goal);
@@ -92,13 +95,6 @@ async function discoveryHints(runtime: Runtime, ref: RepoRef, goal: Goal): Promi
   } finally {
     session.close();
   }
-}
-
-function opportunityLabel(opportunity: Dict): string {
-  const issue = asDict(opportunity.issue);
-  const number = opportunity.issueNumber ?? issue.number;
-  const title = opportunity.title ?? opportunity.summary ?? issue.title ?? "(untitled)";
-  return `${number !== undefined ? `#${String(number)} ` : ""}${String(title)}`;
 }
 
 function readText(path: string): string | undefined {
@@ -127,6 +123,11 @@ function repoArgument(value: string): RepoRef {
   return ref;
 }
 
+function effortArgument(value: string): Effort {
+  if ((EFFORTS as readonly string[]).includes(value)) return value as Effort;
+  throw new InvalidArgumentError(`Expected one of ${EFFORTS.join(", ")}, got "${value}"`);
+}
+
 function explainFailure(error: unknown, runtime: Runtime): string {
   if (error instanceof RateLimitError) {
     const hint = runtime.env.GITHUB_TOKEN || runtime.env.GH_TOKEN ? "Try again after the reset." : "Set GITHUB_TOKEN or run `gh auth login` for a much higher limit.";
@@ -136,9 +137,69 @@ function explainFailure(error: unknown, runtime: Runtime): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function slug(ref: RepoRef): string {
+  return `${ref.owner}/${ref.name}`;
+}
+
+/** Where the engine keeps runs and clones. One default for every command, so a run started by `contribute` is found by `publish`. */
+function resolveWorkdir(runtime: Runtime, option: string | undefined): string {
+  return resolve(option ?? runtime.env.GITGOBLIN_WORKDIR ?? join(homedir(), ".gitgoblin"));
+}
+
+/** The engine reports progress through this; the same shape its own CLI prints. */
+function reporterFor(runtime: Runtime): Reporter {
+  return {
+    phase: (name, detail) => runtime.stderr(`==> ${detail ? `${name}: ${detail}` : name}`),
+    info: (message) => runtime.stderr(`    ${message}`),
+    warn: (message) => runtime.stderr(` !! ${message}`),
+  };
+}
+
+/** One line for a failed parse. A zod error lists its issues as JSON; name the first field instead. */
+function describeParseError(error: unknown): string {
+  const issues = (error as { issues?: unknown }).issues;
+  if (Array.isArray(issues) && issues.length > 0) {
+    const first = issues[0] as { path?: unknown[]; message?: string };
+    const path = Array.isArray(first.path) && first.path.length > 0 ? first.path.join(".") : "report";
+    return `${path}: ${first.message ?? "invalid"}${issues.length > 1 ? ` (and ${issues.length - 1} more)` : ""}`;
+  }
+  return (error instanceof Error ? error.message : String(error)).split("\n")[0] ?? "invalid";
+}
+
+/** A report saved by `analyze --json --out`, checked against intel's schema and against the repository asked for. */
+function readSavedReport(intel: IntelModule, file: string, ref: RepoRef): AnalysisReport {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(file, "utf8"));
+  } catch (error) {
+    throw new Error(`${file} is not an analysis report: ${describeParseError(error)}`);
+  }
+  let report: AnalysisReport;
+  try {
+    report = intel.AnalysisReport.parse(parsed);
+  } catch (error) {
+    throw new Error(`${file} is not an analysis report (expected the JSON written by \`gitgoblin analyze --json --out\`): ${describeParseError(error)}`);
+  }
+  const repo = report.profile.repo;
+  if (!sameRepo({ host: repo.host, owner: repo.owner, name: repo.name }, ref)) throw new Error(`report ${file} is for ${repo.owner}/${repo.name}, not ${slug(ref)}`);
+  return report;
+}
+
+/** What to type next, printed on stderr so piped output stays clean. */
+function nextStepAfterAnalyze(report: AnalysisReport, ref: RepoRef, savedTo: string | undefined): string | undefined {
+  if (report.opportunities.length === 0) return undefined;
+  if (savedTo) return `Next: gitgoblin contribute ${slug(ref)} --report ${savedTo}`;
+  const best = report.opportunities[recommendedRank(report) - 1];
+  if (!best) return undefined;
+  return [
+    `Next: gitgoblin contribute ${slug(ref)} --opportunity ${best.id}`,
+    `      (or save this report with --json --out report.json and pass --report report.json to skip re-analysis)`,
+  ].join("\n");
+}
+
 export function buildProgram(runtime: Runtime): Command {
   const program = new Command("gitgoblin")
-    .description("Discover public software projects worth your time, for whatever you are trying to do.")
+    .description("Find open-source projects worth your time, work out what they need, and prepare a pull request you approve.")
     .version("0.1.0")
     .configureOutput({ writeOut: (s) => runtime.stdout(s.trimEnd()), writeErr: (s) => runtime.stderr(s.trimEnd()) })
     .exitOverride();
@@ -178,6 +239,8 @@ export function buildProgram(runtime: Runtime): Command {
         else {
           runtime.stdout(formatResults(results, { color: runtime.color }));
           if (query.goal === "explore") runtime.stderr(`seed ${query.randomSeed}: pass --seed ${query.randomSeed} to see these again`);
+          const first = results[0];
+          if (first && runtime.isInteractive) runtime.stderr(`Next: gitgoblin analyze ${first.repo.owner}/${first.repo.name}   (profile it and find concrete work to do)`);
         }
         if (options.verbose) runtime.stderr(`GitHub rate limits: ${session.rateLimits() || "unknown"}`);
       } finally {
@@ -200,7 +263,7 @@ export function buildProgram(runtime: Runtime): Command {
       });
       try {
         const result = await session.engine.explain(ref, options.goal);
-        if (!result) throw new Error(`${ref.owner}/${ref.name} was not found on ${ref.host}.`);
+        if (!result) throw new Error(`${slug(ref)} was not found on ${ref.host}.`);
         runtime.stdout(options.json ? JSON.stringify(result, null, 2) : formatExplanation(result, { color: runtime.color }));
       } finally {
         session.close();
@@ -264,134 +327,204 @@ export function buildProgram(runtime: Runtime): Command {
 
   program
     .command("analyze")
-    .description("Deep-dive one repository with @gitgoblin/intel: profile, conventions and contribution opportunities")
+    .description("Profile one repository and find evidence-backed work to do in it")
     .argument("<repo>", "owner/name or URL", repoArgument)
     .option("-g, --goal <goal>", `discovery goal used for hints, one of ${GOALS.join(", ")}`, goalArgument, "contribute")
+    .option("--local <path>", "analyze an existing checkout at this path instead of cloning")
     .option("--max <n>", "maximum opportunities in the report", "15")
     .option("--no-links", "skip checking external links")
     .option("--no-deps", "skip dependency and vulnerability checks")
     .option("--out <file>", "write the report to a file instead of stdout")
-    .option("--json", "print the AnalysisReport as JSON instead of Markdown")
+    .option("--json", "print the AnalysisReport as JSON instead of Markdown (what `contribute --report` reads)")
     .option("-v, --verbose", "show analysis progress on stderr")
-    .action(async (ref: RepoRef, options: { goal: Goal; max: string; links: boolean; deps: boolean; out?: string; json?: boolean; verbose?: boolean }) => {
-      const intel = await runtime.loadModule("@gitgoblin/intel");
-      if (typeof intel?.analyzeRepository !== "function") {
-        throw new Error("The @gitgoblin/intel package is not available in this install, so analyze cannot run.");
-      }
+    .action(async (ref: RepoRef, options: { goal: Goal; local?: string; max: string; links: boolean; deps: boolean; out?: string; json?: boolean; verbose?: boolean }) => {
+      const intel = await loadIntel(runtime.loadModule);
+      if (!intel) throw new Error("The @gitgoblin/intel package is not available in this install, so analyze cannot run.");
       const maxOpportunities = Number(options.max);
       if (!Number.isInteger(maxOpportunities) || maxOpportunities < 1) throw new Error("--max must be a positive integer");
       const hints = await discoveryHints(runtime, ref, options.goal);
-      const analyze = intel.analyzeRepository as (r: RepoRef, o: Dict) => Promise<unknown>;
-      const report = await analyze(ref, {
+      const target: RepoRefInput = options.local ? { ...ref, localPath: resolve(options.local) } : ref;
+      const report = await intel.analyzeRepository(target, {
         hints,
         maxOpportunities,
         checkLinks: options.links,
         dependencyChecks: options.deps,
         log: options.verbose ? (message: string) => runtime.stderr(message) : undefined,
       });
-      const render = typeof intel.renderMarkdown === "function" ? (intel.renderMarkdown as (r: unknown) => string) : undefined;
-      const text = options.json || !render ? JSON.stringify(report, null, 2) : render(report);
+      const text = options.json ? JSON.stringify(report, null, 2) : intel.renderMarkdown(report);
       if (options.out) {
         await writeFile(options.out, `${text}\n`);
         runtime.stderr(`wrote ${options.out}`);
       } else {
         runtime.stdout(text);
       }
+      const next = nextStepAfterAnalyze(report, ref, options.out && options.json ? options.out : undefined);
+      if (next) runtime.stderr(next);
     });
 
   program
     .command("contribute")
-    .description("Analyze a repository, let the engine draft a change, and open a draft pull request only after you approve")
+    .description("Pick one opportunity, let the engine draft the change in a local clone, and open a draft pull request only after you approve")
     .argument("<repo>", "owner/name or URL", repoArgument)
+    .option("--report <file>", "reuse a report saved by `analyze --json --out` instead of analyzing again")
+    .option("--opportunity <id>", "work on this opportunity: its id from the report, or its rank in the list")
     .option("--issue <n>", "work on the opportunity for this issue number")
     .option("--max-cost <usd>", "spending cap for the agent run", "2")
     .option("--workdir <dir>", "where the engine keeps runs and clones (default: $GITGOBLIN_WORKDIR or ~/.gitgoblin)")
     .option("--model <id>", "model for the engine")
-    .option("--effort <level>", "effort for the engine")
+    .option("--effort <level>", `effort for the engine, one of ${EFFORTS.join(", ")}`, effortArgument)
     .option("-g, --goal <goal>", "discovery goal used for hints", goalArgument, "contribute")
-    .action(async (ref: RepoRef, options: { issue?: string; maxCost: string; workdir?: string; model?: string; effort?: string; goal: Goal }) => {
+    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost: string; workdir?: string; model?: string; effort?: Effort; goal: Goal }) => {
       if (!runtime.canPrompt) {
         throw new Error("contribute needs an interactive terminal: it asks before running an agent and again before publishing anything.");
       }
       const maxCostUsd = Number(options.maxCost);
       if (!(maxCostUsd > 0)) throw new Error("--max-cost must be a positive number of dollars");
-      const [intel, engine] = await Promise.all([runtime.loadModule("@gitgoblin/intel"), runtime.loadModule("@gitgoblin/engine")]);
-      const missing = [
-        typeof intel?.analyzeRepository === "function" ? undefined : "@gitgoblin/intel",
-        typeof engine?.runContribution === "function" && typeof engine?.publishRun === "function" ? undefined : "@gitgoblin/engine",
-      ].filter((name): name is string => name !== undefined);
-      if (missing.length > 0) throw new Error(`contribute needs ${missing.join(" and ")}, not available in this install.`);
-      const workdir = options.workdir ?? runtime.env.GITGOBLIN_WORKDIR ?? join(homedir(), ".gitgoblin");
+      const [intel, engine] = await Promise.all([loadIntel(runtime.loadModule), loadEngine(runtime.loadModule)]);
+      const missing = [intel ? undefined : "@gitgoblin/intel", engine ? undefined : "@gitgoblin/engine"].filter((name): name is string => name !== undefined);
+      if (!intel || !engine) throw new Error(`contribute needs ${missing.join(" and ")}, not available in this install.`);
+      const workdir = resolveWorkdir(runtime, options.workdir);
+      if (options.issue !== undefined && options.opportunity !== undefined) throw new Error("Give either --issue or --opportunity, not both.");
 
-      runtime.stderr(`Analyzing ${ref.owner}/${ref.name}...`);
-      const hints = await discoveryHints(runtime, ref, options.goal);
-      const report = asDict(await (intel!.analyzeRepository as (r: RepoRef, o: Dict) => Promise<unknown>)(ref, { hints }));
-      const opportunities = (Array.isArray(report.opportunities) ? report.opportunities : []).map(asDict);
-      if (opportunities.length === 0) throw new Error("No contribution opportunities found.");
-
-      let opportunity: Dict | undefined;
-      if (options.issue !== undefined) {
-        opportunity = opportunities.find((o) => String(o.issueNumber ?? asDict(o.issue).number) === options.issue);
-        if (!opportunity) throw new Error(`No opportunity for issue #${options.issue}. Available: ${opportunities.map(opportunityLabel).join("; ")}`);
-      } else if (opportunities.length === 1) {
-        opportunity = opportunities[0];
+      let report: AnalysisReport;
+      if (options.report) {
+        report = readSavedReport(intel, options.report, ref);
       } else {
-        opportunities.forEach((o, i) => runtime.stdout(`${i + 1}. ${opportunityLabel(o)}`));
-        const picked = Number((await runtime.ask(`Which opportunity? [1-${opportunities.length}] `)).trim() || "1");
-        opportunity = opportunities[picked - 1];
+        runtime.stderr(`Analyzing ${slug(ref)}...`);
+        const hints = await discoveryHints(runtime, ref, options.goal);
+        report = await intel.analyzeRepository(ref, { hints, log: runtime.isInteractive ? (message: string) => runtime.stderr(message) : undefined });
       }
-      if (!opportunity) throw new Error("No opportunity chosen.");
-      runtime.stdout(`Opportunity: ${opportunityLabel(opportunity)}`);
+      if (report.opportunities.length === 0) throw new Error(`No contribution opportunities found in ${slug(ref)}.`);
 
+      let opportunity = selectOpportunity(report, { issue: options.issue, opportunity: options.opportunity });
+      if (!opportunity) {
+        runtime.stdout(formatOpportunities(report, { color: runtime.color }));
+        const recommended = recommendedRank(report);
+        for (let attempt = 1; !opportunity; attempt += 1) {
+          const answer = (await runtime.ask(`Which opportunity? [1-${report.opportunities.length}, or an id; Enter for ${recommended}] `)).trim();
+          try {
+            opportunity = selectOpportunity(report, { opportunity: answer || String(recommended) });
+          } catch (error) {
+            if (attempt >= 3) throw error;
+            runtime.stdout(error instanceof Error ? error.message : String(error));
+          }
+        }
+      }
+      runtime.stdout(`Opportunity: ${opportunity.title}`);
+      const refusal = engineWillRefuse(opportunity);
+      if (refusal) runtime.stdout(`The engine will refuse this one at intake: ${refusal}.`);
+
+      // The engine clones the repository, unless the report came from `analyze --local`, in which case it
+      // attaches a git worktree to that checkout. The person approves what will actually happen.
+      const localPath = report.profile.repo.localPath;
+      const where = localPath ? `a git worktree of ${localPath}` : "a local clone";
       const proceed = await confirm(
         runtime,
-        `Run an AI agent against ${ref.owner}/${ref.name} in a local clone, spending up to $${maxCostUsd.toFixed(2)}? Nothing is published without another explicit yes.`,
+        `${refusal ? "Run it anyway" : "Run an AI agent"} against ${slug(ref)} in ${where}, spending up to $${maxCostUsd.toFixed(2)}? Nothing is published without another explicit yes.`,
       );
       if (!proceed) {
         runtime.stdout("Stopped before running the engine.");
         return;
       }
 
-      const run = engine!.runContribution as (input: Dict, options: Dict) => Promise<unknown>;
-      const result = asDict(
-        await run(
-          { profile: report.profile, opportunity },
-          {
-            workdir,
-            limits: { maxCostUsd },
-            model: options.model,
-            effort: options.effort,
-            approvePlan: async (plan: unknown) =>
-              confirm(runtime, `Proposed plan:\n${typeof plan === "string" ? plan : JSON.stringify(plan, null, 2)}\nProceed with this plan?`),
-            reporter: (event: unknown) => runtime.stderr(typeof event === "string" ? event : JSON.stringify(event)),
-          },
-        ),
+      const result = await engine.runContribution(
+        { profile: report.profile, opportunity },
+        {
+          workdir,
+          limits: { maxCostUsd },
+          ...(options.model ? { model: options.model } : {}),
+          ...(options.effort ? { effort: options.effort } : {}),
+          approvePlan: async (plan) => confirm(runtime, `\n${formatPlan(plan)}\n\nImplement this plan?`),
+          reporter: reporterFor(runtime),
+        },
       );
 
-      const runDir = String(result.runDir ?? "");
-      runtime.stdout(`status: ${String(result.status)}${result.reason ? ` (${String(result.reason)})` : ""}`);
-      if (runDir) runtime.stdout(`run: ${runDir}`);
-      runtime.stdout(`cost: $${Number(result.costUsd ?? 0).toFixed(2)}`);
-      for (const question of Array.isArray(result.questions) ? result.questions : []) runtime.stdout(`question: ${String(question)}`);
-      const title = runDir ? readText(join(runDir, "pr-title.txt")) : undefined;
-      const body = runDir ? readText(join(runDir, "pr.md")) : undefined;
-      if (title || body) runtime.stdout(`\n${[title, body].filter(Boolean).join("\n\n")}`);
-
+      runtime.stdout("");
+      for (const line of describeRun(result)) runtime.stdout(line);
+      const reportText = readText(join(result.runDir, "report.md"));
+      if (reportText) runtime.stdout(`\n${reportText}`);
+      if (result.status === "failed") throw new Error(`the run failed: ${result.reason}`);
       if (result.status !== "awaiting_approval") {
         runtime.stdout("Nothing to publish.");
         return;
       }
+
+      const title = readText(join(result.runDir, "pr-title.txt"));
+      const body = readText(join(result.runDir, "pr.md"));
+      runtime.stdout(`\nProposed pull request${title ? `: ${title}` : ""}\n`);
+      if (body) runtime.stdout(body);
+      runtime.stdout(`\nDiff: ${join(result.runDir, "diff.patch")}`);
+      runtime.stdout(`Read the diff and the report before publishing. To decide later: gitgoblin publish ${result.runId}${options.workdir ? ` --workdir ${workdir}` : ""}`);
+
       const publish = await confirm(runtime, "Open a draft pull request on GitHub under your account?");
       if (!publish) {
-        runtime.stdout(`Not published. The change stays in ${runDir || "the run directory"}.`);
+        runtime.stdout(`Not published. The change stays in ${result.runDir}.`);
         return;
       }
-      const publishRun = engine!.publishRun as (runId: unknown, options: Dict) => Promise<unknown>;
-      const published = asDict(await publishRun(result.runId, { workdir, approved: true, draft: true }));
-      runtime.stdout(`Draft pull request: ${String(published.url ?? "(no url returned)")}`);
+      const published = await engine.publishRun(result.runId, { workdir, approved: true, draft: true, log: (line) => runtime.stderr(line) });
+      runtime.stdout(`Draft pull request: ${published.url}`);
+    });
+
+  program
+    .command("runs")
+    .description("List the contribution runs under the workdir and what became of each")
+    .option("--workdir <dir>", "where the engine keeps runs (default: $GITGOBLIN_WORKDIR or ~/.gitgoblin)")
+    .action((options: { workdir?: string }) => {
+      const workdir = resolveWorkdir(runtime, options.workdir);
+      runtime.stdout(formatRuns(listRuns(workdir), { color: runtime.color }, options.workdir ? ` --workdir ${workdir}` : ""));
+    });
+
+  program
+    .command("show")
+    .description("Show what a run did: its report, or with --diff or --pr the change and the pull request text")
+    .argument("<runId>", "a run id from `gitgoblin runs`")
+    .option("--diff", "print the prepared change as a patch")
+    .option("--pr", "print the pull request title and description")
+    .option("--workdir <dir>", "where the engine keeps runs (default: $GITGOBLIN_WORKDIR or ~/.gitgoblin)")
+    .action((runId: string, options: { diff?: boolean; pr?: boolean; workdir?: string }) => {
+      const workdir = resolveWorkdir(runtime, options.workdir);
+      const run = readRun(workdir, runId);
+      if (!run) throw new Error(`no run "${runId}" under ${workdir}; \`gitgoblin runs\` lists them.`);
+      if (options.diff) runtime.stdout(run.diff ?? `run ${runId} prepared no change (${run.result.status}: ${run.result.reason})`);
+      else if (options.pr) runtime.stdout([run.prTitle, run.prBody].filter(Boolean).join("\n\n") || `run ${runId} prepared no pull request (${run.result.status}: ${run.result.reason})`);
+      else runtime.stdout(run.report ?? JSON.stringify(run.result, null, 2));
+    });
+
+  program
+    .command("publish")
+    .description("Push a prepared run's change and open a pull request under your account, after you confirm")
+    .argument("<runId>", "a run id from `gitgoblin runs`")
+    .option("--ready", "open the pull request ready for review instead of as a draft")
+    .option("--workdir <dir>", "where the engine keeps runs (default: $GITGOBLIN_WORKDIR or ~/.gitgoblin)")
+    .action(async (runId: string, options: { ready?: boolean; workdir?: string }) => {
+      if (!runtime.canPrompt) throw new Error("publish needs an interactive terminal: it asks before pushing anything.");
+      const workdir = resolveWorkdir(runtime, options.workdir);
+      const run = readRun(workdir, runId);
+      if (!run) throw new Error(`no run "${runId}" under ${workdir}; \`gitgoblin runs\` lists them.`);
+      if (run.result.status !== "awaiting_approval") throw new Error(`run ${runId} is ${run.result.status} (${run.result.reason}), so there is nothing to publish.`);
+      const engine = await loadEngine(runtime.loadModule);
+      if (!engine) throw new Error("publish needs @gitgoblin/engine, not available in this install.");
+
+      runtime.stdout(`Pull request${run.prTitle ? `: ${run.prTitle}` : ""}\n`);
+      if (run.prBody) runtime.stdout(run.prBody);
+      runtime.stdout(`\nDiff: ${run.diffPath}\nReport: ${join(run.dir, "report.md")}`);
+      const draft = !options.ready;
+      const ok = await confirm(runtime, `Push this change and open a ${draft ? "draft" : "ready-for-review"} pull request on GitHub under your account?`);
+      if (!ok) {
+        runtime.stdout("Not published.");
+        return;
+      }
+      const published = await engine.publishRun(runId, { workdir, approved: true, draft, log: (line) => runtime.stderr(line) });
+      runtime.stdout(`${draft ? "Draft pull request" : "Pull request"}: ${published.url}`);
     });
 
   return program;
+}
+
+function describeRun(result: RunResult): string[] {
+  const lines = [`Run ${result.status}: ${result.reason}`, `Cost: $${result.costUsd.toFixed(2)} in ${Math.round(result.durationMs / 1000)}s`, `Run directory: ${result.runDir}`];
+  for (const question of result.questions) lines.push(`Question for you: ${question}`);
+  return lines;
 }
 
 /** Runs the CLI and returns the exit code. */
