@@ -162,12 +162,26 @@ export function afterPlan(plan: ChangePlan, task: Task, limits: Limits): Decisio
   return { action: "continue" };
 }
 
+/** Where most of a change lives, by top-level directory: `[".pnpm-store/ (18925)", "src/ (1)"]`. */
+export function topDirectories(files: string[], n = 3): string[] {
+  const counts = new Map<string, number>();
+  for (const file of files) {
+    const slash = file.indexOf("/");
+    const key = slash === -1 ? "(top level)" : `${file.slice(0, slash)}/`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, n)
+    .map(([dir, count]) => `${dir} (${count})`);
+}
+
 /** The plan is a promise; the diff is what happened. The same limits apply to both. */
 export function afterDiff(diff: DiffStats, task: Task, limits: Limits): Decision {
   if (diff.files > limits.maxFilesChanged) {
     return {
       action: "escalate",
-      reason: `the change touches ${diff.files} files, limit is ${limits.maxFilesChanged}`,
+      reason: `the change touches ${diff.files} files, limit is ${limits.maxFilesChanged} (mostly ${topDirectories(diff.changedFiles).join(", ")})`,
       questions: ["Is a change of this size wanted, or did the agent run a formatter or generator over the tree?"],
     };
   }
