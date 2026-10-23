@@ -18,7 +18,9 @@ function fakeFetch(routes: Record<string, unknown>): typeof fetch & { calls: str
 
 describe("referencedIssues", () => {
   it("reads the issues a pull request says it fixes", () => {
-    expect(referencedIssues("Fixes #12 and closes #7. See #12 again. Related to #99")).toEqual([12, 7, 99]);
+    expect(referencedIssues("Fixes #12 and closes #7. See #12 again. Related to #99")).toEqual([12, 7]);
+    // A mention is not a fix: "see #45 for background" must not mark #45 resolved when the PR merges.
+    expect(referencedIssues("See #45 for background; refs #46; addresses #47")).toEqual([]);
     expect(referencedIssues("Bump version to 1.2.3")).toEqual([]);
     expect(referencedIssues(null)).toEqual([]);
   });
@@ -77,7 +79,66 @@ describe("fetchGitea", () => {
     expect(samples.openIssues[0]?.lastComments[0]).toMatchObject({ association: "MEMBER", body: "can reproduce" });
     expect(samples.openIssues[0]?.linkedPrs).toEqual([{ number: 8, url: "p8", state: "OPEN", isDraft: false, updatedAt: "2026-01-02T00:00:00Z" }]);
     expect(samples.openPrs[0]?.closingIssues).toEqual([5]);
-    expect(samples.openPrs[0]).toMatchObject({ mergeable: "CONFLICTING", reviews: [{ state: "REQUEST_CHANGES", association: "MEMBER" }] });
+    // Gitea's REQUEST_CHANGES is GitHub's CHANGES_REQUESTED, the name the stale-PR analyzer reads.
+    expect(samples.openPrs[0]).toMatchObject({ mergeable: "CONFLICTING", reviews: [{ state: "CHANGES_REQUESTED", association: "MEMBER" }] });
     expect(samples.closedPrs[0]).toMatchObject({ state: "MERGED", association: "NONE" });
+  });
+});
+
+describe("forges that hide comments without a token", () => {
+  it("stops after the first refused notes request and marks comments as unread, not absent", async () => {
+    const calls: string[] = [];
+    const issue = (iid: number) => ({ iid, title: `Bug ${iid}`, description: "boom", state: "opened", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-02-01T00:00:00Z", closed_at: null, labels: [], assignees: [], author: { username: "ext" }, closed_by: null, user_notes_count: 7, upvotes: 0, merge_requests_count: 0, discussion_locked: null, web_url: `u${iid}` });
+    const fetchImpl = (async (input: string | URL | Request) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes("/notes")) return new Response('{"message":"401 Unauthorized"}', { status: 401 });
+      if (url.includes("/issues?state=opened")) return Response.json([issue(1), issue(2), issue(3)]);
+      if (url.includes("/issues?state=closed")) return Response.json([{ ...issue(9), state: "closed", closed_by: { username: "ext" }, user_notes_count: 0 }]);
+      if (/\/projects\/o%2Fr$/.test(url)) return Response.json({ default_branch: "main", description: "d", star_count: 1, forks_count: 0, created_at: "2020-01-01T00:00:00Z", last_activity_at: "2026-02-01T00:00:00Z", web_url: "w" });
+      return Response.json([]);
+    }) as typeof fetch;
+    const { samples, notes } = await fetchGitLab("gitlab.com", "o", "r", { fetchImpl, counter: { requests: 0 } });
+    expect(calls.filter((u) => u.includes("/notes"))).toHaveLength(1);
+    expect(samples.openIssues.map((i) => i.commentsFetched)).toEqual([false, false, false]);
+    expect(notes?.join(" ")).toMatch(/does not show issue and merge request comments without a token/);
+    expect(notes?.join(" ")).toMatch(/whether the project is archived/);
+    // ext closed their own issue: that does not make them a maintainer.
+    expect(samples.openIssues[0]?.association).toBe("NONE");
+  });
+
+  it("recognises self-hosted GitLab by the 401 its version endpoint returns", async () => {
+    const { detectForge } = await import("../src/forge/index.ts");
+    const fetchImpl = (async (input: string | URL | Request) => (String(input).includes("/api/v4/version") ? new Response('{"message":"401 Unauthorized"}', { status: 401 }) : new Response("nope", { status: 404 }))) as typeof fetch;
+    expect(await detectForge("salsa.debian.org", { fetchImpl })).toBe("gitlab");
+  });
+
+  it("files Gitea pull request comments under their pull request", async () => {
+    const fetchImpl = fakeFetch({
+      "/repos/o/r/pulls?state=open": [{ number: 8, title: "PR", body: "", state: "open", draft: false, merged: false, merged_at: null, closed_at: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-02T00:00:00Z", mergeable: true, user: { login: "ext" }, merged_by: null, head: { ref: "b" }, labels: [], comments: 1, html_url: "p8" }],
+      "/repos/o/r/issues/comments?since": [{ issue_url: "", pull_request_url: "https://codeberg.org/o/r/pulls/8", user: { login: "owner" }, body: "please rebase", created_at: "2026-01-02T00:00:00Z" }],
+      "/repos/o/r": { description: "", stars_count: 0, forks_count: 0, archived: false, has_issues: true, open_issues_count: 0, open_pr_counter: 1, default_branch: "main", created_at: "2020-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", fork: false, template: false, mirror: false, owner: { login: "owner" }, html_url: "h" },
+    });
+    const { samples } = await fetchGitea("codeberg.org", "o", "r", { fetchImpl, counter: { requests: 0 } });
+    expect(samples.openPrs[0]?.lastComments.map((c) => c.body)).toEqual(["please rebase"]);
+    expect(fetchImpl.calls.find((u) => u.includes("issues/comments"))).toMatch(/page=1&limit=50/);
+  });
+});
+
+describe("unread comments in profile statistics and triage", () => {
+  it("leaves items whose comments were not read out of response times and triage", async () => {
+    const { computeActivity } = await import("../src/profile/activity.ts");
+    const { assessIssue } = await import("../src/analyzers/issues.ts");
+    const now = new Date("2026-10-22T00:00:00Z");
+    const pr = { number: 1, title: "x", url: "u", state: "MERGED", isDraft: false, merged: true, mergedAt: "2026-01-02T00:00:00Z", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-02T00:00:00Z", mergeable: "UNKNOWN", author: { login: "ext", isBot: false }, association: "NONE", additions: 0, deletions: 0, changedFiles: 1, headRefName: "b", labels: [], closingIssues: [], firstComments: [], lastComments: [], reviews: [], commentsFetched: false };
+    const samples = { isMirror: false, openIssueCount: 0, openPrCount: 0, labels: [], openIssues: [], closedIssues: [], openPrs: [], closedPrs: [pr] };
+    const a = computeActivity({ commits: [], samples: samples as never, releases: [], pushedAt: undefined, openIssues: 0, openPrs: 0, now });
+    expect(a.medianPrResponseHours).toBeUndefined();
+    // Most issues unread: the readable ones are the unanswered ones, so the median would mislead.
+    const unread = (n: number, fetched: boolean) => ({ number: n, title: "t", url: "u", body: "", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-02T00:00:00Z", locked: false, author: { login: "ext", isBot: false }, association: "NONE", labels: [], assignees: [], reactions: 0, commentCount: fetched ? 0 : 4, firstComments: [], lastComments: [], linkedPrs: [], commentsFetched: fetched });
+    const issueSamples = { ...samples, closedPrs: [], openIssues: [unread(1, true), unread(2, false), unread(3, false), unread(4, false)] };
+    expect(computeActivity({ commits: [], samples: issueSamples as never, releases: [], pushedAt: undefined, openIssues: 4, openPrs: 0, now }).medianIssueResponseHours).toBeUndefined();
+    const issue = { number: 3, title: "Search ignores accents", url: "https://gitlab.com/o/r/-/issues/3", body: "Searching for cafe does not find café.", createdAt: "2026-06-01T00:00:00Z", updatedAt: "2026-06-01T00:00:00Z", locked: false, author: { login: "ext", isBot: false }, association: "NONE", labels: [], assignees: [], reactions: 0, commentCount: 7, firstComments: [], lastComments: [], linkedPrs: [], commentsFetched: false };
+    expect(assessIssue(issue as never, now, true, "https://gitlab.com/o/r").kind).not.toBe("triage");
   });
 });

@@ -30,7 +30,7 @@ export async function forgeJson<T>(url: string, options: ForgeFetchOptions): Pro
     signal: AbortSignal.timeout(options.timeoutMs ?? 20_000),
   });
   options.counter.requests++;
-  if (!response.ok) throw new Error(`${response.status} for ${url}`);
+  if (!response.ok) throw Object.assign(new Error(`${response.status} for ${url}`), { status: response.status });
   const value = (await response.json()) as T;
   await options.cache?.set(key, value);
   return value;
@@ -45,11 +45,30 @@ export function associationOf(login: string | undefined, maintainers: Set<string
   return login && maintainers.has(login) ? "MEMBER" : "NONE";
 }
 
-/** Issue numbers a pull request says it fixes or closes, from its description. */
+/**
+ * Issue numbers a pull request says it closes, from its description: the closing keywords GitHub,
+ * GitLab and Gitea honour. "See #45" or "related to #45" is a mention, not a fix.
+ */
 export function referencedIssues(body: string | null | undefined): number[] {
   const out = new Set<number>();
-  for (const m of (body ?? "").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|related to|see|addresses|for)\s*:?\s*#(\d{1,6})\b/gi)) out.add(Number(m[1]));
+  for (const m of (body ?? "").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)[ \t]{0,3}:?[ \t]{0,3}#(\d{1,6})\b/gi)) out.add(Number(m[1]));
   return [...out];
+}
+
+/** A forge list endpoint's answer as an array; anything else (an error object, HTML parsed as JSON) is no items. */
+export async function forgeList<T>(url: string, options: ForgeFetchOptions): Promise<T[]> {
+  try {
+    const value = await forgeJson<unknown>(url, options);
+    return Array.isArray(value) ? (value as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** HTTP status of a failed forge request, when there was a response. */
+export function statusOf(error: unknown): number | undefined {
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" ? status : undefined;
 }
 
 export function commentOf(login: string | undefined, createdAt: string, body: string | undefined, maintainers: Set<string>): CommentSample {

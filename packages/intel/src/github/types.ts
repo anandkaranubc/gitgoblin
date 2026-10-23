@@ -72,6 +72,8 @@ export interface IssueSample {
   /** Latest comments, for claim detection and maintainer stance. */
   lastComments: CommentSample[];
   linkedPrs: LinkedPr[];
+  /** False when the item has comments that could not be read (forge APIs without a token); reply and response statistics skip it. */
+  commentsFetched?: boolean | undefined;
 }
 
 export interface ReviewSample {
@@ -104,6 +106,8 @@ export interface PrSample {
   firstComments: CommentSample[];
   lastComments: CommentSample[];
   reviews: ReviewSample[];
+  /** False when comments and reviews exist but were not read (other forges); response statistics skip it. */
+  commentsFetched?: boolean | undefined;
 }
 
 export interface LabelSample {
