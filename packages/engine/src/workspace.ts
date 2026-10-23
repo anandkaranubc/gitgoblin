@@ -20,13 +20,19 @@ export interface Workspace {
 export class GitError extends Error {
   readonly args: string[];
   readonly output: string;
+  /** True when the command succeeded but produced more output than the caller allowed. */
+  readonly exceeded: boolean;
 
-  constructor(args: string[], output: string) {
-    super(`git ${args.join(" ")} failed: ${output.trim().split("\n").slice(-3).join(" | ")}`);
+  constructor(args: string[], output: string, exceeded = false) {
+    super(exceeded ? `git ${args.join(" ")} produced more output than allowed; output exceeded the cap` : `git ${args.join(" ")} failed: ${output.trim().split("\n").slice(-3).join(" | ")}`);
     this.args = args;
     this.output = output;
+    this.exceeded = exceeded;
   }
 }
+
+/** Patches larger than this are escalated rather than reviewed; a reviewer cannot read them anyway. */
+export const DEFAULT_MAX_PATCH_BYTES = 32 * 1024 * 1024;
 
 /**
  * The agent can edit the workspace, so the engine never lets repository-local git configuration
@@ -34,9 +40,11 @@ export class GitError extends Error {
  */
 const HARDENING = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
 
-export async function git(args: string[], cwd: string, env: Record<string, string>, timeoutMs = 5 * 60_000): Promise<string> {
-  const result = await execFile("git", [...HARDENING, ...args], { cwd, env, timeoutMs });
+export async function git(args: string[], cwd: string, env: Record<string, string>, timeoutMs = 5 * 60_000, maxOutputBytes?: number): Promise<string> {
+  const result = await execFile("git", [...HARDENING, ...args], { cwd, env, timeoutMs, ...(maxOutputBytes ? { maxOutputBytes } : {}) });
   if (result.exitCode !== 0) throw new GitError(args, result.output);
+  // A silently truncated diff would hide the start of the patch from the reviewer and the secret scan.
+  if (result.truncated) throw new GitError(args, result.output, true);
   return result.output.trimEnd();
 }
 
@@ -121,9 +129,9 @@ export async function diffStats(wsPath: string, baseSha: string, env: Record<str
   return stats;
 }
 
-export async function diffPatch(wsPath: string, baseSha: string, env: Record<string, string>): Promise<string> {
+export async function diffPatch(wsPath: string, baseSha: string, env: Record<string, string>, maxBytes = DEFAULT_MAX_PATCH_BYTES): Promise<string> {
   await stageAll(wsPath, env);
-  return git(["diff", "--cached", baseSha], wsPath, env);
+  return git(["diff", "--cached", baseSha], wsPath, env, 5 * 60_000, maxBytes);
 }
 
 /** Content of `file` at `sha`, or undefined when it did not exist there. */

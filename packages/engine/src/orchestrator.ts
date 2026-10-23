@@ -29,7 +29,9 @@ import {
   ChangePlanSchema,
   ImplementationNotesSchema,
   InvestigationSchema,
+  PreparedDeliverySchema,
   ReviewSchema,
+  TaskSchema,
   type ChangePlan,
   type Commands,
   type ImplementationNotes,
@@ -42,7 +44,7 @@ import {
   type Verification,
 } from "./types.ts";
 import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
-import { diffPatch, diffStats, git, prepareWorkspace, showAtBase, type Workspace } from "./workspace.ts";
+import { DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, showAtBase, type Workspace } from "./workspace.ts";
 
 export interface RunInput {
   /** A Task written by hand or exported from an earlier run. */
@@ -72,6 +74,8 @@ export interface RunOptions {
   skipInstall?: boolean;
   /** Optional human checkpoint between planning and implementation. */
   approvePlan?: (plan: ChangePlan) => Promise<boolean>;
+  /** Largest patch the engine will review and commit; bigger ones escalate. Default 32 MiB. */
+  maxPatchBytes?: number;
   /** Replaces the Claude Agent SDK runner; tests use a scripted one. */
   runnerFactory?: (ctx: RunnerContext) => AgentRunner;
 }
@@ -198,9 +202,23 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   let review: Review | undefined;
   let delivery: PreparedDelivery | undefined;
 
+  const maxPatchBytes = options.maxPatchBytes ?? DEFAULT_MAX_PATCH_BYTES;
   journal.artifact("task", task);
-  journal.event("run", "start", { runId: journal.runId, task: task.id });
+  journal.event("run", "start", { runId: journal.runId, task: task.id, isolation: options.isolation ?? "sandbox" });
   reporter.phase("run", `${journal.runId} for ${task.title}`);
+  if (options.isolation === "none") reporter.warn("isolation: none. The agent's commands run on this machine with only text-matching hooks between them and your files.");
+
+  /** The patch between the base commit and the tree, or an escalation when it is too big to review. */
+  const patch = async (ws: Workspace): Promise<string> => {
+    try {
+      return await diffPatch(ws.path, ws.baseSha, env, maxPatchBytes);
+    } catch (err) {
+      if (err instanceof GitError && err.exceeded) {
+        throw new RunAborted("escalated", `the diff is too large to review (more than ${Math.round(maxPatchBytes / 1024)} KiB)`, ["Did the agent run a formatter or generator over the tree? Inspect the workspace before trusting any of it."]);
+      }
+      throw err;
+    }
+  };
 
   const decide = (phase: string, decision: Decision): void => {
     journal.event(phase, "decision", { ...decision });
@@ -307,13 +325,14 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       // that diff first; the engine does not run it.
       const control = await checkControlChanges(workspace.path, workspace.baseSha, diff.changedFiles, env);
       if (control.length > 0) {
-        journal.text(`diff-${attempt}.patch`, await diffPatch(workspace.path, workspace.baseSha, env));
+        journal.text(`diff-${attempt}.patch`, await patch(workspace));
         throw new RunAborted(
           "escalated",
           `the change edits files that decide what the verification commands run on this machine (${control.join(", ")}); the engine did not run them`,
           ["Read the diff of those files. If the change is intended, run the repository's checks yourself before trusting it."],
         );
       }
+      decide("verify", checkBudget(costUsd, Date.now() - started, limits));
       reporter.phase("verify", `${diff.files} files changed, +${diff.insertions} -${diff.deletions}`);
       const checks = await runChecks(checkSpecs(task.commands, reproduction), checkOptions);
       verification = compareWithBaseline(checks, baseline.checks, diff);
@@ -330,7 +349,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       }
       decide("verify", afterVerifyDecision);
 
-      reviewedPatch = await diffPatch(workspace.path, workspace.baseSha, env);
+      reviewedPatch = await patch(workspace);
       journal.text(`diff-${attempt}.patch`, reviewedPatch);
       const secrets = findSecrets(reviewedPatch);
       if (secrets.length > 0) throw new RunAborted("escalated", `the diff adds something that looks like a secret (${secrets.join(", ")})`, ["Inspect the diff before anything is pushed."]);
@@ -364,7 +383,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     }
 
     // The reviewer has no write tools and a write-free sandbox, but the commit must still be exactly what was reviewed.
-    if ((await diffPatch(workspace.path, workspace.baseSha, env)) !== reviewedPatch) {
+    if ((await patch(workspace)) !== reviewedPatch) {
       throw new RunAborted("escalated", "the workspace changed after the review", ["Compare the workspace with the reviewed diff before trusting it."]);
     }
 
@@ -374,7 +393,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     journal.artifact("delivery", delivery);
     journal.text("pr.md", delivery.prBody);
     journal.text("pr-title.txt", `${delivery.prTitle}\n`);
-    journal.text("diff.patch", await git(["show", "--format=%H%n%s%n", "HEAD"], workspace.path, env));
+    journal.text("diff.patch", await git(["show", "--format=%H%n%s%n", "HEAD"], workspace.path, env, 5 * 60_000, maxPatchBytes));
     return finish("awaiting_approval", "ready for human review", []);
   } catch (err) {
     if (err instanceof RunAborted) return finish(err.status, err.reason, err.questions);
@@ -441,11 +460,15 @@ export async function publishRun(runId: string, options: PublishRunOptions): Pro
   if (options.approved !== true) throw new Error("publishRun requires approved: true from a human");
   const journal = RunJournal.open(options.workdir ?? path.resolve(".gitgoblin"), runId);
   const result = journal.readArtifact<RunResult>("result");
-  const task = journal.readArtifact<Task>("task");
-  const delivery = journal.readArtifact<PreparedDelivery>("delivery");
+  const rawTask = journal.readArtifact<unknown>("task");
+  const rawDelivery = journal.readArtifact<unknown>("delivery");
   const workspace = journal.readArtifact<Workspace>("workspace");
-  if (!result || !task || !delivery || !workspace) throw new Error(`run ${runId} has no prepared delivery`);
+  if (!result || !rawTask || !rawDelivery || !workspace) throw new Error(`run ${runId} has no prepared delivery`);
   if (result.status !== "awaiting_approval") throw new Error(`run ${runId} is ${result.status}, not awaiting approval`);
+  // These files sat on disk since the run; parse them again rather than trust their shape.
+  const task = TaskSchema.parse(rawTask);
+  const delivery: PreparedDelivery = PreparedDeliverySchema.parse(rawDelivery);
+  if (typeof workspace.path !== "string" || !existsSync(path.join(workspace.path, ".git"))) throw new Error(`run ${runId}: workspace ${String(workspace.path)} is not a git checkout`);
   const published = await publishPullRequest({
     task,
     delivery,

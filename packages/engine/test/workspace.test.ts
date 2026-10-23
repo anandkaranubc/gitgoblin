@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { commitAll, diffPatch, diffStats, git, prepareWorkspace, removeWorkspace } from "../src/workspace.ts";
+import { commitAll, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace } from "../src/workspace.ts";
 import { branchNameFor, slugify } from "../src/naming.ts";
 import { TaskSchema } from "../src/types.ts";
 
@@ -84,5 +84,17 @@ describe("prepareWorkspace", () => {
     expect(ws.source).toBe("clone");
     expect(await git(["rev-parse", "--abbrev-ref", "HEAD"], ws.path, env)).toBe(ws.branch);
     expect(ws.baseSha).toBe(await git(["rev-parse", "HEAD"], repo, env));
+  });
+});
+
+describe("git output caps", () => {
+  it("fails loudly instead of returning a silently truncated patch", async () => {
+    const repo = await sampleRepo();
+    writeFileSync(path.join(repo, "big.txt"), "x".repeat(20_000));
+    await git(["add", "."], repo, env);
+    await expect(git(["diff", "--cached"], repo, env, 60_000, 1000)).rejects.toBeInstanceOf(GitError);
+    await expect(git(["diff", "--cached"], repo, env, 60_000, 1000)).rejects.toThrow(/exceeded/);
+    await expect(diffPatch(repo, await git(["rev-parse", "HEAD"], repo, env), env, 1000)).rejects.toThrow(/exceeded/);
+    expect(await git(["diff", "--cached", "--stat"], repo, env)).toContain("big.txt");
   });
 });

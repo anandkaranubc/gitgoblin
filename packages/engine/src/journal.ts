@@ -37,8 +37,9 @@ export class RunJournal {
     return new RunJournal(path.join(workdir, "runs", runId));
   }
 
-  /** Opens an existing run without creating anything. */
+  /** Opens an existing run without creating anything. The id must name a directory under runs/, nothing else. */
   static open(workdir: string, runId: string): RunJournal {
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,80}$/.test(runId)) throw new Error(`invalid run id: ${JSON.stringify(runId)}`);
     const dir = path.join(workdir, "runs", runId);
     if (!existsSync(path.join(dir, "result.json"))) throw new Error(`no run ${runId} under ${workdir}`);
     return new RunJournal(dir);

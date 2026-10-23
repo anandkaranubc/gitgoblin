@@ -18,6 +18,14 @@ describe("RunJournal", () => {
     expect(j.readText("pr.md")).toBe("# hi");
     expect(j.readArtifact("missing")).toBeUndefined();
   });
+  it("refuses run ids that leave the runs directory", () => {
+    const workdir = mkdtempSync(path.join(os.tmpdir(), "gg-j-"));
+    RunJournal.create(workdir, "20261022-183000-ab12").artifact("result", {});
+    expect(() => RunJournal.open(workdir, "20261022-183000-ab12")).not.toThrow();
+    expect(() => RunJournal.open(workdir, "../runs/20261022-183000-ab12")).toThrow(/run id/);
+    expect(() => RunJournal.open(workdir, "/etc")).toThrow(/run id/);
+    expect(() => RunJournal.open(workdir, "")).toThrow(/run id/);
+  });
   it("makes sortable run ids", () => {
     expect(newRunId(new Date("2026-10-22T18:30:00Z"))).toMatch(/^20261022-183000-[a-z0-9]{4}$/);
   });

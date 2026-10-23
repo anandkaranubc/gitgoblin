@@ -60,7 +60,7 @@ export function renderReport(input: ReportInput): string {
     lines.push("");
   }
   if (result.status === "awaiting_approval") {
-    lines.push("## Next step", `Review pr.md and the diff, then publish with: \`gitgoblin-engine publish ${result.runId}\``, "");
+    lines.push("## Next step", "Nothing has been pushed. Read pr.md and diff.patch in this directory; if you would open this pull request by hand, publish it from the tool you ran this with.", "");
   }
   return lines.filter((l) => l !== undefined).join("\n");
 }

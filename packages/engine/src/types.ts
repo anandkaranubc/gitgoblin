@@ -22,18 +22,32 @@ export const IssueRefSchema = z.object({
 });
 export type IssueRef = z.infer<typeof IssueRefSchema>;
 
+/**
+ * Repository fields end up as git arguments and URL parts, so they are shaped here: an owner or name
+ * cannot be a path, a sha cannot be an option, a branch cannot be a revision expression, and a clone
+ * URL cannot select a transport such as `ext::` that runs commands.
+ */
+const Identifier = z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$|^[A-Za-z0-9]$/, "letters, digits, dots, dashes and underscores only").refine((v) => v !== "..", "cannot be ..");
+const Hostname = z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*(?::\d{1,5})?$/, "must be a hostname");
+const Sha = z.string().regex(/^[0-9a-fA-F]{4,64}$/, "must be a hex commit id");
+const BranchName = z
+  .string()
+  .min(1)
+  .refine((v) => !v.startsWith("-") && !/[\s~^:?*\[\\]/.test(v) && !v.includes("..") && !v.endsWith("/") && !v.endsWith(".lock"), "must be a plain branch name");
+const CloneUrl = z.string().refine((v) => /^(https?|ssh|git|git\+ssh|file):\/\/[^\s]+$/.test(v) || /^[\w.-]+@[\w.-]+:[^\s]+$/.test(v), "must be an http(s), ssh, git or file URL");
+
 /** Everything the engine needs to work on one contribution. Built by `intake.ts` from intel's contracts. */
 export const TaskSchema = z.object({
   id: z.string().min(1),
   repo: z.object({
-    host: z.string().default("github.com"),
-    owner: z.string().min(1),
-    name: z.string().min(1),
-    cloneUrl: z.string().optional(),
+    host: Hostname.default("github.com"),
+    owner: Identifier,
+    name: Identifier,
+    cloneUrl: CloneUrl.optional(),
     /** Existing local checkout. The engine creates a git worktree from it instead of cloning. */
-    localPath: z.string().optional(),
-    defaultBranch: z.string().default("main"),
-    headSha: z.string().optional(),
+    localPath: z.string().min(1).optional(),
+    defaultBranch: BranchName.default("main"),
+    headSha: Sha.optional(),
   }),
   commands: CommandsSchema.prefault({}),
   conventions: z
@@ -167,13 +181,15 @@ export interface Verification {
   diff: DiffStats;
 }
 
-export interface PreparedDelivery {
-  branch: string;
-  commitSha: string;
-  commitMessage: string;
-  prTitle: string;
-  prBody: string;
-}
+/** What `prepare` wrote and `publish` reads back; validated on the way back in because the file sat on disk. */
+export const PreparedDeliverySchema = z.object({
+  branch: BranchName,
+  commitSha: z.string().regex(/^[0-9a-f]{40}$|^[0-9a-f]{64}$/, "must be a full commit id"),
+  commitMessage: z.string().min(1),
+  prTitle: z.string().min(1).max(256),
+  prBody: z.string(),
+});
+export type PreparedDelivery = z.infer<typeof PreparedDeliverySchema>;
 
 export type RunStatus = "awaiting_approval" | "published" | "escalated" | "stopped" | "failed";
 
