@@ -10,7 +10,7 @@ import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/i
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
 import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
-import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "./contribute.ts";
+import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { explainMissingRepository, explainNetworkFailure } from "./errors.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
@@ -381,6 +381,8 @@ export function buildProgram(runtime: Runtime): Command {
       } else {
         runtime.stdout(text);
       }
+      const gap = issueGap(report);
+      if (gap) runtime.stderr(gap);
       const next = nextStepAfterAnalyze(report, ref, options.out && options.json ? options.out : undefined);
       if (next) runtime.stderr(next);
     });
@@ -423,7 +425,10 @@ export function buildProgram(runtime: Runtime): Command {
         const hints = await discoveryHints(runtime, ref, options.goal);
         report = await intel.analyzeRepository(ref, { hints, log: runtime.isInteractive ? (message: string) => runtime.stderr(message) : undefined });
       }
-      if (report.opportunities.length === 0) throw new Error(`No contribution opportunities found in ${slug(ref)}.`);
+      if (report.opportunities.length === 0) {
+        const gap = issueGap(report);
+        throw new Error(`No contribution opportunities found in ${slug(ref)}.${gap ? ` ${gap}` : ""}`);
+      }
 
       let opportunity = selectOpportunity(report, { issue: options.issue, opportunity: options.opportunity });
       if (!opportunity) {
