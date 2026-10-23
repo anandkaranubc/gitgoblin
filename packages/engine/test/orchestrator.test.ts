@@ -404,6 +404,13 @@ describe("runContribution", () => {
     expect((seen as { install?: unknown }).install).toBeUndefined();
   });
 
+  it("still accepts a one-argument plan approver", async () => {
+    const repo = await createFixtureRepo();
+    const approvePlan = async (plan: { goal: string }) => plan.goal.length > 0;
+    const result = await run(happyPath, [], { approvePlan })(repo, workdir());
+    expect(result.status).toBe("awaiting_approval");
+  });
+
   it("reports a failed phase instead of throwing", async () => {
     const repo = await createFixtureRepo();
     const result = await run({ orient: () => ({ not: "an investigation" }) })(repo, workdir());

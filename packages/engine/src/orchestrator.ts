@@ -59,8 +59,11 @@ export interface RunInput {
 
 /** What a person deciding on a plan should know about the environment it will be verified in. */
 export interface PlanContext {
-  /** Present when the repository's install command ran and did not exit 0. */
-  install?: { exitCode: number | null; logPath: string };
+  /**
+   * Present when the repository's install command ran and did not exit 0. `exitCode` is -1 when the
+   * process was killed (timeout or signal); `timedOut` says which.
+   */
+  install?: { exitCode: number; logPath: string; timedOut: boolean };
   /** The repository's own checks before any change. */
   baseline: Check[];
 }
@@ -93,8 +96,12 @@ export interface RunOptions {
   /** Timeout for each repository command (install, test, lint...). */
   checkTimeoutMs?: number;
   skipInstall?: boolean;
-  /** Optional human checkpoint between planning and implementation; the context says how install and baseline went. */
-  approvePlan?: (plan: ChangePlan, context: PlanContext) => Promise<boolean>;
+  /**
+   * Optional human checkpoint between planning and implementation. The engine always passes the
+   * context (how install and baseline went); it is optional in the type so one-argument callbacks
+   * and callers written before it existed keep compiling.
+   */
+  approvePlan?: (plan: ChangePlan, context?: PlanContext) => Promise<boolean>;
   /** Largest patch the engine will review and commit; bigger ones escalate. Default 32 MiB. */
   maxPatchBytes?: number;
   /** Shallow clone depth for very large repositories; omitted means full history. */
@@ -306,7 +313,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       journal.text("install-output.txt", install.output);
       journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs, timedOut: install.timedOut, outputTail: tail(install.output, 2000) });
       if (install.exitCode !== 0) {
-        installFailure = { exitCode: install.exitCode, logPath: journal.pathFor("install-output.txt") };
+        installFailure = { exitCode: install.exitCode ?? -1, logPath: journal.pathFor("install-output.txt"), timedOut: install.timedOut };
         reporter.warn(`install failed (exit ${install.exitCode}); checks may fail. Output: ${installFailure.logPath}`);
       }
     }
@@ -321,7 +328,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     if (installFailure && baselineChecks.length > 0 && baselineChecks.every((c) => c.status !== "pass")) {
       throw new RunAborted(
         "escalated",
-        `install failed (exit ${installFailure.exitCode}) and the repository's checks cannot run (${baselineChecks.map((c) => `${c.name}: ${c.status}`).join(", ")}); nothing the agent did could be verified`,
+        `install ${installFailure.timedOut ? "timed out" : `failed (exit ${installFailure.exitCode})`} and the repository's checks cannot run (${baselineChecks.map((c) => `${c.name}: ${c.status}`).join(", ")}); nothing the agent did could be verified`,
         [`Read ${installFailure.logPath}; fix the environment (missing tool, blocked write, network) and run again.`],
       );
     }
