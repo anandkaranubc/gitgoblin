@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -47,7 +47,7 @@ describe("hostSandboxFor", () => {
 
 describe("specFor strict mode", () => {
   it("hides the home directory except toolchain and cache directories, the run prefix and the temp dir", () => {
-    const home = mkdtempSync(path.join(os.tmpdir(), "gg-home-"));
+    const home = realpathSync(mkdtempSync(path.join(os.tmpdir(), "gg-home-")));
     mkdirSync(path.join(home, ".nvm"));
     mkdirSync(path.join(home, ".npm"));
     mkdirSync(path.join(home, "Documents"));
@@ -134,5 +134,36 @@ describe.skipIf(!available)("host sandbox strict mode (OS)", () => {
     expect(documents.exitCode).not.toBe(0);
     const listing = await run(`ls "${home}"`);
     expect(listing.exitCode).not.toBe(0);
+  });
+});
+
+describe("specFor paths", () => {
+  it("returns real paths, so a profile built from it matches what the kernel checks", () => {
+    const ws = mkdtempSync(path.join(os.tmpdir(), "gg-real-"));
+    const spec = specFor(ws, false);
+    expect(spec.workspace).toBe(realpathSync(ws));
+    expect(spec.extraWrite).toContain(realpathSync(os.tmpdir()));
+  });
+  it("lets tools use the shared /tmp as well as the per-user temp directory", () => {
+    const spec = specFor(mkdtempSync(path.join(os.tmpdir(), "gg-real-")), false);
+    if (existsSync("/tmp")) expect(spec.extraWrite).toContain(realpathSync("/tmp"));
+  });
+});
+
+describe.skipIf(!available)("host sandbox temp directories (OS)", () => {
+  it("allows writes to $TMPDIR and /tmp, also when the profile is built from specFor directly", async () => {
+    const ws = mkdtempSync(path.join(os.tmpdir(), "gg-tmp-"));
+    const spec = specFor(ws, false);
+    const viaWrap = (command: string) => execShell(command, { cwd: ws, env, wrap: (c) => available!.wrap(c, spec) });
+    expect((await viaWrap('touch "$TMPDIR/gg-tmp-probe" && rm "$TMPDIR/gg-tmp-probe"')).exitCode).toBe(0);
+    expect((await viaWrap("touch /tmp/gg-tmp-probe-$$ && rm /tmp/gg-tmp-probe-$$")).exitCode).toBe(0);
+    if (available!.kind === "sandbox-exec") {
+      const direct = await execShell('touch "$TMPDIR/gg-tmp-direct" && rm "$TMPDIR/gg-tmp-direct"', {
+        cwd: ws,
+        env,
+        wrap: (c) => ({ file: "/usr/bin/sandbox-exec", args: ["-p", sandboxExecProfile(spec), "/bin/sh", "-c", c] }),
+      });
+      expect(direct.exitCode).toBe(0);
+    }
   });
 });
