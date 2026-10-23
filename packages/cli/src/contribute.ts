@@ -47,7 +47,8 @@ export function recommendedRank(report: AnalysisReport): number {
 export function formatOpportunities(report: AnalysisReport, style: Style): string {
   const paint = (tone: "bold" | "dim" | "yellow", text: string) => (style.color ? styleText(tone, text) : text);
   const repo = `${report.profile.repo.owner}/${report.profile.repo.name}`;
-  if (report.opportunities.length === 0) return `No contribution opportunities found in ${repo}.`;
+  const gap = issueGap(report);
+  if (report.opportunities.length === 0) return `No contribution opportunities found in ${repo}.${gap ? ` ${gap}` : ""}`;
   const blocks = report.opportunities.map((o, index) => {
     const lines = [`${String(index + 1).padStart(2)}. ${paint("bold", plain(o.title))}`];
     lines.push(`    ${paint("dim", `${o.kind} · score ${o.score.toFixed(2)} · ${o.effort} effort · id ${o.id}`)}`);
@@ -61,7 +62,8 @@ export function formatOpportunities(report: AnalysisReport, style: Style): strin
     return lines.join("\n");
   });
   const footer = report.skipped.length > 0 ? `\n\n${paint("dim", `${report.skipped.length} more findings were dropped; the analyze report lists them under Skipped.`)}` : "";
-  return `Opportunities in ${repo}, best first:\n\n${blocks.join("\n")}${footer}`;
+  const warning = gap ? `${paint("yellow", "!")} ${gap}\n\n` : "";
+  return `${warning}Opportunities in ${repo}, best first:\n\n${blocks.join("\n")}${footer}`;
 }
 
 /**
@@ -159,4 +161,33 @@ export function describeEnvironment(context: PlanContextLike | undefined): strin
   if (failing.length > 0) lines.push(`Failing before any change: ${failing.join(", ")}.`);
   lines.push(installFailed ? "A change implemented now cannot be verified against the project's own checks." : "Verification can only catch new failures, not these.");
   return lines.join(" ");
+}
+
+/**
+ * Intel's notes, stable by contract, for a GitHub issue and pull request sample that was not read:
+ * because the request failed (worth retrying), or because it was skipped on purpose.
+ */
+const SAMPLE_FAILED = "issue and PR samples unavailable: ";
+const SAMPLE_SKIPPED = ["issue and PR sampling skipped: ", "issue, PR and CI sampling skipped by request"];
+
+/**
+ * Issues are where most opportunities come from. When intel says it did not read them, the list is
+ * missing its main source, and the person choosing should know why. Only intel's notes decide this:
+ * the profile's sample sizes measure response times, not whether issues were read.
+ */
+export function issueGap(report: AnalysisReport): string | undefined {
+  const failed = report.budget.notes.find((n) => n.startsWith(SAMPLE_FAILED));
+  const skipped = failed ? undefined : report.budget.notes.find((n) => SAMPLE_SKIPPED.some((prefix) => n.startsWith(prefix)));
+  const note = failed ?? skipped;
+  if (!note) return undefined;
+  const prefix = failed ? SAMPLE_FAILED : SAMPLE_SKIPPED.find((p) => note.startsWith(p))!;
+  const reason = note
+    .slice(prefix.length)
+    .replace(/^[;:,\s]+/, "")
+    // Intel may append its own "were not analyzed, try again" clause; this sentence already says both.
+    .replace(/;\s*issues and pull requests were not analyzed.*$/i, "")
+    .trim();
+  const why = reason ? ` (${plain(reason)})` : "";
+  const advice = failed ? " Try again in a minute, or check your token with `gh auth status`." : "";
+  return `Issues and pull requests were not analyzed${why}, so opportunities from them are missing.${advice}`;
 }

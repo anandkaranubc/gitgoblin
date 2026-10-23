@@ -132,13 +132,13 @@ function applyPyproject(m: PythonManifest, text: string): void {
   if (tool?.uv && m.packageManager === "pip") m.packageManager = "uv";
 }
 
-function applySetupCfg(m: PythonManifest, text: string): void {
-  const name = /^\s*name\s*=\s*(.+)$/m.exec(text)?.[1]?.trim();
+export function applySetupCfg(m: PythonManifest, text: string): void {
+  const name = /^[ \t]*name[ \t]*=[ \t]*(.+)$/m.exec(text)?.[1]?.trim();
   if (name && !m.name) m.name = name;
-  const req = /^\s*python_requires\s*=\s*(.+)$/m.exec(text)?.[1]?.trim();
+  const req = /^[ \t]*python_requires[ \t]*=[ \t]*(.+)$/m.exec(text)?.[1]?.trim();
   if (req && !m.requiresPython) m.requiresPython = req;
   m.classifierVersions.push(...classifierVersions(text.split("\n")));
-  const block = /^\s*install_requires\s*=\s*\n((?:\s+.+\n?)+)/m.exec(text)?.[1];
+  const block = /^[ \t]*install_requires[ \t]*=[ \t]*\n((?:[ \t]+[^\n]+\n?)+)/m.exec(text)?.[1];
   if (block) for (const line of block.split("\n")) if (line.trim()) m.dependencies.push(parseRequirement(line.trim(), false));
   if (/^\[tool:pytest\]/m.test(text)) addTool(m, "pytest");
   if (/^\[flake8\]/m.test(text)) addTool(m, "flake8");
@@ -146,7 +146,7 @@ function applySetupCfg(m: PythonManifest, text: string): void {
   if (/console_scripts/.test(text)) m.scripts.push("(console_scripts in setup.cfg)");
 }
 
-function applySetupPy(m: PythonManifest, text: string): void {
+export function applySetupPy(m: PythonManifest, text: string): void {
   const name = /\bname\s*=\s*["']([^"']+)["']/.exec(text)?.[1];
   if (name && !m.name) m.name = name;
   const req = /python_requires\s*=\s*["']([^"']+)["']/.exec(text)?.[1];
@@ -178,7 +178,7 @@ export function compareVersions(a: string, b: string): number {
 export function parseRequirements(text: string, dev: boolean): Dependency[] {
   const deps: Dependency[] = [];
   for (const raw of text.split("\n")) {
-    const line = raw.replace(/\s+#.*$/, "").trim();
+    const line = raw.replace(/\s#.*$/, "").trim();
     if (!line || line.startsWith("#") || line.startsWith("-") || line.startsWith("http") || line.includes("://")) continue;
     deps.push(parseRequirement(line, dev));
   }

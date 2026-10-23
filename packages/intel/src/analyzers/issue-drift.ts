@@ -10,7 +10,7 @@
  */
 import type { AnalysisContext } from "../context.ts";
 import type { IssueSample } from "../github/types.ts";
-import { truncate } from "../util/text.ts";
+import { truncate, trimEnd } from "../util/text.ts";
 import { type Finding, evidence } from "./types.ts";
 
 export interface IssueDrift {
@@ -63,7 +63,8 @@ export function quotedCodeLines(body: string): string[] {
 /** Python traceback frames: the file path and the source line printed under it. */
 export function tracebackFrames(body: string): { path: string; line: string }[] {
   const out: { path: string; line: string }[] = [];
-  const frame = /^\s*File "([^"]+)", line \d+, in [^\n]+\n(?!\s*File ")\s+([^\n]+)/gm;
+  // Horizontal whitespace only: a multiline `^\s*` would rescan every following blank line.
+  const frame = /^[ \t]*File "([^"\n]{1,500})", line \d+, in [^\n]+\n(?![ \t]*File ")[ \t]+([^\n]+)/gm;
   for (const m of body.matchAll(frame)) {
     const line = m[2]!.trim();
     if (line.length >= 8) out.push({ path: m[1]!, line });
@@ -108,13 +109,13 @@ const MAX_PERMALINK_LINES = 12;
 async function stillPresent(ctx: AnalysisContext, line: string, paths: string[] = []): Promise<string[]> {
   const hits = await ctx.repo.grepExact(line, { paths });
   if (hits.length) return hits;
-  const relaxed = line.replace(/[\s)\];,:.]+$/, "");
+  const relaxed = trimEnd(line, " \t\n)];,:.");
   if (relaxed.length >= 12 && relaxed !== line) {
     const again = await ctx.repo.grepExact(relaxed, { paths });
     if (again.length) return again;
   }
   // A line that kept its first two thirds gained an argument or a clause (`validate_json(a, b)` to `validate_json(a, b, c)`).
-  const prefix = line.slice(0, Math.floor(line.length * 0.66)).replace(/[\s,(]+$/, "");
+  const prefix = trimEnd(line.slice(0, Math.floor(line.length * 0.66)), " \t\n,(");
   if (prefix.length < 20) return [];
   return ctx.repo.grepExact(prefix, { paths });
 }

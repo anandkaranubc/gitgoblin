@@ -49,3 +49,10 @@ export function looksBinary(buf: Uint8Array): boolean {
   for (let i = 0; i < n; i++) if (buf[i] === 0) return true;
   return false;
 }
+
+/** Remove any run of the given characters from the end, without a regex (no backtracking on long runs). */
+export function trimEnd(text: string, chars: string): string {
+  let end = text.length;
+  while (end > 0 && chars.includes(text[end - 1]!)) end--;
+  return text.slice(0, end);
+}

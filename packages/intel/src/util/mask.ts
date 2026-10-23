@@ -31,7 +31,9 @@ export function maskLangFor(path: string): MaskLang {
 const SLASH_COMMENTS = new Set<MaskLang>(["js", "go", "rs", "c"]);
 const HASH_COMMENTS = new Set<MaskLang>(["py", "rb", "sh"]);
 /** What may precede a `/` that opens a regex literal rather than a division. */
-const REGEX_PRECEDER = /(^|[=(,:;!&|?{}[>])\s*$|\b(return|typeof|case|in|of|do|else)\s*$/;
+const REGEX_PRECEDER = /[=(,:;!&|?{}[>][ \t]{0,40}$|\b(return|typeof|case|in|of|do|else)[ \t]{0,40}$/;
+/** Characters looked back from a `/`; reading from the line start each time would be quadratic on long lines. */
+const LOOKBACK = 64;
 
 export function maskCodeLiterals(text: string, lang: MaskLang, options: MaskOptions = {}): string {
   if (lang === "other") return text;
@@ -150,7 +152,9 @@ export function maskCodeLiterals(text: string, lang: MaskLang, options: MaskOpti
         i = scanQuoted(i, c);
         continue;
       }
-      if (lang === "js" && c === "/" && REGEX_PRECEDER.test(text.slice(lineStart, i))) {
+      const from = Math.max(lineStart, i - LOOKBACK);
+      const before = text.slice(from, i);
+      if (lang === "js" && c === "/" && ((from === lineStart && before.trim() === "") || REGEX_PRECEDER.test(before))) {
         let j = i + 1;
         let inClass = false;
         while (j < n && text[j] !== "\n") {
