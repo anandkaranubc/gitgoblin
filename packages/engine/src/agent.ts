@@ -62,6 +62,8 @@ export interface SdkRunnerOptions {
   model?: string;
   env?: Record<string, string>;
   readRoots?: string[];
+  /** Directories outside the workspace the agent's shell may write, such as the run's toolchain prefix. */
+  extraWrite?: string[];
   onToolUse?: (phase: string, tool: string, summary: string) => void;
   onMessage?: (phase: string, message: SDKMessage) => void;
 }
@@ -110,7 +112,7 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
       ...(spec.model ?? opts.model ? { model: spec.model ?? opts.model } : {}),
       ...(spec.effort ? { effort: spec.effort } : {}),
       ...(spec.resume ? { resume: spec.resume } : {}),
-      ...(isolation === "sandbox" ? { sandbox: sandboxSettings(opts.workspace, spec.profile) } : {}),
+      ...(isolation === "sandbox" ? { sandbox: sandboxSettings(opts.workspace, spec.profile, opts.extraWrite ?? []) } : {}),
       ...overrides,
     };
 
