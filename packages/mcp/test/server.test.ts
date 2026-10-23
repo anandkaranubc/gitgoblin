@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { DiscoveryQuery, DiscoveryResult, RepoRef } from "@gitgoblin/core";
+import { type DiscoveryQuery, type DiscoveryResult, type RepoRef, SIGNAL_NAMES } from "@gitgoblin/core";
 import type { AnalysisReport } from "@gitgoblin/intel";
 import { RateLimitError } from "@gitgoblin/sources";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
@@ -180,7 +180,7 @@ describe("server", () => {
     expect(text).toContain("activity: 0.95 (+0.12 for this goal)  last change yesterday");
     expect(text).toContain("busFactor: unknown");
     const structured = result.structuredContent as { signals: { signal: string; value?: number }[] };
-    expect(structured.signals).toHaveLength(10);
+    expect(structured.signals).toHaveLength(SIGNAL_NAMES.length);
 
     const missing = fakeDeps({ explain: async () => undefined });
     const gone = await (await connect(missing.deps)).client.callTool({ name: "explain_repository", arguments: { repository: "nobody/nothing" } });
