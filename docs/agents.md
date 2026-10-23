@@ -2,7 +2,7 @@
 
 gitgoblin runs as a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server, so the agent you already use can find open-source projects worth your time, understand what a repository needs, and hand you an evidence-backed piece of work to start on. Claude Code, Codex, Cursor, Gemini CLI, Copilot in VS Code and every other MCP client speak to the same server.
 
-> **Where this stands (October 2026).** The server ships from [GitHub release `mcp-v0.1.0`](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.0) as an npm tarball and a Claude Desktop bundle. The `@gitgoblin/mcp` package is not on npm yet, so until it is, replace `npx -y @gitgoblin/mcp` in every command below with `npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.0/gitgoblin-mcp-0.1.0.tgz`. Nothing else changes; for Claude Code that is:
+> **Where this stands (October 2026).** The server ships from [GitHub release `mcp-v0.1.0`](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.0) as an npm tarball and a Claude Desktop bundle, and is listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.anandkaranubc/gitgoblin) as `io.github.anandkaranubc/gitgoblin`. The `@gitgoblin/mcp` package is not on npm yet, so until it is, replace `npx -y @gitgoblin/mcp` in every command below with `npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.0/gitgoblin-mcp-0.1.0.tgz`. Nothing else changes; for Claude Code that is:
 >
 > ```sh
 > claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.0/gitgoblin-mcp-0.1.0.tgz
@@ -199,5 +199,6 @@ Checked on macOS on 22 October 2026. "Release" means the tarball or bundle attac
 | Claude Code plugin | `claude plugin validate`, install from a local marketplace | Installs with the skill and the server inventoried |
 | MCPB bundle | `mcpb validate`, `mcpb pack`, unpack and run the launcher | Initializes and lists the tools; not installed in Claude Desktop itself |
 | Cursor and VS Code one-click links | Encoded and decoded | Point at `@gitgoblin/mcp`, so they work once the npm package exists |
+| MCP Registry | `mcp-publisher publish` from the repository's GitHub Actions workflow, then the registry API | `io.github.anandkaranubc/gitgoblin` 0.1.0 listed as active on 23 October 2026, pointing at the release's `.mcpb` |
 
 Anything not in this table has not been tried here.

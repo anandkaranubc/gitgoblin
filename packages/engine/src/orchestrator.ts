@@ -2,9 +2,10 @@ import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import path from "node:path";
 import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
 import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
-import { execShell } from "./exec.ts";
+import { execShell, tail } from "./exec.ts";
 import { commandEnv, isInside, isSafeCommand, scrubEnv } from "./guard.ts";
 import { hostSandboxFor, specFor, type CheckIsolation, type HostIsolation } from "./hostbox.ts";
+import { prepareToolchain } from "./toolchain.ts";
 import { parseTask, sanitizeText, taskFromIntel } from "./intake.ts";
 import { consoleReporter, RunJournal, type Reporter } from "./journal.ts";
 import {
@@ -58,6 +59,10 @@ export interface RunInput {
 export interface RunnerContext {
   workspace: string;
   task: Task;
+  /** Environment for the agent process, including the run's toolchain (virtualenv on PATH and so on). */
+  env?: Record<string, string>;
+  /** Directories outside the workspace the agent's shell may write, such as the run's toolchain prefix. */
+  extraWrite?: string[];
 }
 
 export interface RunOptions {
@@ -197,8 +202,9 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   const workdir = options.workdir ?? path.resolve(".gitgoblin");
   const limits: Limits = { ...DEFAULT_LIMITS, ...options.limits };
   const reporter = options.reporter ?? consoleReporter();
-  const env = options.env ?? scrubEnv();
-  const hostEnv = commandEnv(env);
+  const baseEnv = options.env ?? scrubEnv();
+  let env = baseEnv;
+  let hostEnv = commandEnv(env);
   const journal = RunJournal.create(workdir);
   const started = Date.now();
   const phases: PhaseSummary[] = [];
@@ -270,15 +276,23 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     } else {
       reporter.info(`repository commands run under ${hostBox.kind}: writes limited to the workspace and tool caches, credential paths hidden, network only during install`);
     }
-    const wrapFor = (network: boolean) => (hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network)) });
+    // A per-run prefix for what the toolchain installs, so `pip install -e .` lands in a virtualenv
+    // under the run directory rather than in the operator's interpreter (which the sandbox refuses).
+    const toolchain = await prepareToolchain(task, workspace.path, journal.dir, hostEnv);
+    env = { ...baseEnv, ...toolchain.env };
+    hostEnv = commandEnv(env);
+    journal.event("run", "toolchain", { notes: toolchain.notes, writeDirs: toolchain.writeDirs });
+    for (const note of toolchain.notes) reporter.info(note);
+    const wrapFor = (network: boolean) => (hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network, { extraWrite: toolchain.writeDirs })) });
     const timeout = options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {};
     const checkOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(false) };
     const installOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(true) };
     if (task.commands.install && !options.skipInstall) {
       reporter.phase("install", task.commands.install);
       const install = await execShell(task.commands.install, installOptions);
-      journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs });
-      if (install.exitCode !== 0) reporter.warn(`install failed (exit ${install.exitCode}); continuing, checks may fail`);
+      journal.text("install-output.txt", install.output);
+      journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs, timedOut: install.timedOut, outputTail: tail(install.output, 2000) });
+      if (install.exitCode !== 0) reporter.warn(`install failed (exit ${install.exitCode}); continuing, checks may fail. Output: ${journal.pathFor("install-output.txt")}`);
     }
     const guidance = readGuidance(workspace.path, task);
     reporter.phase("baseline", checkSpecs(task.commands).map((s) => s.name).join(", ") || "no commands known");
@@ -287,7 +301,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     journal.artifact("baseline", baseline);
     for (const c of baselineChecks.filter((c) => c.status !== "pass")) reporter.warn(`baseline ${c.name}: ${c.status}`);
 
-    const runner = (options.runnerFactory ?? defaultRunnerFactory(options, env, reporter))({ workspace: workspace.path, task });
+    const runner = (options.runnerFactory ?? defaultRunnerFactory(options, reporter))({ workspace: workspace.path, task, env, extraWrite: toolchain.writeDirs });
     const builderPrompt = builderSystemPrompt(task, workspace.path, guidance);
     const common = { systemPrompt: builderPrompt, profile: "build" as const, ...(options.model ? { model: options.model } : {}), ...(options.effort ? { effort: options.effort } : {}) };
 
@@ -453,12 +467,13 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   }
 }
 
-function defaultRunnerFactory(options: RunOptions, env: Record<string, string>, reporter: Reporter): (ctx: RunnerContext) => AgentRunner {
+function defaultRunnerFactory(options: RunOptions, reporter: Reporter): (ctx: RunnerContext) => AgentRunner {
   return (ctx) =>
     createSdkRunner({
       workspace: ctx.workspace,
       task: ctx.task,
-      env,
+      ...(ctx.env ? { env: ctx.env } : {}),
+      ...(ctx.extraWrite ? { extraWrite: ctx.extraWrite } : {}),
       ...(options.model ? { model: options.model } : {}),
       ...(options.isolation ? { isolation: options.isolation } : {}),
       onToolUse: (phaseName, tool, summary) => reporter.info(`${phaseName} ${tool} ${summary}`),

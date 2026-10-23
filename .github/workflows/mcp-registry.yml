@@ -1,0 +1,58 @@
+# Publishes packages/mcp/server.json to the official MCP Registry
+# (https://registry.modelcontextprotocol.io) under io.github.anandkaranubc/gitgoblin.
+#
+# Started by hand only (workflow_dispatch), so a person approves every registry publish. It
+# authenticates with this repository's GitHub Actions OIDC token: the registry grants a workflow
+# in a repository owned by <owner> the right to publish io.github.<owner>/*, so no personal token
+# or secret is involved. The server.json must already point at a release asset that exists.
+name: MCP Registry
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-registry
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish server.json
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: packages/mcp
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install mcp-publisher
+        env:
+          VERSION: "1.8.1"
+          SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          curl -fsSL -o mcp-publisher.tar.gz "https://github.com/modelcontextprotocol/registry/releases/download/v${VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          ./mcp-publisher --version
+
+      - name: Validate server.json
+        run: ./mcp-publisher validate server.json
+
+      - name: Log in with the repository's OIDC token
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish
+        run: ./mcp-publisher publish server.json
+
+      - name: Confirm the entry is listed
+        run: |
+          NAME=$(jq -r .name server.json)
+          VERSION=$(jq -r .version server.json)
+          curl -fsSL "https://registry.modelcontextprotocol.io/v0.1/servers?search=${NAME}" \
+            | jq -e --arg name "$NAME" --arg version "$VERSION" \
+              '.servers[] | select(.server.name == $name and .server.version == $version) | {name: .server.name, version: .server.version, status: ._meta["io.modelcontextprotocol.registry/official"].status}'
