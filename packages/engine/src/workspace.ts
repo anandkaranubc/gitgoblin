@@ -61,6 +61,12 @@ async function unusedBranchName(branch: string, repo: string, env: Record<string
   throw new Error(`too many branches named ${branch}`);
 }
 
+class EmptyRepositoryError extends Error {
+  constructor(where: string) {
+    super(`${where} has no commits; there is nothing to start a contribution from`);
+  }
+}
+
 /** The commit a worktree should start from: the profiled SHA, else the remote default branch, else HEAD. */
 async function resolveStart(task: Task, repo: string, env: Record<string, string>): Promise<{ ref: string; note?: string }> {
   if (task.repo.headSha && (await commitExists(task.repo.headSha, repo, env))) return { ref: task.repo.headSha };
@@ -70,7 +76,26 @@ async function resolveStart(task: Task, repo: string, env: Record<string, string
       ? { ref: remote, note: `commit ${task.repo.headSha.slice(0, 7)} is not in the local checkout; started from origin/${task.repo.defaultBranch}` }
       : { ref: remote };
   }
+  if (!(await commitExists("HEAD", repo, env))) throw new EmptyRepositoryError(`the checkout at ${repo}`);
   return { ref: "HEAD", note: `origin/${task.repo.defaultBranch} is not available locally; started from the checkout's HEAD` };
+}
+
+/**
+ * The commit a fresh clone should start from. Profiles can be stale (the commit is gone) or wrong
+ * about the default branch (a repository on `master` or `trunk`), and a repository can be empty;
+ * each case is either explained in a note or refused in plain words, never a raw git error.
+ */
+async function resolveCloneStart(task: Task, wsPath: string, env: Record<string, string>): Promise<{ ref: string; note?: string }> {
+  const wanted = task.repo.headSha;
+  if (wanted && (await commitExists(wanted, wsPath, env))) return { ref: wanted };
+  const named = `refs/remotes/origin/${task.repo.defaultBranch}`;
+  if (await commitExists(named, wsPath, env)) {
+    return wanted ? { ref: named, note: `commit ${wanted.slice(0, 7)} is not in the repository; started from origin/${task.repo.defaultBranch}` } : { ref: named };
+  }
+  if (await commitExists("refs/remotes/origin/HEAD", wsPath, env)) {
+    return { ref: "refs/remotes/origin/HEAD", note: `origin/${task.repo.defaultBranch} is not a branch of the repository; started from its default branch` };
+  }
+  throw new EmptyRepositoryError(task.repo.cloneUrl ?? `${task.repo.owner}/${task.repo.name}`);
 }
 
 /**
@@ -93,11 +118,11 @@ export async function prepareWorkspace(task: Task, runDir: string, env: Record<s
   }
 
   if (!task.repo.cloneUrl) throw new Error("task has neither repo.localPath nor repo.cloneUrl");
-  await git(["clone", "--quiet", "--no-tags", task.repo.cloneUrl, wsPath], runDir, env, 15 * 60_000);
-  const start = task.repo.headSha ?? `origin/${task.repo.defaultBranch}`;
-  await git(["checkout", "--quiet", "-b", branch, start], wsPath, env);
+  await git(["clone", "--quiet", "--no-tags", "--", task.repo.cloneUrl, wsPath], runDir, env, 15 * 60_000);
+  const start = await resolveCloneStart(task, wsPath, env);
+  await git(["checkout", "--quiet", "-b", branch, start.ref], wsPath, env);
   const baseSha = await git(["rev-parse", "HEAD"], wsPath, env);
-  return { path: wsPath, branch, baseSha, source: "clone" };
+  return { path: wsPath, branch, baseSha, source: "clone", ...(start.note ? { startNote: start.note } : {}) };
 }
 
 export async function removeWorkspace(ws: Workspace, env: Record<string, string>): Promise<void> {
