@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterDiff, afterOrient, atIntake, afterPlan, afterReview, afterVerify, checkBudget, controlsChecks, DEFAULT_LIMITS, failureSignature, findSecrets, isProtectedPath, packageJsonControlChanged } from "../src/policy.ts";
+import { afterDiff, afterOrient, topDirectories, atIntake, afterPlan, afterReview, afterVerify, checkBudget, controlsChecks, DEFAULT_LIMITS, failureSignature, findSecrets, isProtectedPath, packageJsonControlChanged } from "../src/policy.ts";
 import type { ChangePlan, Investigation, Review, Task, Verification } from "../src/types.ts";
 import { TaskSchema } from "../src/types.ts";
 
@@ -237,5 +237,23 @@ describe("packageJsonControlChanged", () => {
     expect(packageJsonControlChanged(base, "{ not json")).toBe(true);
     expect(packageJsonControlChanged(undefined, base)).toBe(true);
     expect(packageJsonControlChanged(base, undefined)).toBe(true);
+  });
+});
+
+describe("topDirectories", () => {
+  it("names where most of a large change lives", () => {
+    const files = [...Array.from({ length: 300 }, (_, i) => `.pnpm-store/v10/files/${i}`), "src/a.ts", "test/a.test.ts", "README.md"];
+    const top = topDirectories(files);
+    expect(top[0]).toBe(".pnpm-store/ (300)");
+    expect(top).toHaveLength(3);
+  });
+});
+
+describe("afterDiff on a huge change", () => {
+  it("says where the files are, so a person can act on it", () => {
+    const changedFiles = [...Array.from({ length: 50 }, (_, i) => `.pnpm-store/x/${i}`), "src/a.ts"];
+    const d = afterDiff({ files: changedFiles.length, insertions: 1, deletions: 0, changedFiles }, task, DEFAULT_LIMITS);
+    expect(d.action).toBe("escalate");
+    expect(d.action === "escalate" && d.reason).toMatch(/mostly \.pnpm-store\/ \(50\)/);
   });
 });

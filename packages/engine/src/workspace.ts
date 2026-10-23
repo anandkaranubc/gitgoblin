@@ -139,15 +139,29 @@ export async function removeWorkspace(ws: Workspace, env: Record<string, string>
   await rm(ws.path, { recursive: true, force: true });
 }
 
-/** Stages every change, including new files, so diffs and commits see the same content. */
-export async function stageAll(wsPath: string, env: Record<string, string>): Promise<void> {
-  await git(["add", "-A"], wsPath, env);
+/**
+ * Package-manager stores that land in the workspace when the tool cannot reach its usual location.
+ * They are never source, so the engine never stages them. `.yarn/cache` is not here: zero-install
+ * repositories commit it.
+ */
+const STRAY_CACHES = [":(glob)**/.pnpm-store/**", ":(glob)**/.yarn-cache/**"];
+
+/**
+ * Stages every change, including new files, so diffs and commits see the same content. Stray tool
+ * caches are reset to how they were at the base commit, which also undoes an agent's own
+ * `git add -A` or commit of them.
+ */
+export async function stageAll(wsPath: string, env: Record<string, string>, baseSha?: string): Promise<void> {
+  await git(["add", "-A", "--", ".", ...STRAY_CACHES.map((p) => p.replace(":(glob)", ":(exclude,glob)"))], wsPath, env);
+  if (baseSha) await git(["reset", "-q", baseSha, "--", ...STRAY_CACHES], wsPath, env).catch(() => undefined);
 }
 
 /** Changes since the run's base commit, whether the agent committed them or not. */
 export async function diffStats(wsPath: string, baseSha: string, env: Record<string, string>): Promise<DiffStats> {
-  await stageAll(wsPath, env);
-  const numstat = await git(["diff", "--cached", "--numstat", baseSha], wsPath, env);
+  await stageAll(wsPath, env, baseSha);
+  // One line per file; the cap is the patch cap, so a huge change is measured and then escalated by
+  // the file limit with a readable reason, rather than failing on the size of this listing.
+  const numstat = await git(["diff", "--cached", "--numstat", baseSha], wsPath, env, 5 * 60_000, DEFAULT_MAX_PATCH_BYTES);
   const stats: DiffStats = { files: 0, insertions: 0, deletions: 0, changedFiles: [] };
   for (const line of numstat.split("\n").filter(Boolean)) {
     const [ins, del, file] = line.split("\t");
@@ -161,7 +175,7 @@ export async function diffStats(wsPath: string, baseSha: string, env: Record<str
 }
 
 export async function diffPatch(wsPath: string, baseSha: string, env: Record<string, string>, maxBytes = DEFAULT_MAX_PATCH_BYTES): Promise<string> {
-  await stageAll(wsPath, env);
+  await stageAll(wsPath, env, baseSha);
   return git(["diff", "--cached", baseSha], wsPath, env, 5 * 60_000, maxBytes);
 }
 
@@ -183,7 +197,7 @@ export async function hasGitIdentity(wsPath: string, env: Record<string, string>
  */
 export async function commitAll(wsPath: string, baseSha: string, message: string, env: Record<string, string>, signoff = false): Promise<string> {
   await git(["reset", "--quiet", "--soft", baseSha], wsPath, env);
-  await stageAll(wsPath, env);
+  await stageAll(wsPath, env, baseSha);
   if (!(await hasGitIdentity(wsPath, env))) {
     throw new Error("git user.name and user.email are not configured; commits must carry the operator's identity");
   }
