@@ -53,7 +53,7 @@ const DOC_EXT = new Set([".md", ".rst", ".txt", ".adoc", ".mdx"]);
 const CONFIG_EXT = new Set([".yml", ".yaml", ".json", ".toml", ".ini", ".cfg", ".xml", ".lock"]);
 
 const VENDORED_SEGMENTS = new Set([
-  "node_modules", "vendor", "vendors", "third_party", "third-party", "thirdparty", "external",
+  "node_modules", "vendor", "vendors", "vendored", "_vendor", "_vendored", "third_party", "third-party", "thirdparty", "3rdparty", "external", "extern", "externals",
   "dist", "build", "out", "target", "bin", "obj", ".venv", "venv", "site-packages", "__pycache__",
   "bower_components", "jspm_packages", ".yarn", "generated", "gen", "_build", "deps",
 ]);
@@ -63,7 +63,7 @@ const LOCKFILES = new Set([
   "Cargo.lock", "go.sum", "Gemfile.lock", "composer.lock", "flake.lock",
 ]);
 
-const TEST_DIR = /(^|\/)(tests?|__tests__|spec|specs|testing|e2e|integration-tests?)(\/|$)/;
+const TEST_DIR = /(^|\/)(tests?|__tests__|spec|specs|testing|e2e|integration-tests?)(\/|$)/i;
 const TEST_FILE = /(^|\/)(test_[^/]+\.py|[^/]+_test\.(py|go|rs|rb|ex|exs)|[^/]+\.(test|spec)\.[cm]?[jt]sx?|[^/]+Tests?\.(java|kt|cs|swift|scala)|[^/]+_spec\.rb|conftest\.py)$/;
 const DOCS_DIR = /(^|\/)(docs?|documentation|doc-src|wiki|site|website\/docs)(\/|$)/;
 
@@ -80,6 +80,11 @@ export function isVendored(path: string): boolean {
 
 export function isTestPath(path: string): boolean {
   return TEST_DIR.test(path) || TEST_FILE.test(path);
+}
+
+/** A test by its own name (foo.test.ts, test_foo.py), as opposed to a fixture that merely lives under tests/. */
+export function isTestSpecFile(path: string): boolean {
+  return TEST_FILE.test(path);
 }
 
 export function isDocsPath(path: string): boolean {

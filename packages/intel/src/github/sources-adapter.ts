@@ -1,4 +1,4 @@
-import { type GitHubApi, GitHubError, type GitHubStats } from "./client.ts";
+import { GitHubError, RateLimitError, type GitHubApi, type GitHubStats } from "./client.ts";
 
 /** The slice of `@gitgoblin/sources` intel relies on, typed structurally so no build coupling exists. */
 export interface SourcesLike {
@@ -25,7 +25,9 @@ export function adaptSources(sources: SourcesLike): SharedGitHubApi {
   };
   const translate = (error: unknown, path: string): never => {
     const e = error as { name?: string; status?: number; message?: string };
-    if (e?.name === "HttpError" && typeof e.status === "number") throw new GitHubError(e.message ?? `HTTP ${e.status}`, e.status, path);
+    // The shared client's RateLimitError (REST 403/429, and GraphQL RATE_LIMIT payloads) becomes intel's, so callers wait or stop.
+    if (e?.name === "RateLimitError") throw new RateLimitError(path, stats.remaining ?? 0);
+    if (typeof e?.status === "number" && (e.name === "HttpError" || /Error$/.test(e.name ?? ""))) throw new GitHubError(e.message ?? `HTTP ${e.status}`, e.status, path);
     if (e?.name === "GraphQLError" || e?.name === "MissingTokenError") throw new GitHubError(e.message ?? "GraphQL failed", 200, path);
     throw error;
   };

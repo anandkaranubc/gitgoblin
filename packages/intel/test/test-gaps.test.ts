@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTestIndex, findSkippedTests, looksUntested, testedStem } from "../src/analyzers/test-gaps.ts";
+import { buildTestIndex, findSkippedTests, looksUntested, stemWords, testedStem } from "../src/analyzers/test-gaps.ts";
 
 describe("test gap heuristics", () => {
   it("derives the tested module from test file names", () => {
@@ -23,6 +23,14 @@ describe("test gap heuristics", () => {
     expect(looksUntested("pkg/net/conn.go", "", index)).toBe(false);
     expect(looksUntested("pkg/other/thing.go", "", index)).toBe(true);
     expect(looksUntested("src/engine.rs", "#[cfg(test)]\nmod tests {}", index)).toBe(false);
+    expect(stemWords("PalmImagePlugin")).toEqual(["palm"]);
+    expect(stemWords("test_file_tga")).toEqual(["tga"]);
+    expect(stemWords("test_api_client")).toEqual([]);
+    const pillow = buildTestIndex([{ path: "Tests/test_file_palm.py", text: "from PIL import Image" }]);
+    expect(looksUntested("src/PIL/PalmImagePlugin.py", "", pillow)).toBe(false);
+    expect(looksUntested("src/PIL/TgaImagePlugin.py", "", pillow)).toBe(true);
+    const tga = buildTestIndex([{ path: "Tests/test_file_tga.py", text: "" }]);
+    expect(looksUntested("src/PIL/TgaImagePlugin.py", "", tga)).toBe(false);
   });
 
   it("finds skips without an environmental reason", () => {
@@ -41,5 +49,7 @@ def test_d(): ...
     expect(found[0]?.reason).toBe("flaky, see #123");
     const js = "it.skip('does thing', () => {});\ntest('ok', () => {});\nit.skip('needs network', () => {});";
     expect(findSkippedTests("a.test.js", js).map((f) => f.line)).toEqual([1]);
+    const go = 'func TestA(t *testing.T) {\n\tif testing.Short() {\n\t\tt.Skip("short test")\n\t}\n\tt.Skip("TODO: flaky on CI, see #12")\n}';
+    expect(findSkippedTests("a_test.go", go).map((f) => [f.line, f.reason])).toEqual([[5, "TODO: flaky on CI, see #12"]]);
   });
 });
