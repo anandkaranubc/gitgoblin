@@ -45,10 +45,13 @@ export function neutralizeForGitHub(text: string, ownIssue?: number): string {
  * mean nothing to a maintainer and expose the operator's setup. The prompt asks for them in
  * environmentNotes; this catches the ones that still land in the maintainer-facing lists.
  */
+/** Lines about the task's standing rather than the change: they were written for the operator. */
+const OPERATOR_NOTE = /\b(?:no|not yet|has not|hasn't|nobody)\b[^.]*\bconfirmed\b|\bconfirmed\b[^.]*\b(?:yet|so far)\b/i;
+
 const ENVIRONMENT_NOTE = /\bsandbox|ERR_PNPM_|\bEPERM\b|operation not permitted|reach the network|no network access|network access|\.pnpm-store|store lock|install-output\.txt|\bphase \d\b|\buntracked\b|\bthe (?:review )?hook\b|\bmy operator\b|\brecommend (?:approving|approval)\b/i;
 
 export function forMaintainers(lines: string[]): string[] {
-  return lines.filter((line) => !ENVIRONMENT_NOTE.test(line));
+  return lines.filter((line) => !ENVIRONMENT_NOTE.test(line) && !OPERATOR_NOTE.test(line));
 }
 
 function words(text: string): Set<string> {
@@ -104,12 +107,14 @@ export function pullRequestBody(input: DeliveryInput): string {
   // about files outside the change (a stray directory in the workspace) are not about the change.
   const changed = new Set(verification.diff.changedFiles);
   // The reviewer often restates what the implementer already listed as a known gap; say it once.
-  const gaps = forMaintainers(notes.knownGaps);
+  // The task's risks are intel's notes to the operator; the model sometimes copies them into its own.
+  const risks = task.risks.map(words);
+  const gaps = forMaintainers(notes.knownGaps).filter((g) => !restates(g, risks));
   const said = gaps.map(words);
   const nits = review.findings
     .filter((f) => (f.severity === "minor" || f.severity === "nit") && changed.has(f.file))
     .filter((f) => forMaintainers([f.summary]).length === 1 && !restates(f.summary, said));
-  const prNotes = review.prNotes && forMaintainers([review.prNotes]).length === 1 && !restates(review.prNotes, [...said, ...nits.map((f) => words(f.summary))]) ? review.prNotes : "";
+  const prNotes = review.prNotes && forMaintainers([review.prNotes]).length === 1 && !restates(review.prNotes, [...said, ...risks, ...nits.map((f) => words(f.summary))]) ? review.prNotes : "";
   const reviewerNotes = [
     ...gaps.map((g) => `- ${n(g)}`),
     ...nits.map((f) => `- Reviewer note (${f.severity}): ${n(f.summary)}`),
