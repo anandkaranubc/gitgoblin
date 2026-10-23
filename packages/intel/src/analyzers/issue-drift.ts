@@ -85,7 +85,7 @@ export function permalinks(text: string, ref: { host: string; owner: string; nam
   const out: Permalink[] = [];
   const re = new RegExp(`https?://${escapeRe(ref.host)}/${escapeRe(ref.owner)}/${escapeRe(ref.name)}/(?:-/)?(?:blob|blame)/([^/\\s#)]+)/([^\\s#)]+?)(?:#L(\\d+)(?:-L?(\\d+))?)?(?=[\\s)\\]"'<>]|$)`, "gi");
   for (const m of text.matchAll(re)) {
-    const path = decodeURIComponent(m[2]!).replace(/\/+$/, "");
+    const path = trimEnd(decodeURIComponent(m[2]!), "/");
     if (!path || out.some((p) => p.path === path && p.rev === m[1])) continue;
     const a = m[3] ? Number(m[3]) : undefined;
     const b = m[4] ? Number(m[4]) : a;

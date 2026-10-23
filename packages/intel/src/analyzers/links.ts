@@ -100,7 +100,8 @@ export function siteSlugify(heading: string): string {
     .replace(/<[^>]+>/g, "")
     .replace(/[`*~]/g, "")
     .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/^-+/, "")
+    .replace(/-{1,200}$/, "");
 }
 
 /** Anchors a Markdown file exposes, in GitHub style and in static-site style. */
