@@ -27,9 +27,13 @@ at a local checkout) stays there until you remove it.
 
 Requirements: Node 24, git, a Claude Code login or `ANTHROPIC_API_KEY` (the Agent SDK uses either),
 and `gh auth login` for publishing. The agent's bash runs in the Agent SDK sandbox with no network;
-pass `--no-sandbox` only on platforms without one. The repository's install and test commands run
-on your machine with a credential-free environment; for repositories you do not trust, run the
-engine itself inside a container.
+pass `--no-sandbox` only on platforms without one. The repository's own install and check commands
+run on your machine with a credential-free environment and, by default, inside an OS sandbox
+(`sandbox-exec` on macOS, `bwrap` on Linux when installed): writes limited to the checkout and tool
+caches, credential files hidden, network only during install. `--check-isolation sandbox` makes the
+run fail when no OS sandbox is available; `none` turns it off, for example when a tool needs to
+write outside those places. The install command still runs the repository's own scripts: for
+repositories you do not trust, run the engine itself inside a container.
 
 ## Library
 
@@ -58,6 +62,7 @@ without a model.
 | `verify.ts` | runs the repository's own checks and compares with the baseline |
 | `workspace.ts` | git: worktree or clone, diffs against the base commit, the single squashed commit |
 | `exec.ts` | runs commands with timeouts, process-group kill and capped output |
+| `hostbox.ts` | OS sandbox (sandbox-exec, bwrap) for the repository's own commands |
 | `journal.ts` | the run directory: events, artifacts, report |
 | `deliver.ts` | commit message, PR text, push and PR creation via `gh` |
 | `intake.ts` | maps `@gitgoblin/intel` contracts to the engine's `Task` |

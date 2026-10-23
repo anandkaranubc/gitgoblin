@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
-import { parseCostLimit, parseEffort } from "./flags.ts";
+import { parseCheckIsolation, parseCostLimit, parseEffort } from "./flags.ts";
 import { RunJournal } from "./journal.ts";
 import { publishRun, runContribution } from "./orchestrator.ts";
 
@@ -23,6 +23,8 @@ Run options:
   --confirm-plan      pause after planning and ask before implementing
   --skip-install      do not run the repository's install command
   --no-sandbox        rely on hooks only (not recommended)
+  --check-isolation   how the repository's own commands run on this machine:
+                      auto (default: OS sandbox when available), sandbox (required), none
 
 Publishing never happens during run. It pushes with your gh login and opens a draft PR
 only after you confirm.`;
@@ -63,6 +65,7 @@ async function main(argv: string[]): Promise<void> {
         "confirm-plan": { type: "boolean" },
         "skip-install": { type: "boolean" },
         "no-sandbox": { type: "boolean" },
+        "check-isolation": { type: "string" },
       },
     });
     let input;
@@ -77,6 +80,7 @@ async function main(argv: string[]): Promise<void> {
       fail("run needs --task FILE or --report FILE --opportunity ID");
     }
     const effort = parseEffort(values.effort);
+    const checkIsolation = parseCheckIsolation(values["check-isolation"]);
     if (values["no-sandbox"]) process.stderr.write("warning: --no-sandbox: the agent's commands run on this machine with only text-matching hooks between them and your files\n");
     const result = await runContribution(input, {
       workdir: path.resolve(values.workdir ?? ".gitgoblin"),
@@ -85,6 +89,7 @@ async function main(argv: string[]): Promise<void> {
       ...(effort ? { effort } : {}),
       ...(values["skip-install"] ? { skipInstall: true } : {}),
       ...(values["no-sandbox"] ? { isolation: "none" as const } : {}),
+      ...(checkIsolation ? { checkIsolation } : {}),
       ...(values["confirm-plan"]
         ? {
             approvePlan: async (plan) => {

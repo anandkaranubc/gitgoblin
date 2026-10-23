@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { PhaseSpec } from "../src/agent.ts";
 import { silentReporter } from "../src/journal.ts";
+import { detectHostSandbox } from "../src/hostbox.ts";
 import { publishRun, readGuidance, runContribution } from "../src/orchestrator.ts";
 import { git } from "../src/workspace.ts";
 import { approve, createFixtureRepo, env, FIXED, fixtureTask, investigation, notes, plan, REPRO_TEST, scriptedRunner, type PhaseHandler } from "./helpers/fixture.ts";
@@ -312,6 +313,28 @@ describe("runContribution", () => {
     const delivery = JSON.parse(readFileSync(deliveryFile, "utf8"));
     writeFileSync(deliveryFile, JSON.stringify({ ...delivery, commitSha: "not a sha" }));
     await expect(publishRun(result.runId, { workdir: wd, approved: true, dryRun: true, env })).rejects.toThrow();
+  });
+
+  it("runs the repository's checks inside the OS sandbox when one is required and available", async () => {
+    const repo = await createFixtureRepo();
+    const result = await run(happyPath, [], { checkIsolation: "sandbox" })(repo, workdir());
+    if (detectHostSandbox()) {
+      expect(result.status).toBe("awaiting_approval");
+      const events = readFileSync(path.join(result.runDir, "events.jsonl"), "utf8");
+      expect(events).toMatch(/"type":"check-isolation","kind":"(sandbox-exec|bwrap)"/);
+      expect(readFileSync(path.join(result.runDir, "report.md"), "utf8")).toMatch(/Repository commands ran under (sandbox-exec|bwrap)/);
+    } else {
+      expect(result.status).toBe("failed");
+      expect(result.reason).toMatch(/no OS sandbox/);
+    }
+  });
+
+  it("records when repository commands ran without an OS sandbox", async () => {
+    const repo = await createFixtureRepo();
+    const result = await run(happyPath, [], { checkIsolation: "none" })(repo, workdir());
+    expect(result.status).toBe("awaiting_approval");
+    expect(readFileSync(path.join(result.runDir, "events.jsonl"), "utf8")).toContain('"type":"check-isolation","kind":"none"');
+    expect(readFileSync(path.join(result.runDir, "report.md"), "utf8")).toContain("ran without an OS sandbox");
   });
 
   it("reports a failed phase instead of throwing", async () => {
