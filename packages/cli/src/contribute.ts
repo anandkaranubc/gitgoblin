@@ -1,5 +1,5 @@
 import { styleText } from "node:util";
-import type { ChangePlan } from "@gitgoblin/engine";
+import type { ChangePlan, RunResult } from "@gitgoblin/engine";
 import type { AnalysisReport, ContributionOpportunity } from "@gitgoblin/intel";
 import type { Style } from "./format.ts";
 
@@ -94,4 +94,19 @@ export function formatPlan(plan: ChangePlan): string {
   if (plan.risks.length) lines.push(`Risks: ${plan.risks.join("; ")}`);
   if (plan.needsNewDependency) lines.push("This plan adds a new dependency, which is usually a maintainer decision.");
   return lines.join("\n");
+}
+
+/** The reason's first sentence, cut at a word past `max`; the run report carries the whole text. */
+function firstSentence(reason: string, max = 200): string {
+  const boundary = /[.;](?=\s)/.exec(reason);
+  let head = boundary && boundary.index < max ? reason.slice(0, boundary.index + (reason[boundary.index] === "." ? 1 : 0)) : reason;
+  if (head.length > max) head = `${head.slice(0, max).replace(/\s+\S*$/, "")}…`;
+  return head.length < reason.length ? `${head} (the report below has the rest)` : head;
+}
+
+/** The lines a person reads first when a run ends: what happened, what it cost, where the artifacts are. */
+export function describeRun(result: RunResult): string[] {
+  const lines = [`Run ${result.status}: ${firstSentence(result.reason)}`, `Cost: $${result.costUsd.toFixed(2)} in ${Math.round(result.durationMs / 1000)}s`, `Run directory: ${result.runDir}`];
+  for (const question of result.questions) lines.push(`Question for you: ${question}`);
+  return lines;
 }
