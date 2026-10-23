@@ -28,7 +28,7 @@ sources.close();
 | Retries | Network errors and `5xx` retry twice with backoff, then fall back to a stale copy if one exists. |
 | Concurrency | At most 4 in-flight requests per host. |
 | Body limit | Responses over `maxBodyBytes` (32 MiB) are dropped mid-stream and reported as an `HttpError`, never buffered or cached. |
-| Self-healing | A cached body that no longer parses as JSON is discarded and fetched again. |
+| Self-healing | A cached body that no longer parses as JSON is discarded and fetched again. A cache that cannot be read or written (a lock held by another process past the busy timeout, a full disk) costs the cache entry, never the request, and is reported as a `cache-error` event. |
 | Observability | `onEvent` reports hits, misses, revalidations, retries, waits, discarded entries and the cache fallback; `rateLimits()` exposes the latest headers per host and resource. |
 
 Caches implement `HttpCache`. `SqliteCache` uses Node's built-in `node:sqlite`
