@@ -6,7 +6,7 @@ order: 1
 
 # Getting started
 
-gitgoblin is in early development. Discovery and repository analysis work from a clone today; preparing a contribution is experimental, and no single command runs the whole flow yet.
+gitgoblin is in early development. Discovery and repository analysis work from a clone today, and the `gitgoblin` command carries the whole flow from `discover` to `contribute`; preparing a contribution is experimental, runs a model, and costs money per run.
 
 ## Discover a repository
 
@@ -19,7 +19,7 @@ npm install
 npx gitgoblin discover contribute --language typescript
 ```
 
-That prints ten ranked repositories with the reasons behind each ranking. `npx gitgoblin goals` lists the five goals, `explain owner/name` shows why one repository ranked where it did, `analyze owner/name` profiles one repository and lists its evidence-backed opportunities, and `--json` prints every signal and the evidence behind it. The repository's [getting started tutorial](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/getting-started.md) covers the filters, the token, the cache and analysis.
+That prints ten ranked repositories with the reasons behind each ranking. `npx gitgoblin goals` lists the five goals, `explain owner/name` shows why one repository ranked where it did, `analyze owner/name` profiles one repository and lists its evidence-backed opportunities, `contribute owner/name` has the engine draft one of them and asks you before anything is run or published, and `--json` prints every signal and the evidence behind it. The repository's [getting started tutorial](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/getting-started.md) covers the filters, the token, the cache and analysis.
 
 ## Use it from your AI agent
 
@@ -47,7 +47,7 @@ npm run typecheck
 | `packages/core` | Shared types: repository identity, discovery goals, results and signals. Working and tested. |
 | `packages/sources` | Clients for GitHub and package registries, with a local cache. In progress. |
 | `packages/discovery` | Ranking repositories for a goal, with reasons. In progress. |
-| `packages/cli` | The `gitgoblin` command line. In progress. |
+| `packages/cli` | The `gitgoblin` command line: `discover`, `explain`, `analyze`, `contribute`, `runs`, `show`, `publish`. Working from a clone. |
 | `packages/intel` | Profiling one repository and finding evidence-backed opportunities. Working from a clone; scores still being calibrated. |
 | `packages/engine` | Turning one opportunity into a reviewable pull request. Pipeline and the `gitgoblin-engine` command written; see [its README](https://github.com/anandkaranubc/gitgoblin/blob/main/packages/engine/README.md). |
 | `packages/mcp` | The MCP server that gives Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents gitgoblin's discovery and analysis. Released on GitHub; see [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md). |
