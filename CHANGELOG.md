@@ -55,6 +55,8 @@ The first release of the `gitgoblin` command.
   certificate failure points at `NODE_EXTRA_CA_CERTS`, and a repository that does not exist is
   reported as not found rather than as an HTTP status. When GitHub refuses the issue sample, `analyze`
   and `contribute` say that issues were not analyzed and why, instead of showing a shorter list.
+- The response cache, shared with the MCP server, never fails a command: when it is locked by
+  another process, full or damaged, the answer comes from the network and the cache entry is skipped.
 
 Needs Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the
 CLI (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude
