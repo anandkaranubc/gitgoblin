@@ -18,12 +18,15 @@ export interface Candidate {
   /** Newcomer outcomes in the year before T: the behavioural signal discovery lacks. */
   priorNewcomerMergeRate?: number | undefined;
   priorNewcomerMerged: number;
+  /** Every outside contributor's pull requests in the year before T: computable from recent pull requests alone. */
+  priorOutsiderMergeRate?: number | undefined;
+  priorOutsiderMerged?: number | undefined;
   /** Outcome in the window after T. */
   grade: number;
   merged: number;
 }
 
-export const RANKINGS = ["gitgoblin", "stars", "starterIssues", "recency", "priorNewcomers", "random"] as const;
+export const RANKINGS = ["gitgoblin", "stars", "starterIssues", "recency", "priorNewcomers", "priorOutsiders", "random"] as const;
 export type Ranking = (typeof RANKINGS)[number];
 
 export const RANKING_LABELS: Record<Ranking, string> = {
@@ -32,6 +35,7 @@ export const RANKING_LABELS: Record<Ranking, string> = {
   starterIssues: "most open starter issues",
   recency: "most recent commit",
   priorNewcomers: "newcomer merge rate in the prior year",
+  priorOutsiders: "outside-contributor merge rate in the prior year",
   random: "random",
 };
 
@@ -49,6 +53,8 @@ export function rankingKey(ranking: Ranking, c: Candidate): number | undefined {
     case "priorNewcomers":
       // Rate alone is noisy at one merged pull request; weight it by how much was merged.
       return c.priorNewcomerMergeRate === undefined ? undefined : c.priorNewcomerMergeRate * Math.log1p(c.priorNewcomerMerged);
+    case "priorOutsiders":
+      return c.priorOutsiderMergeRate === undefined ? undefined : c.priorOutsiderMergeRate * Math.log1p(c.priorOutsiderMerged ?? 0);
     case "random":
       return 0;
   }

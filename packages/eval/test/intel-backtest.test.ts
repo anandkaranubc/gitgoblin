@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ContributionOpportunity } from "@gitgoblin/intel";
-import { acceptedIssues, controlLine, gradeFinding, gradeIssue, starterBaseline, subkind } from "../src/intel-backtest.ts";
+import { acceptedIssues, controlLine, gradeFinding, gradeIssue, isLiveFinding, starterBaseline, subkind } from "../src/intel-backtest.ts";
 
 function sh(args: string[], cwd: string): string {
   return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_DATE: "2026-08-01T00:00:00Z", GIT_COMMITTER_DATE: "2026-08-01T00:00:00Z", GIT_AUTHOR_NAME: "Ann", GIT_AUTHOR_EMAIL: "a@x", GIT_COMMITTER_NAME: "Ann", GIT_COMMITTER_EMAIL: "a@x" } });
@@ -118,7 +118,9 @@ describe("containsExcerpt", () => {
     expect(containsExcerpt("foo(  alpha,\n   beta )", "foo( alpha, beta )")).toBe(true);
     expect(containsExcerpt("uses-node12: true", "uses-node12")).toBe(true);
     expect(containsExcerpt("uses-node12: true", "uses-node1")).toBe(false);
-    expect(containsExcerpt("short", "short")).toBe(false);
+    expect(containsExcerpt("short", "short")).toBe(true);
+    expect(containsExcerpt("    #[ignore]\n    fn slow() {}", "#[ignore]")).toBe(true);
+    expect(containsExcerpt("    fn slow() {}", "#[ignore]")).toBe(false);
   });
 });
 
@@ -162,5 +164,16 @@ describe("containsExcerpt on reconstructed excerpts", () => {
     expect(anchorPhrase("@pytest.mark.xfail(not (sys.version_info >= (3, 13)), reason=\"failing test\")")).toBeUndefined();
     expect(containsExcerpt("// TODO: handle methods, for now return early in a class body. For example, an additional\n", "TODO: handle methods, for now return early in a class body. For exampl…")).toBe(true);
     expect(containsExcerpt("// TODO: handle methods\n", "TODO: handle methods, for now…")).toBe(false);
+  });
+});
+
+describe("isLiveFinding", () => {
+  it("keeps rule-table CI findings and drops run-based ones", () => {
+    const file = { id: "e", kind: "file" as const, locator: ".github/workflows/ci.yml:3", excerpt: "runs-on: ubuntu-20.04", observedAt: "" };
+    const run = { id: "r", kind: "workflow_run" as const, locator: "https://github.com/o/n/actions/runs/1", observedAt: "" };
+    expect(isLiveFinding({ kind: "ci_rot", evidence: [file] })).toBe(false);
+    expect(isLiveFinding({ kind: "ci_rot", evidence: [run] })).toBe(true);
+    expect(isLiveFinding({ kind: "issue", evidence: [file] })).toBe(true);
+    expect(isLiveFinding({ kind: "tech_debt", evidence: [file] })).toBe(false);
   });
 });

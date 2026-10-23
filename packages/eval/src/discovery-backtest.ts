@@ -8,10 +8,10 @@ import { computeSignals, type EnrichedRepo, scoreRepo } from "@gitgoblin/discove
 import { createSources, type GitHubRepoDetails, STARTER_ISSUE_LABELS } from "@gitgoblin/sources";
 import { enrichedAsOf } from "./asof.ts";
 import { type Candidate, RANKINGS, type Ranking, rankCandidates, rankingKey } from "./baselines.ts";
-import { fetchHistory, graphqlReset, withRateLimitRetry } from "./github/history.ts";
+import { fetchHistory, fetchLabeledIssues, graphqlReset, withRateLimitRetry } from "./github/history.ts";
 import type { Example } from "./learn.ts";
 import { auc, bootstrap, ndcgAtK, precisionAtK, spearman } from "./metrics.ts";
-import { gradeOutcome, type NewcomerOutcome, newcomerOutcomes, type TrackerStats, trackerStats } from "./outcomes.ts";
+import { gradeOutcome, type NewcomerOutcome, newcomerOutcomes, type OutsiderOutcome, outsiderOutcomes, type TrackerStats, trackerStats } from "./outcomes.ts";
 import { type PoolMember, poolQueries, samplePool } from "./pool.ts";
 
 const DAY_MS = 86_400_000;
@@ -33,6 +33,8 @@ export interface BacktestRow {
   grade: number;
   /** The same measurement over the year before T. */
   prior: NewcomerOutcome;
+  /** Every outside pull request in the year before T: the query-time version of `prior`. Absent in datasets fetched before it existed. */
+  priorOutsider?: OutsiderOutcome | undefined;
   tracker: TrackerStats;
   historyStart?: string | undefined;
   prsTruncated: boolean;
@@ -65,6 +67,8 @@ export interface FetchOptions {
   cachePath?: string | undefined;
   /** Reuse this dataset's pool and rows; only missing or skipped candidates are fetched. */
   resume?: BacktestDataset | undefined;
+  /** With `resume`: keep its pool but recompute every row (history comes from the cache, so this is cheap). */
+  recompute?: boolean | undefined;
   /** Repositories fetched at once. Default 3. */
   concurrency?: number | undefined;
   /** Called with the dataset so far after every language and every 25 repositories, so a crash loses little. */
@@ -90,7 +94,7 @@ export async function fetchDataset(options: FetchOptions): Promise<BacktestDatas
 
   const sources = await createSources({ cachePath: options.cachePath });
   if (!sources.github.authenticated) throw new Error("a GitHub token is required (GITHUB_TOKEN or gh auth login)");
-  const rows: BacktestRow[] = [...(options.resume?.rows ?? [])];
+  const rows: BacktestRow[] = options.recompute ? [] : [...(options.resume?.rows ?? [])];
   const done = new Set(rows.map((r) => r.id));
   const poolByLanguage: Record<string, PoolMember[]> = {};
   const skipped: BacktestDataset["skipped"] = [];
@@ -126,7 +130,11 @@ export async function fetchDataset(options: FetchOptions): Promise<BacktestDatas
             sources.ecosystems.lookupRepository(facts).catch(() => undefined),
             fetchHistory(sources.github, facts.owner, facts.name, { since, asOf, log: (m) => log(`${id}: ${m}`) }),
           ]);
-          const enriched = enrichedAsOf({ facts, ecosystems, details: details.get(id) }, history, asOf, STARTER_ISSUE_LABELS);
+          // The issue history only reaches a year back; starter issues opened earlier and still open at T come from a labelled-issues query.
+          const labelled = await fetchLabeledIssues(sources.github, facts.owner, facts.name, STARTER_ISSUE_LABELS, 3).catch(() => []);
+          const known = new Set(history.issues.map((i) => i.number));
+          const issues = [...history.issues, ...labelled.filter((i) => !known.has(i.number))];
+          const enriched = enrichedAsOf({ facts, ecosystems, details: details.get(id) }, { ...history, issues }, asOf, STARTER_ISSUE_LABELS);
           const scored = scoreRepo(enriched, "contribute", { now: asOfMs });
           const historyStart = history.historyStart ?? asOf;
           const outcome = newcomerOutcomes(history.prs, { start: asOf, end: windowEnd }, historyStart);
@@ -146,6 +154,7 @@ export async function fetchDataset(options: FetchOptions): Promise<BacktestDatas
             outcome,
             grade: gradeOutcome(outcome),
             prior,
+            priorOutsider: outsiderOutcomes(history.prs, { start: since, end: asOf }),
             tracker: trackerStats(history.prs, history.issues, { start: since, end: asOf }),
             historyStart: history.historyStart,
             prsTruncated: history.prsTruncated,
@@ -186,6 +195,8 @@ export function toCandidate(row: BacktestRow): Candidate {
     daysSinceCommitAtT: row.daysSinceCommitAtT,
     priorNewcomerMergeRate: row.prior.mergeRate,
     priorNewcomerMerged: row.prior.merged,
+    priorOutsiderMergeRate: row.priorOutsider?.mergeRate,
+    priorOutsiderMerged: row.priorOutsider?.merged ?? 0,
     grade: row.grade,
     merged: row.outcome.merged,
   };
@@ -198,8 +209,19 @@ export interface RankingMetrics {
   spearman: number | undefined;
 }
 
+export interface OddsMetric {
+  /** Spearman correlation between the ranking key and the newcomer merge rate in the window, with a 95% bootstrap interval. */
+  spearman: { estimate: number; lower: number; upper: number };
+  /** AUC for separating repositories that merged at least half of newcomers' pull requests. */
+  auc: number | undefined;
+}
+
 export interface Evaluation {
   k: number;
+  /** Repositories with at least three decided newcomer pull requests in the window, pooled over languages. */
+  oddsPool: number;
+  /** Does the ranking pick projects where a newcomer's pull request is likely to be merged, regardless of how busy they are? */
+  odds: Record<Ranking, OddsMetric | undefined>;
   /** Rows dropped because their fetched history did not reach back to T. */
   uncovered: number;
   /** Rows after exclusion, per language. */
@@ -233,9 +255,21 @@ function byLanguage(cands: Candidate[]): Map<string, Candidate[]> {
   return groups;
 }
 
-export function evaluate(dataset: Pick<BacktestDataset, "rows" | "asOf">, options: { k?: number | undefined; iterations?: number | undefined; seed?: number | undefined } = {}): Evaluation {
+export interface EvaluateOptions {
+  k?: number | undefined;
+  iterations?: number | undefined;
+  seed?: number | undefined;
+  /**
+   * Sensitivity check: keep repositories whose history did not reach back to T. Their grades
+   * over-count newcomers and their as-of scores lack pre-T pull requests, so this favours
+   * popularity and handicaps gitgoblin; a result that survives it is robust to the coverage drop.
+   */
+  includeUncovered?: boolean | undefined;
+}
+
+export function evaluate(dataset: Pick<BacktestDataset, "rows" | "asOf">, options: EvaluateOptions = {}): Evaluation {
   const k = options.k ?? 10;
-  const usable = dataset.rows.filter((row) => covered(row, dataset.asOf));
+  const usable = options.includeUncovered ? dataset.rows : dataset.rows.filter((row) => covered(row, dataset.asOf));
   const cands = usable.map(toCandidate);
   const groups = byLanguage(cands);
   const perLanguage: Evaluation["perLanguage"] = {};
@@ -260,8 +294,24 @@ export function evaluate(dataset: Pick<BacktestDataset, "rows" | "asOf">, option
     }),
   ) as Evaluation["ndcgDelta"];
 
+  const decided = cands.filter((c, i) => !c.excluded && usable[i]!.outcome.merged + usable[i]!.outcome.closedUnmerged >= 3);
+  const rates = new Map(usable.map((row) => [row.id, row.outcome.mergeRate ?? 0]));
+  const odds = Object.fromEntries(
+    RANKINGS.map((r) => {
+      if (r === "random" || decided.length < 10) return [r, undefined];
+      const xs = decided.map((c) => rankingKey(r, c) ?? Number.NEGATIVE_INFINITY);
+      const ys = decided.map((c) => rates.get(c.id)!);
+      const b = bootstrap(decided.length, (idx) => spearman(idx.map((i) => xs[i]!), idx.map((i) => ys[i]!)) ?? 0, { iterations: options.iterations ?? 1000, seed: options.seed ?? 1 });
+      const pos = decided.flatMap((c, i) => (ys[i]! >= 0.5 ? [xs[i]!] : []));
+      const neg = decided.flatMap((c, i) => (ys[i]! < 0.5 ? [xs[i]!] : []));
+      return [r, { spearman: { estimate: b.estimate, lower: b.lower, upper: b.upper }, auc: auc(pos, neg) }];
+    }),
+  ) as Evaluation["odds"];
+
   return {
     k,
+    oddsPool: decided.length,
+    odds,
     uncovered: dataset.rows.length - usable.length,
     pools: [...groups].map(([language, pool]) => ({ language, candidates: pool.length, eligible: pool.filter((c) => !c.excluded).length, grades: pool.filter((c) => !c.excluded).map((c) => c.grade) })),
     overall,
@@ -287,6 +337,7 @@ export function examplesFrom(dataset: Pick<BacktestDataset, "rows" | "asOf">, mi
           ...signals,
           priorNewcomerMergeRate: row.prior.mergeRate,
           priorNewcomerMerged: Math.log1p(row.prior.merged),
+          priorOutsiderMergeRate: row.priorOutsider?.mergeRate,
           priorOutsiderMerged: Math.log1p(row.tracker.outsiderMerged),
           starterIssuesAtT: Math.log1p(row.starterIssuesAtT),
         },
@@ -298,5 +349,20 @@ export function examplesFrom(dataset: Pick<BacktestDataset, "rows" | "asOf">, mi
 
 export const LEARN_FEATURES = [
   "activity", "responsiveness", "busFactor", "newcomerFriendliness", "docs", "maturity", "popularity", "momentum", "license",
-  "priorNewcomerMergeRate", "priorNewcomerMerged", "priorOutsiderMerged", "starterIssuesAtT",
+  "priorNewcomerMergeRate", "priorNewcomerMerged", "priorOutsiderMergeRate", "priorOutsiderMerged", "starterIssuesAtT",
 ];
+
+/**
+ * Re-scores every row from its stored as-of input with the discovery code checked out now, so a
+ * change to discovery's signals or weights can be measured on the same past without fetching again.
+ */
+export function rescore<D extends Pick<BacktestDataset, "rows" | "asOf">>(dataset: D): D {
+  const now = Date.parse(dataset.asOf);
+  return {
+    ...dataset,
+    rows: dataset.rows.map((row) => {
+      const scored = scoreRepo(row.enriched, "contribute", { now });
+      return { ...row, score: scored.score, excluded: scored.excluded, reasons: scored.reasons.slice(0, 4) };
+    }),
+  };
+}

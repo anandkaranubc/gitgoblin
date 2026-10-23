@@ -33,11 +33,22 @@ describe("evaluate", () => {
     expect(ev.ndcgDelta.stars.upper).toBeGreaterThanOrEqual(ev.ndcgDelta.stars.estimate);
   });
 
+  it("rescores stored inputs with the current discovery code", async () => {
+    const { rescore } = await import("../src/discovery-backtest.ts");
+    const re = rescore({ rows: [rows[0]!], asOf: "2026-06-01T00:00:00Z" });
+    expect(re.rows[0]!.score).not.toBe(0.9);
+    expect(re.rows[0]!.score).toBeGreaterThanOrEqual(0);
+    expect(re.rows[0]!.id).toBe("a");
+  });
+
   it("drops rows whose history does not reach back to T", () => {
     const late = { ...rows[0]!, id: "late", historyStart: "2026-07-01T00:00:00Z" };
     const ev = evaluate({ rows: [...rows, late], asOf: "2026-06-01T00:00:00Z" }, { k: 3, iterations: 10 });
     expect(ev.uncovered).toBe(1);
     expect(ev.pools.find((p) => p.language === "ts")?.candidates).toBe(5);
+    const all = evaluate({ rows: [...rows, late], asOf: "2026-06-01T00:00:00Z" }, { k: 3, iterations: 10, includeUncovered: true });
+    expect(all.uncovered).toBe(0);
+    expect(all.pools.find((p) => p.language === "ts")?.candidates).toBe(6);
   });
 
   it("maps rows to candidates with the prior-year behavioural signal", () => {

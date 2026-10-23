@@ -89,6 +89,31 @@ Learning: a logistic fit of the grade on discovery's signals with leave-one-
 language-out validation says whether re-weighting would generalise. A change
 to `profiles.ts` needs a held-out improvement, not a fitted one.
 
+Decision rule, written down on 2026-10-23 before the first complete E1
+dataset was read: a change to discovery's `contribute` ranking ships only if
+(a) on the primary metric, macro nDCG@10 over languages, it beats the current
+score with a paired 95% bootstrap interval that excludes zero; (b) it does so
+on a second as-of date not used to design it; and (c) the signal it adds can
+be computed at query time from data discovery already fetches or can fetch
+for about one request per candidate. Secondary metrics (AUC, precision@10)
+are reported but cannot carry a decision on their own.
+
+Amendment, 2026-10-23 17:43 UTC, written after reading the 2026-06-20 data and before
+reading any 2026-02-15 data. The 2026-06-20 data showed that the graded
+outcome partly rewards busy projects, and that a second outcome matters to a
+newcomer: the share of newcomers' pull requests that get merged ("newcomer
+odds", Spearman with the ranking among repositories with three or more decided
+newcomer pull requests). It was not pre-registered, so it is treated as a
+hypothesis from the design date and tested on the held-out date. One candidate
+was chosen on 2026-06-20 ("V2": a new `acceptance` signal, the share of pull
+requests merged in the past year, weight 3; responsiveness 3 to 1; activity
+2.5 to 3; bus factor 1 to 2; newcomer friendliness 3 to 2; docs 1.5 to 0.5;
+license 1 to 0.5). It ships if, on 2026-02-15, against the current weights:
+(1) the newcomer-odds correlation improves with a paired 95% interval that
+excludes zero, and (2) nDCG@10 does not get worse by more than 0.05 (the
+lower bound of its paired interval is above -0.05). No other candidate is
+tested on 2026-02-15.
+
 ### E2. Intel opportunities against later changes
 
 For the calibration and held-out repositories, analyze the default-branch

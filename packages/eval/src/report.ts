@@ -1,6 +1,6 @@
 import { RANKING_LABELS, RANKINGS } from "./baselines.ts";
 import { type BacktestDataset, type BacktestRow, covered, type Evaluation } from "./discovery-backtest.ts";
-import { subkind } from "./intel-backtest.ts";
+import { SWEEP_FILES, subkind } from "./intel-backtest.ts";
 
 export function table(header: string[], rows: (string | number | undefined)[][]): string {
   const cell = (v: string | number | undefined) => (v === undefined ? "n/a" : typeof v === "number" ? fmt(v) : v);
@@ -18,7 +18,7 @@ export function pct(part: number, whole: number): string {
 export function renderEvaluation(dataset: Pick<BacktestDataset, "asOf" | "windowDays" | "fetchedAt" | "rows">, ev: Evaluation): string {
   const lines: string[] = [];
   lines.push(`## Discovery backtest: contribute ranking against newcomer outcomes`, "");
-  lines.push(`As of ${dataset.asOf.slice(0, 10)}, outcomes over the following ${dataset.windowDays} days, fetched ${dataset.fetchedAt.slice(0, 10)}. ${dataset.rows.length} repositories${ev.uncovered ? `, ${ev.uncovered} dropped because the pull request history fetched did not reach back to the as-of date` : ""}.`, "");
+  lines.push(`As of ${dataset.asOf.slice(0, 10)}, outcomes over the following ${dataset.windowDays} days, fetched ${dataset.fetchedAt.slice(0, 10)}. ${dataset.rows.length} repositories${ev.uncovered ? `, ${ev.uncovered} dropped because the pull request history fetched did not reach back to the as-of date` : ", all included (sensitivity check: rows whose history does not reach back to the as-of date favour popularity)"}.`, "");
   lines.push(
     table(
       ["language", "candidates", "eligible at T", "grade 0", "grade 1", "grade 2", "grade 3"],
@@ -34,6 +34,17 @@ export function renderEvaluation(dataset: Pick<BacktestDataset, "asOf" | "window
         const m = ev.overall[r];
         const d = ev.ndcgDelta[r];
         return [RANKING_LABELS[r], m.ndcg, m.precision, m.auc, m.spearman, r === "gitgoblin" ? "" : `${d.estimate >= 0 ? "+" : ""}${fmt(d.estimate)} [${fmt(d.lower)}, ${fmt(d.upper)}]`];
+      }),
+    ),
+    "",
+  );
+  lines.push(`Newcomer's odds: among the ${ev.oddsPool} eligible repositories with at least three decided newcomer pull requests in the window, how well does each ranking predict the share of them that were merged? This outcome ignores how busy a project is.`, "");
+  lines.push(
+    table(
+      ["ranking", "Spearman with newcomer merge rate", "AUC (merge rate >= 0.5)"],
+      RANKINGS.filter((r) => ev.odds[r]).map((r) => {
+        const o = ev.odds[r]!;
+        return [RANKING_LABELS[r], `${fmt(o.spearman.estimate)} [${fmt(o.spearman.lower)}, ${fmt(o.spearman.upper)}]`, o.auc];
       }),
     ),
     "",
@@ -74,9 +85,9 @@ export function renderIntel(dataset: { asOf: string; fetchedAt: string; rows: im
   const lines: string[] = [];
   const findings = dataset.rows.flatMap((r) => r.findings.map((f) => ({ ...f, repo: r.id })));
   lines.push(`## Intel backtest: opportunities found at ${dataset.asOf.slice(0, 10)}, checked ${dataset.fetchedAt.slice(0, 10)}`, "");
-  lines.push(`${dataset.rows.length} repositories, ${findings.length} file-anchored findings (kinds read from the live API were dropped: ${dataset.rows.reduce((s, r) => s + r.liveKindsDropped, 0)}).`, "");
+  lines.push(`${dataset.rows.length} repositories, ${findings.length} file-anchored findings (issue, feature request, stale pull request, triage and run-based CI findings read today's API and were dropped: ${dataset.rows.reduce((s, r) => s + r.liveKindsDropped, 0)}).`, "");
   const kinds = [...new Set(findings.map((f) => f.kind))].sort();
-  const SWEEP = 50;
+  const SWEEP = SWEEP_FILES;
   const summarize = (label: string, fs: typeof findings): (string | number)[] => {
     const gone = fs.filter((f) => f.status === "excerpt_gone");
     const targeted = gone.filter((f) => f.commit !== undefined && f.commit.files <= SWEEP);
@@ -85,11 +96,11 @@ export function renderIntel(dataset: { asOf: string; fetchedAt: string; rows: im
     const outsider = targeted.filter((f) => f.commit?.by === "outsider");
     const maintainer = targeted.filter((f) => f.commit?.by === "maintainer");
     const controlled = fs.filter((f) => f.control !== undefined);
-    const controlGone = controlled.filter((f) => f.control === "gone");
+    const controlGone = controlled.filter((f) => f.controlTargeted === true);
     const unverifiable = fs.filter((f) => f.status === "unverifiable");
     return [label, fs.length, pct(targeted.length, fs.length), targeted.length, gone.length - targeted.length, removed.length, moved.length, unverifiable.length, outsider.length, maintainer.length, pct(outsider.length, fs.length), controlled.length ? pct(controlGone.length, controlled.length) : "n/a"];
   };
-  lines.push(`"Acted upon" counts excerpts removed by an identified commit touching at most ${SWEEP} files; removals inside larger sweeps or without an attributable commit, deleted files, excerpts that moved to another file, and excerpts that were never verbatim in the file ("unverifiable") are listed but not counted. "Control" is the share of random lines from the same files at T that are gone at HEAD, the background churn an acted-upon rate has to beat. A hand-read sample is in the results note.`, "");
+  lines.push(`"Acted upon" counts excerpts removed by an identified commit touching at most ${SWEEP} files; removals inside larger sweeps or without an attributable commit, deleted files, excerpts that moved to another file, and excerpts that were never verbatim in the file ("unverifiable") are listed but not counted. "Control" is the share of random lines from the same files at T that were removed the same way (an identified commit touching at most ${SWEEP} files): the background churn an acted-upon rate has to beat. A hand-read sample is in the results note.`, "");
   const header = ["kind", "findings", "acted upon", "targeted removal", "in a sweep or unattributed", "file removed", "moved", "unverifiable", "by an outsider", "by a maintainer", "outsider rate", "control"];
   lines.push(table(header, [...kinds.map((k) => summarize(k, findings.filter((f) => f.kind === k))), summarize("all", findings)]), "");
   const subkinds = [...new Set(findings.map((f) => `${f.kind}/${subkind(f.kind, f.title)}`))].sort();

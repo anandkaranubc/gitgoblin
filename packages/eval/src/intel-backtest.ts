@@ -14,8 +14,16 @@ import { MAINTAINER_ASSOCIATIONS } from "./outcomes.ts";
 const run = promisify(execFile);
 const DAY_MS = 86_400_000;
 
-/** Findings whose evidence comes from the live API rather than the clone at T. */
-export const LIVE_KINDS: ReadonlySet<string> = new Set(["issue", "feature_request", "stale_pr", "triage", "ci_rot"]);
+/** Kinds whose evidence always comes from the live API rather than the clone at T. */
+export const LIVE_KINDS: ReadonlySet<string> = new Set(["issue", "feature_request", "stale_pr", "triage"]);
+
+/**
+ * True when an opportunity reflects today's API rather than the code at T: the live kinds, and CI
+ * findings built from workflow runs (rule-table CI findings read workflow files and stay in).
+ */
+export function isLiveFinding(o: Pick<ContributionOpportunity, "kind" | "evidence">): boolean {
+  return LIVE_KINDS.has(o.kind) || (o.kind === "ci_rot" && o.evidence.some((e) => e.kind === "workflow_run"));
+}
 
 /**
  * `moved`: the excerpt still exists somewhere at HEAD (another file after a rename, or the same file after re-wrapping), which is not a fix.
@@ -36,6 +44,8 @@ export interface FindingOutcome {
   status: FindingStatus;
   /** The same grading for a random line of the same file at T: how much of the file churned anyway. */
   control?: "unchanged" | "gone" | undefined;
+  /** Whether the control line's removal was targeted (an identified commit touching at most 50 files), like `acted upon`. */
+  controlTargeted?: boolean | undefined;
   /** First commit after T that removed the excerpt, when one was found. `files` is how many files it touched: a sweep of hundreds rarely targets the finding. */
   commit?: { sha: string; author: string; date: string; daysAfter: number; files: number; prNumber?: number | undefined; by: FixedBy } | undefined;
 }
@@ -108,7 +118,9 @@ export function containsExcerpt(content: string, excerpt: string): boolean {
   // intel truncates long excerpts with an ellipsis, so the last token may be cut mid-word.
   const truncated = /(\u2026|\.\.\.)\s*$/.test(excerpt.trim());
   const tokens = excerpt.toLowerCase().match(/[a-z0-9]+/g) ?? [];
-  if (tokens.join("").length < 8) return false;
+  if (tokens.length === 0) return false;
+  // Short markers such as `#[ignore]` or `t.Skip()` carry their meaning in punctuation; match them literally.
+  if (tokens.join("").length < 8) return normalize(content).includes(normalize(excerpt));
   // Tokens of the content with their positions in the skeleton, so a skeleton match can be checked for token alignment.
   const contentTokens = content.toLowerCase().match(/[a-z0-9]+/g) ?? [];
   const starts = new Set<number>();
@@ -173,6 +185,31 @@ export function controlLine(contentAtT: string, excerpt: string, seed: number): 
   return lines[Math.floor(seededRandom(seed)() * lines.length)];
 }
 
+/** Commits touching more files than this are sweeps (migrations, reformatting), not work on the finding. */
+export const SWEEP_FILES = 50;
+
+async function filesTouched(cloneDir: string, sha: string): Promise<number> {
+  return (await git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha], cloneDir).catch(() => "")).split("\n").filter(Boolean).length;
+}
+
+/**
+ * The first commit after `asOf` in which `excerpt` is absent from `path`, as a `%H%x1f%an%x1f%cI` line.
+ * `git log -S` also lists commits that added an occurrence, so each candidate is checked; when the
+ * pickaxe finds nothing, every commit on the path is tried.
+ */
+async function removalCommit(cloneDir: string, head: string, asOf: string, path: string, excerpt: string): Promise<string | undefined> {
+  const anchor = anchorPhrase(excerpt) ?? normalize(excerpt).replace(/(\u2026|\.\.\.)\s*$/, "").slice(0, 80);
+  const candidates = async (pickaxe: boolean) =>
+    (await git(["log", head, `--since=${asOf}`, "--reverse", "--format=%H%x1f%an%x1f%cI", ...(pickaxe ? ["-i", `-S${anchor.slice(0, 120)}`] : []), "--", path], cloneDir).catch(() => ""))
+      .split("\n").filter((l) => l.trim()).slice(0, 12);
+  for (const line of [...(await candidates(true)), ...(await candidates(false))]) {
+    const sha = line.split("\x1f")[0]!;
+    const then = await git(["show", `${sha}:${path}`], cloneDir).catch(() => undefined);
+    if (then === undefined || !containsExcerpt(then, excerpt)) return line;
+  }
+  return undefined;
+}
+
 export async function gradeFinding(opportunity: ContributionOpportunity, rank: number, cloneDir: string, head: string, asOf: string, lookup: (sha: string) => Promise<{ prNumber?: number | undefined; by: FixedBy }>, baseSha?: string): Promise<FindingOutcome | undefined> {
   const ev = opportunity.evidence.find((e) => e.kind === "file" && e.excerpt);
   if (!ev) return undefined;
@@ -188,6 +225,10 @@ export async function gradeFinding(opportunity: ContributionOpportunity, rank: n
     if (line !== undefined) {
       const present = (content !== undefined && containsExcerpt(content, line)) || (await git(["grep", "-F", "-i", "-w", "-l", "--", anchorPhrase(line) ?? line, head], cloneDir).catch(() => "")).trim() !== "";
       base.control = present ? "unchanged" : "gone";
+      if (!present) {
+        const removal = await removalCommit(cloneDir, head, asOf, loc.path, line);
+        base.controlTargeted = removal !== undefined && (await filesTouched(cloneDir, removal.split("\x1f")[0]!)) <= SWEEP_FILES;
+      }
     }
   }
   if (content !== undefined && containsExcerpt(content, ev.excerpt!)) return { ...base, status: "unchanged" };
@@ -195,22 +236,10 @@ export async function gradeFinding(opportunity: ContributionOpportunity, rank: n
   const elsewhere = await git(["grep", "-F", "-i", "-w", "-l", "--", anchor, head], cloneDir).catch(() => "");
   if (elsewhere.trim()) return { ...base, status: "moved" };
   if (content === undefined) return { ...base, status: "file_removed" };
-  // `-S` lists commits that changed the number of occurrences, including ones that added one; take the first after T where the excerpt is absent.
-  const candidates = async (pickaxe: boolean) =>
-    (await git(["log", head, `--since=${asOf}`, "--reverse", "--format=%H%x1f%an%x1f%cI", ...(pickaxe ? ["-i", `-S${anchor.slice(0, 120)}`] : []), "--", loc.path], cloneDir).catch(() => ""))
-      .split("\n").filter((l) => l.trim()).slice(0, 12);
-  let first: string | undefined;
-  for (const line of [...(await candidates(true)), ...(await candidates(false))]) {
-    const sha = line.split("\x1f")[0]!;
-    const then = await git(["show", `${sha}:${loc.path}`], cloneDir).catch(() => undefined);
-    if (then === undefined || !containsExcerpt(then, ev.excerpt!)) {
-      first = line;
-      break;
-    }
-  }
+  const first = await removalCommit(cloneDir, head, asOf, loc.path, ev.excerpt!);
   if (!first) return { ...base, status: "excerpt_gone" };
   const [sha, author, date] = first.split("\x1f") as [string, string, string];
-  const files = (await git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha], cloneDir).catch(() => "")).split("\n").filter(Boolean).length;
+  const files = await filesTouched(cloneDir, sha);
   const who = await lookup(sha);
   return { ...base, status: "excerpt_gone", commit: { sha, author, date, daysAfter: Math.round((Date.parse(date) - Date.parse(asOf)) / DAY_MS), files, prNumber: who.prNumber, by: who.by } };
 }
@@ -265,7 +294,7 @@ export async function runIntelBacktest(options: IntelBacktestOptions): Promise<I
         const findings: FindingOutcome[] = [];
         let dropped = 0;
         for (const [i, opp] of report.opportunities.entries()) {
-          if (LIVE_KINDS.has(opp.kind)) {
+          if (isLiveFinding(opp)) {
             dropped++;
             continue;
           }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gradeOutcome, newcomerOutcomes, type PrRow, trackerStats, type IssueRow } from "../src/outcomes.ts";
+import { gradeOutcome, newcomerOutcomes, outsiderOutcomes, type PrRow, trackerStats, type IssueRow } from "../src/outcomes.ts";
 
 const T = "2026-06-01T00:00:00Z";
 const END = "2026-10-01T00:00:00Z";
@@ -88,5 +88,18 @@ describe("trackerStats", () => {
     expect(stats.completedIssues).toBe(3);
     expect(stats.completedByOutsiderPr).toBe(1);
     expect(stats.completedByAnyPr).toBe(2);
+  });
+});
+
+describe("outsiderOutcomes", () => {
+  it("counts every outside pull request in the window, first-timers or not", () => {
+    const prs = [
+      pr({ number: 1, createdAt: "2026-06-02T00:00:00Z", author: "old", mergedAt: "2026-06-03T00:00:00Z" }),
+      pr({ number: 2, createdAt: "2026-06-04T00:00:00Z", author: "old", state: "CLOSED", closedAt: "2026-06-05T00:00:00Z" }),
+      pr({ number: 3, createdAt: "2026-06-06T00:00:00Z", author: "new", state: "OPEN" }),
+      pr({ number: 4, createdAt: "2026-06-07T00:00:00Z", author: "m", association: "OWNER", mergedAt: "2026-06-08T00:00:00Z" }),
+      pr({ number: 5, createdAt: "2026-05-01T00:00:00Z", author: "early", mergedAt: "2026-05-02T00:00:00Z" }),
+    ];
+    expect(outsiderOutcomes(prs, WINDOW)).toEqual({ pullRequests: 3, merged: 1, closedUnmerged: 1, mergeRate: 0.5 });
   });
 });

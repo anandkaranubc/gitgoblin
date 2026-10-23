@@ -124,6 +124,33 @@ export function newcomerOutcomes(prs: PrRow[], window: Window, historyStart: str
   };
 }
 
+export interface OutsiderOutcome {
+  pullRequests: number;
+  merged: number;
+  closedUnmerged: number;
+  /** merged / (merged + closedUnmerged); undefined when nothing was decided. */
+  mergeRate: number | undefined;
+}
+
+/**
+ * Fate of every outside contributor's pull request created in the window (decided by its end).
+ * Cheaper than `newcomerOutcomes` at query time: it needs only recent pull requests and their
+ * author association, not each author's history.
+ */
+export function outsiderOutcomes(prs: PrRow[], window: Window): OutsiderOutcome {
+  let pullRequests = 0;
+  let merged = 0;
+  let closedUnmerged = 0;
+  for (const pr of prs) {
+    if (!isOutsider(pr) || !inWindow(pr.createdAt, window)) continue;
+    pullRequests++;
+    if (pr.mergedAt && inWindow(pr.mergedAt, window)) merged++;
+    else if (pr.closedAt && !pr.mergedAt && inWindow(pr.closedAt, window)) closedUnmerged++;
+  }
+  const decided = merged + closedUnmerged;
+  return { pullRequests, merged, closedUnmerged, mergeRate: decided > 0 ? merged / decided : undefined };
+}
+
 /**
  * 0: no newcomer pull request merged. 1: at least one. 2: at least two and a
  * merge rate of at least a half. 3: grade 2 with a median first response
