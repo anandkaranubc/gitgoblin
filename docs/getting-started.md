@@ -47,7 +47,7 @@ How to read a result:
 - **score** runs from 0 to 1 and is only comparable between results for the same goal.
 - **`+` lines** are the strongest reasons it ranked where it did. **`−` lines** are what counted against it. Each one names the evidence, so you can check it.
 - Stars, language, and license are shown for context, not because they drove the ranking.
-- Stars are not a guide to your odds. In a backtest over 296 repositories ([results](../packages/eval/docs/results-2026-10-23.md)), the more stars a project had, the less likely a newcomer's first pull request was to be merged. The `contribute` score did better than stars at finding projects where newcomers got work merged at all, but it did not predict whether a given newcomer's pull request would be merged either. The share of pull requests a project merges did; `explain` shows it as `acceptance` (step 4).
+- Stars are not a guide to your odds. In backtests on three past dates, about 300 repositories each ([results](../packages/eval/docs/results-2026-10-23.md)), the more stars a project had, the smaller the share of newcomers' pull requests it merged. The `contribute` score beat stars at finding projects where newcomers got work merged at all, but it did not predict whether a given newcomer's pull request would be merged. The share of pull requests a project merges predicted that better on two of the three dates; `explain` shows it as `acceptance` (step 4).
 
 Narrow the search with filters. The ones people reach for most:
 
