@@ -37,9 +37,26 @@ export class GitHubError extends Error {
 }
 
 export class RateLimitError extends GitHubError {
-  constructor(path: string, remaining: number) {
-    super(`GitHub rate limit nearly exhausted (${remaining} left); stopping API use`, 429, path);
+  /** When GitHub said the limit lifts, if it said. */
+  readonly resetAt: Date | undefined;
+  /** True when GitHub refused requests while hourly quota remained: the secondary (burst) limit. */
+  readonly secondary: boolean;
+
+  constructor(path: string, remaining: number, options: { resetAt?: Date | undefined; refused?: boolean } = {}) {
+    // GitHub also refuses bursts of requests (many sessions on one token) while hourly quota remains; say which it was.
+    const secondary = options.refused === true && remaining > 100;
+    super(
+      secondary
+        ? `GitHub refused requests as rate limited (secondary limit; ${remaining} of the hourly quota left)`
+        : options.refused
+          ? `GitHub rate limit reached (${remaining} left${options.resetAt ? `, resets ${options.resetAt.toISOString().slice(11, 16)} UTC` : ""})`
+          : `GitHub rate limit nearly exhausted (${remaining} left); stopping API use`,
+      429,
+      path,
+    );
     this.name = "RateLimitError";
+    this.resetAt = options.resetAt;
+    this.secondary = secondary;
   }
 }
 

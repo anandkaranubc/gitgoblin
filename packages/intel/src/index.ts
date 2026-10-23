@@ -71,8 +71,9 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
     });
   } else {
     const forgeOptions = { fetchImpl: opts.fetchImpl ?? fetch, cache: new DiskCache(join(opts.cacheDir, "forge")), cacheTtlMs: opts.cacheTtlMs };
-    const kind = await detectForge(ref.host, forgeOptions);
-    if (kind) {
+    const kind = opts.skipSamples ? undefined : await detectForge(ref.host, forgeOptions);
+    if (opts.skipSamples) budget.note(`${ref.host}: forge API not queried (samples skipped by request); analysis uses the clone only`);
+    else if (kind) {
       try {
         log(`fetching issues and merge requests from the ${kind} API on ${ref.host}`);
         const result = await fetchForge(kind, ref.host, ref.owner, ref.name, forgeOptions);
@@ -81,6 +82,7 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
         forgeRuns = result.runs ?? [];
         failedJobs = result.failedJobs;
         budget.forgeRequests += result.requests;
+        for (const note of result.notes ?? []) budget.note(note);
         budget.note(`${ref.host} (${kind}): issues and merge requests sampled without authentication; maintainer status inferred from who merges and closes${forgeRuns.length ? `; ${forgeRuns.length} recent pipelines read` : "; CI runs not read"}`);
       } catch (error) {
         budget.note(`${ref.host} (${kind}) API unavailable: ${(error as Error).message.split("\n")[0]}; analysis uses the clone only`);
@@ -144,7 +146,8 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
       log("sampling issues and pull requests");
       samples = await fetchSamples(github, ref.owner, ref.name);
     } catch (error) {
-      budget.note(`issue and PR samples unavailable: ${(error as Error).message.split("\n")[0]}`);
+      // A cut, not a note: the report is missing most of what it would otherwise contain, and says so.
+      budget.cut(`issue and PR samples unavailable: ${(error as Error).message.split("\n")[0]}; issues and pull requests were not analyzed, try again in a minute`);
     }
   }
   let runs: WorkflowRun[] = opts.skipSamples ? [] : forgeRuns;
