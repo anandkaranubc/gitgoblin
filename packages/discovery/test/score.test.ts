@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { GOALS } from "@gitgoblin/core";
 import { GOAL_PROFILES, scoreRepo } from "../src/index.ts";
 import { abandonedLibrary, healthyLibrary, NOW, tinyNewProject } from "./fixtures.ts";
 
@@ -54,6 +55,14 @@ describe("scoreRepo", () => {
     expect(full.reasons.map((r) => r.signal)).toContain("busFactor");
   });
 
+  it("explains acceptance without weighing it in any goal yet", () => {
+    for (const goal of GOALS) expect(GOAL_PROFILES[goal].weights.acceptance).toBeUndefined();
+    const repo = healthyLibrary();
+    repo.issueStats = { ...repo.issueStats!, pastYear: { ...repo.issueStats!.pastYear, mergedPullRequests: 6 } };
+    const reason = scoreRepo(repo, "contribute", { now: NOW }).reasons.find((r) => r.signal === "acceptance");
+    expect(reason).toMatchObject({ weight: 0, detail: "merged 10% of pull requests in the past year (6 of 60)" });
+  });
+
   it("explains itself with human-readable evidence", () => {
     const { reasons } = scoreRepo(healthyLibrary(), "adopt", { now: NOW });
     const text = reasons.map((r) => r.detail).join(" | ");
@@ -66,7 +75,8 @@ describe("scoreRepo", () => {
     expect(sparse.reasons.find((r) => r.signal === "docs")?.detail).toBe("description; no README, homepage, changelog");
     const shy = scoreRepo({ ...healthyLibrary(), details: { ...healthyLibrary().details!, hasContributing: false, issueTemplates: 0 } }, "contribute", { now: NOW });
     expect(shy.reasons.find((r) => r.signal === "newcomerFriendliness")?.detail).toBe("code of conduct; no CONTRIBUTING guide, issue templates");
-    expect(reasons.length).toBe(10);
+    expect(reasons.length).toBe(11);
+    expect(text).toMatch(/merged 83% of pull requests in the past year \(50 of 60\)/);
     expect(reasons.find((r) => r.signal === "newcomerFriendliness")?.weight).toBe(0);
   });
 

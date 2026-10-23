@@ -30,7 +30,7 @@ fork flags. Optional fields mean *unknown*, not *absent*.
 ## Discovery contract
 
 - `Goal`: `contribute`, `learn`, `adopt`, `revive`, `explore`. `GOAL_DESCRIPTIONS` says what each optimizes for.
-- `Signals`: normalized 0..1 values named in `SIGNAL_NAMES` (`activity`, `responsiveness`, `busFactor`, `newcomerFriendliness`, `docs`, `maturity`, `popularity`, `usage`, `momentum`, `license`). A missing signal is unknown, never zero.
+- `Signals`: normalized 0..1 values named in `SIGNAL_NAMES` (`activity`, `responsiveness`, `acceptance`, `busFactor`, `newcomerFriendliness`, `docs`, `maturity`, `popularity`, `usage`, `momentum`, `license`). A missing signal is unknown, never zero.
 - `Evidence`: the raw facts behind the signals (days since push, contributor count, dependents, starter issues...), kept so every result can be audited.
 - `Reason`: `{ signal, weight, detail }`. Positive weight helped the score, negative hurt it, zero means observed but not weighted for this goal.
 - `DiscoveryQuery` and `DiscoveryResult`: the input and output of discovery.
