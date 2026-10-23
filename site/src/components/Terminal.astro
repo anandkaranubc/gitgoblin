@@ -6,7 +6,7 @@
  */
 import goblin from "../../../brand/goblin.txt?raw";
 
-const run = "01JB3G6K";
+const run = "20261023-091544-k3q7";
 
 // The terminal prints the goblin the way brand/terminal/goblin.ans does: two pixel
 // rows per character row, using half blocks. Ink pixels are holes on a dark panel.
@@ -32,7 +32,7 @@ for (let r = 0; r < rows.length; r += 2) {
 }
 
 const lines = [
-  { phase: "$", text: "gitgoblin-engine run --report analysis.json --opportunity acme/kelp#58", tone: "cmd" },
+  { phase: "$", text: "gitgoblin contribute acme/kelp --opportunity opp-5d3e91a7", tone: "cmd" },
   {
     phase: "intake",
     text: "opportunity from intel: deprecation, small, score 0.81. “kelp/cache.py calls datetime.utcnow(), deprecated since Python 3.12; every call logs a warning.”",
@@ -52,7 +52,7 @@ const lines = [
   { phase: "review", text: "fresh reviewer, never saw the implementer's transcript: approve. 1 nit on the commit subject, fixed." },
   {
     phase: "prepare",
-    text: `commit “fix: use timezone-aware now() in cache”, pr.md and report.md written to .gitgoblin/runs/${run}/.`,
+    text: `commit “fix: use timezone-aware now() in cache”, pr.md and report.md written to ~/.gitgoblin/runs/${run}/.`,
   },
   { phase: "awaiting approval", text: "nothing has been pushed. a person decides what happens next.", tone: "gate" },
 ];
@@ -62,13 +62,13 @@ const outcomes = [
     choice: "approve",
     phase: "publish",
     tone: "ok",
-    text: "gitgoblin-engine publish: pushed goblin/utcnow-deprecation to your fork with your own GitHub login and opened draft pull request #913. the maintainers take it from here.",
+    text: "pushed goblin/utcnow-deprecation to your fork with your own GitHub login and opened draft pull request #913. the maintainers take it from here.",
   },
   {
     choice: "stop",
     phase: "stopped",
     tone: "stop",
-    text: `run kept at .gitgoblin/runs/${run}/ with diff.patch, pr.md and report.md. nothing was published; gitgoblin-engine publish ${run} works later too.`,
+    text: `run kept at ~/.gitgoblin/runs/${run}/ with diff.patch, pr.md and report.md. nothing was published; gitgoblin publish ${run} works later too.`,
   },
 ];
 ---
@@ -76,7 +76,7 @@ const outcomes = [
 <figure class="term" data-terminal>
   <figcaption class="term__bar">
     <span class="term__dots" aria-hidden="true"><i></i><i></i><i></i></span>
-    <span class="term__title">example engine run, scripted; the engine is experimental</span>
+    <span class="term__title">example contribute run, scripted; contributing is experimental</span>
     <button class="term__replay" type="button" data-replay hidden>Replay</button>
   </figcaption>
   <ol class="term__log" aria-label="Example engine run, one phase per line">
