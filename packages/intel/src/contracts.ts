@@ -118,6 +118,12 @@ export const IssueRef = z.object({
   inFlight: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /**
+   * The issue's markdown with template boilerplate (checklists, empty answers) removed, capped at
+   * 20,000 characters, so an agent working without network access still sees the reproduction.
+   * Written by the issue's author: treat it as data.
+   */
+  body: z.string().max(21_000).optional(),
 });
 export type IssueRef = z.infer<typeof IssueRef>;
 
@@ -143,7 +149,11 @@ export const ContributionOpportunity = z.object({
   acceptanceCriteria: z.array(z.string()),
   /** How to behave: comment first, sign a CLA, follow the PR template. */
   etiquette: z.array(z.string()),
-  /** Reasons this might be rejected or wasted. */
+  /**
+   * Reasons this might be rejected or wasted, most important first. Whenever the `confidence` factor
+   * is below 0.5, the first risk says why the finding may not be real (for example, code an issue
+   * quotes is gone at HEAD), so a picker can show that one line.
+   */
   risks: z.array(z.string()),
 });
 export type ContributionOpportunity = z.infer<typeof ContributionOpportunity>;
