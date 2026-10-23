@@ -96,7 +96,7 @@ export function assessWelcomeness(input: WelcomenessInput): Welcomeness {
   }
   if (samples) {
     const staleExternal = samples.openPrs.filter(
-      (p) => isExternal(p) && !p.author?.isBot && !p.isDraft && daysAgo(p.createdAt, now) > 30 &&
+      (p) => isExternal(p) && !p.author?.isBot && !p.isDraft && p.commentsFetched !== false && daysAgo(p.createdAt, now) > 30 &&
         ![...p.firstComments, ...p.reviews].some((c) => c.author && !c.author.isBot && c.author.login !== p.author?.login),
     );
     if (samples.openPrs.length >= 5 && staleExternal.length / samples.openPrs.length > 0.5) {
@@ -130,9 +130,13 @@ export function assessWelcomeness(input: WelcomenessInput): Welcomeness {
     push("floored at selective: maintainers still commit, answer issues or merge outside PRs", 0, ev("computed", "git log and GraphQL samples", `${activity.commits90d} commits in 90 days; median issue reply ${issueHours === undefined ? "unknown" : `${Math.round(issueHours)}h`}; ${rate === undefined ? "merge rate unknown" : `${Math.round(rate * 100)}% of ${n} outside PRs merged`}`));
     score = 0.25;
   }
-  // Eager means outsiders are answered quickly and merged often; paperwork alone cannot earn it.
-  if (score >= 0.8 && (slowIssues || slowPrs || (rate !== undefined && rate < 0.5))) {
-    push("capped at open: eager needs quick replies and a merge rate of at least 50%", 0, ev("computed", "GraphQL samples", `${slowIssues ? "slow issue replies; " : ""}${slowPrs ? "slow PR replies; " : ""}${rate !== undefined ? `${Math.round(rate * 100)}% merged` : ""}`));
+  // Eager means outsiders are answered quickly and merged often; paperwork alone cannot earn it. "Quickly" needs
+  // evidence: every known median reply time within two weeks, and at least one of them known.
+  const replyTimes = [prHours, issueHours].filter((h): h is number => h !== undefined);
+  const quickReplies = replyTimes.length > 0 && replyTimes.every((h) => h <= 24 * 14);
+  if (score >= 0.8 && (slowIssues || slowPrs || !quickReplies || (rate !== undefined && rate < 0.5))) {
+    const why = replyTimes.length === 0 ? "reply times unknown; " : !quickReplies ? `median replies ${replyTimes.map((h) => `${Math.round(h / 24)}d`).join(" and ")}; ` : "";
+    push("capped at open: eager needs replies within two weeks and a merge rate of at least 50%", 0, ev("computed", "GraphQL samples", `${why}${rate !== undefined ? `${Math.round(rate * 100)}% merged` : "merge rate unknown"}`));
     score = 0.79;
   }
   // Fast replies cannot make up for rarely merging outside work: cap at selective.
