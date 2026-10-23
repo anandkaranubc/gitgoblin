@@ -9,9 +9,10 @@ Design and security boundaries: [docs/design.md](docs/design.md).
 ## Use
 
 ```bash
-# From intel's analysis (gitgoblin-intel analyze owner/name --json > analysis.json)
+# From intel's analysis (gitgoblin-intel analyze owner/name --json > analysis.json); the id is the
+# opportunity's `id` field in that report, such as opp-6fa0e219
 # (gitgoblin-engine is packages/engine/src/cli.ts; `node src/cli.ts` works from the package directory)
-gitgoblin-engine run --report analysis.json --opportunity "owner/name#123"
+gitgoblin-engine run --report analysis.json --opportunity opp-6fa0e219
 
 # Or from a hand-written task (see examples/task.example.json and TaskSchema in src/types.ts)
 gitgoblin-engine run --task task.json --confirm-plan
@@ -21,9 +22,24 @@ gitgoblin-engine show <runId>
 gitgoblin-engine publish <runId>          # pushes with your gh login, opens a draft PR, asks first
 ```
 
-Each run writes `.gitgoblin/runs/<runId>/` with `report.md`, `pr.md`, `diff.patch`, every phase's
-artifact as JSON, and `events.jsonl`. The workspace (a clone, or a git worktree when the task points
-at a local checkout) stays there until you remove it.
+`publish` asks at a terminal and has no flag to skip the question; piped input is refused, so a
+script or an agent with a shell cannot publish on its own. Code that has asked a person can call
+`publishRun(runId, { approved: true })`.
+
+Each run writes `.gitgoblin/runs/<runId>/`, which other tools may read:
+
+| File | What it holds |
+|---|---|
+| `result.json` | the `RunResult`: status, reason, questions, cost, branch, workspace path |
+| `task.json` | the `Task` the run worked on |
+| `report.md` | the human-readable report, whatever the outcome |
+| `events.jsonl` | one JSON event per line: phases, decisions, isolation, toolchain, install |
+| `install-output.txt` | the install command's output, when it ran |
+| `baseline.json`, `verification-<n>.json` | the repository's checks before and after |
+| `investigation.json`, `plan.json`, `implementation-<n>.json`, `review-<n>.json` | each phase's structured output |
+| `diff-<n>.patch` | the change as reviewed in round `n` |
+| `pr.md`, `pr-title.txt`, `diff.patch`, `delivery.json` | the prepared pull request, when the run reached `awaiting_approval` |
+| `workspace/` | the checkout (a clone, or a worktree of a local checkout); it stays until you remove it |
 
 Requirements: Node 24, git, a Claude Code login or `ANTHROPIC_API_KEY` (the Agent SDK uses either),
 and `gh auth login` for publishing. The agent's bash runs in the Agent SDK sandbox with no network;

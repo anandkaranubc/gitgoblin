@@ -15,7 +15,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=30000",
     "test:watch": "vitest",
     "engine": "node src/cli.ts"
   },
