@@ -145,3 +145,56 @@ describe("git output caps", () => {
     expect(await git(["diff", "--cached", "--stat"], repo, env)).toContain("big.txt");
   });
 });
+
+describe("stray tool caches", () => {
+  it("never stages a package-manager store that fell back into the workspace", async () => {
+    const repo = await sampleRepo();
+    const base = await git(["rev-parse", "HEAD"], repo, env);
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(path.join(repo, ".pnpm-store", "v10", "files"), { recursive: true });
+    writeFileSync(path.join(repo, ".pnpm-store", "v10", "files", "blob"), "x");
+    mkdirSync(path.join(repo, "nested", ".pnpm-store"), { recursive: true });
+    writeFileSync(path.join(repo, "nested", ".pnpm-store", "blob"), "x");
+    writeFileSync(path.join(repo, "a.txt"), "changed\n");
+    const stats = await diffStats(repo, base, env);
+    expect(stats.changedFiles).toEqual(["a.txt"]);
+    const sha = await commitAll(repo, base, "fix: change", env);
+    expect(await git(["show", "--name-only", "--format=", sha], repo, env)).toBe("a.txt");
+  });
+
+  it("drops a stray store even when the agent committed it", async () => {
+    const repo = await sampleRepo();
+    const base = await git(["rev-parse", "HEAD"], repo, env);
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(path.join(repo, ".pnpm-store", "v10"), { recursive: true });
+    writeFileSync(path.join(repo, ".pnpm-store", "v10", "blob"), "x");
+    writeFileSync(path.join(repo, "a.txt"), "changed\n");
+    await git(["add", "-A"], repo, env);
+    await git(["commit", "-q", "-m", "wip: agent checkpoint"], repo, env);
+    expect((await diffStats(repo, base, env)).changedFiles).toEqual(["a.txt"]);
+    const sha = await commitAll(repo, base, "fix: change", env);
+    expect(await git(["show", "--name-only", "--format=", sha], repo, env)).toBe("a.txt");
+  });
+
+  it("still commits a tracked .yarn/cache, which zero-install repositories keep in git", async () => {
+    const repo = await sampleRepo();
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(path.join(repo, ".yarn", "cache"), { recursive: true });
+    writeFileSync(path.join(repo, ".yarn", "cache", "pkg.zip"), "zip");
+    await git(["add", "."], repo, env);
+    await git(["commit", "-q", "-m", "zero install"], repo, env);
+    const base = await git(["rev-parse", "HEAD"], repo, env);
+    writeFileSync(path.join(repo, ".yarn", "cache", "pkg.zip"), "zip2");
+    expect((await diffStats(repo, base, env)).changedFiles).toEqual([".yarn/cache/pkg.zip"]);
+  });
+
+  it("measures very large changes instead of failing on the size of the listing", async () => {
+    const repo = await sampleRepo();
+    const base = await git(["rev-parse", "HEAD"], repo, env);
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(path.join(repo, "gen"), { recursive: true });
+    for (let i = 0; i < 12_000; i += 1) writeFileSync(path.join(repo, "gen", `generated-file-with-a-deliberately-long-name-${i}.txt`), `${i}\n`);
+    const stats = await diffStats(repo, base, env);
+    expect(stats.files).toBe(12_000);
+  }, 120_000);
+});

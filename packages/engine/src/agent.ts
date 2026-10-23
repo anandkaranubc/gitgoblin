@@ -1,6 +1,7 @@
 import { query, type Options, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { buildHooks, sandboxSettings, scrubEnv, toolsFor, type GuardContext, type ToolProfile } from "./guard.ts";
+import { OFFLINE_ENV } from "./hostbox.ts";
 import type { Task } from "./types.ts";
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -89,8 +90,9 @@ const RESUME_PROMPT =
 
 /** Runs phases on the Claude Agent SDK with the engine's security boundaries applied. */
 export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
-  const env = opts.env ?? scrubEnv();
   const isolation = opts.isolation ?? "sandbox";
+  // The agent's shell has no network inside the sandbox; package managers should know it.
+  const env = { ...(opts.env ?? scrubEnv()), ...(isolation === "sandbox" ? OFFLINE_ENV : {}) };
   const costs = new SessionCostTracker();
   const run = opts.query ?? query;
 

@@ -2,6 +2,7 @@ import { existsSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { HookCallback, Options, SandboxSettings } from "@anthropic-ai/claude-agent-sdk";
+import { specFor } from "./hostbox.ts";
 import { isProtectedPath } from "./policy.ts";
 import type { Task } from "./types.ts";
 
@@ -342,6 +343,10 @@ const CREDENTIAL_PATHS = [
   ".config/gh", ".config/gcloud", ".config/hub", ".cargo/credentials", ".cargo/credentials.toml", ".claude/.credentials.json",
 ];
 
+function tempDirs(): string[] {
+  return specFor(os.tmpdir(), false, { home: path.join(os.tmpdir(), "no-home") }).extraWrite.filter((dir) => !dir.includes("no-home"));
+}
+
 /**
  * Sandbox for the agent's shell: no network, writes only in the workspace (never `.git`) and the
  * temp dir, nothing at all for reviewers, and no credential files or model keys visible to commands.
@@ -355,7 +360,9 @@ export function sandboxSettings(workspace: string, profile: ToolProfile, extraWr
     allowUnsandboxedCommands: false,
     network: { allowedDomains: [], allowLocalBinding: true },
     filesystem: {
-      allowWrite: profile === "build" ? [workspace, os.tmpdir(), ...extraWrite] : [os.tmpdir()],
+      // The same temp directories (per-user and the shared /tmp, as real paths) and tool caches the
+      // repository's own commands get, so the agent can run the project's commands as documented.
+      allowWrite: profile === "build" ? [...new Set([workspace, os.tmpdir(), ...specFor(workspace, false, { extraWrite }).extraWrite])] : [os.tmpdir(), ...tempDirs()],
       denyWrite: [path.join(workspace, ".git")],
       denyRead: CREDENTIAL_PATHS.map((p) => path.join(home, p)),
     },
