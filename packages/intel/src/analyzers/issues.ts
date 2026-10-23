@@ -10,6 +10,7 @@ import { describeLlmError } from "../llm/client.ts";
 import { type IssueReview, reviewIssues } from "../llm/issue-review.ts";
 import { DiskCache } from "../util/cache.ts";
 import { applyIssueDrift, assessIssueDrift, permalinks } from "./issue-drift.ts";
+import { issueBody, problemStatement } from "./issue-text.ts";
 import { type Analyzer, type Finding, type FindingSignals, evidence } from "./types.ts";
 
 const BUG_LABEL = /\b(bug|defect|regression|crash|broken|error)\b/i;
@@ -303,7 +304,10 @@ export function reconcile(a: IssueAssessment, r: IssueReview): IssueAssessment {
 }
 
 function issueRef(issue: IssueSample, inFlight: boolean): IssueRef {
-  return { number: issue.number, url: issue.url, title: issue.title, labels: issue.labels, assignees: issue.assignees, inFlight, createdAt: issue.createdAt, updatedAt: issue.updatedAt };
+  const ref: IssueRef = { number: issue.number, url: issue.url, title: issue.title, labels: issue.labels, assignees: issue.assignees, inFlight, createdAt: issue.createdAt, updatedAt: issue.updatedAt };
+  const body = issueBody(issue.body);
+  if (body) ref.body = body;
+  return ref;
 }
 
 function mentionedFiles(ctx: AnalysisContext, text: string): string[] {
@@ -375,7 +379,7 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
     kind: a.kind,
     clusterKey: `issue:${issue.number}`,
     title: `${feature ? "Implement" : a.isDocs ? "Improve docs:" : "Fix"} #${issue.number}: ${truncate(issue.title, 90)}`,
-    summary: review?.problem && review.confidence >= 0.6 ? review.problem : truncate(plainText(issue.body), 300) || issue.title,
+    summary: review?.problem && review.confidence >= 0.6 ? review.problem : truncate(plainText(problemStatement(issue.body)), 300) || issue.title,
     evidence: ev,
     files,
     effort,
