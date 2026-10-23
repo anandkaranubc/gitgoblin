@@ -10,16 +10,14 @@ gitgoblin is in preview. Discovery and repository analysis work today, and the `
 
 ## Discover a repository
 
-You need [Node.js](https://nodejs.org) 24 or newer and git. The command is not on npm yet, so run it from a clone:
+You need [Node.js](https://nodejs.org) 24 or newer and git.
 
 ```sh
-git clone https://github.com/anandkaranubc/gitgoblin.git
-cd gitgoblin
-npm install
-npx gitgoblin discover contribute --language typescript
+npm install -g gitgoblin
+gitgoblin discover contribute --language typescript
 ```
 
-That prints ten ranked repositories with the reasons behind each ranking. `npx gitgoblin goals` lists the five goals, `explain owner/name` shows why one repository ranked where it did, `analyze owner/name` profiles one repository and lists its evidence-backed opportunities, `contribute owner/name` has the engine draft one of them and asks you before anything is run or published, and `--json` prints every signal and the evidence behind it. The repository's [getting started tutorial](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/getting-started.md) covers the filters, the token, the cache and analysis.
+Or run it without installing: `npx gitgoblin discover contribute --language typescript`. That prints ten ranked repositories with the reasons behind each ranking. `gitgoblin goals` lists the five goals, `explain owner/name` shows why one repository ranked where it did, `analyze owner/name` profiles one repository and lists its evidence-backed opportunities, `contribute owner/name` has the engine draft one of them and asks you before anything is run or published, and `--json` prints every signal and the evidence behind it. The repository's [getting started tutorial](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/getting-started.md) covers the filters, the token, the cache and analysis.
 
 ## Use it from your AI agent
 
