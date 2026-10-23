@@ -151,6 +151,8 @@ This is the experimental part. It runs an AI agent against a local clone, costs 
 npx gitgoblin contribute jd/tenacity --report report.json
 ```
 
+The repository's own install and test commands run on your machine in an OS sandbox when one is available. For a repository you do not trust, add `--check-isolation strict`, which also hides your home directory from them.
+
 Without `--report` it analyzes the repository again. Without `--opportunity <id>` or `--issue <n>` it lists the opportunities and asks which one, marking with `!` any the engine would refuse (someone is already on the issue, or the item needs a reply rather than a patch) and with `?` any that intel doubts (for example an issue whose quoted code is gone, so it may already be fixed):
 
 ```
