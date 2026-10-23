@@ -19,7 +19,7 @@
     "commander": "^15.0.0"
   },
   "devDependencies": {
-    "@types/node": "^24",
+    "@types/node": "^26",
     "typescript": "^5.9.0",
     "vitest": "^5.0.5"
   }
