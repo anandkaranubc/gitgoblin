@@ -200,6 +200,6 @@ Checked on macOS on 22 and 23 October 2026. "Release" means the tarball or bundl
 | Claude Code plugin | `claude plugin validate`, install from a local marketplace | Installs with the skill and the server inventoried |
 | MCPB bundle | `mcpb validate`, `mcpb pack`, unpack and run the launcher | Initializes and lists the tools; not installed in Claude Desktop itself |
 | Cursor and VS Code one-click links | Encoded and decoded | Point at `@gitgoblin/mcp`, so they work once the npm package exists |
-| MCP Registry | `mcp-publisher publish` from the repository's GitHub Actions workflow, then the registry API | `io.github.anandkaranubc/gitgoblin` 0.1.0 listed as active on 23 October 2026, pointing at the release's `.mcpb` |
+| MCP Registry | `mcp-publisher publish` from the repository's GitHub Actions workflow, then the registry API | `io.github.anandkaranubc/gitgoblin` 0.1.1 listed as active and latest on 23 October 2026, pointing at the release's `.mcpb`; 0.1.0 marked deprecated |
 
 Anything not in this table has not been tried here.
