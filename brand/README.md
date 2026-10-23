@@ -5,7 +5,12 @@ finds. The mark is that goblin: a 16×16 pixel head, ears out, scheming eyes, on
 It is drawn once as a text file ([goblin.txt](goblin.txt)) and built into everything else, so the
 favicon, the terminal banner and the sticker are literally the same drawing.
 
-<p align="center"><img src="banner-light.svg" width="560" alt="gitgoblin"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="banner-dark.svg">
+    <img alt="gitgoblin" src="banner-light.svg" width="560">
+  </picture>
+</p>
 
 ## Files
 

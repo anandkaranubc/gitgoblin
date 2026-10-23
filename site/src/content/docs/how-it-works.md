@@ -26,7 +26,7 @@ The engine turns one validated opportunity into one reviewable pull request, or 
 | intake | code | A `Task`: the few fields the engine reads from the profile and the opportunity |
 | workspace | code | A clone or worktree at the profiled commit, on a new branch |
 | baseline | code | The project's own test, lint and typecheck results before anything is touched |
-| orient | agent, read-only with a sandboxed shell | An investigation: where the code is, whether the problem reproduces, whether it is feasible |
+| orient | agent, sandboxed; may write a reproduction test | An investigation: where the code is, whether the problem reproduces, whether it is feasible |
 | plan | the same agent session | A change plan: files, steps, tests to add, what is out of scope, risks |
 | implement | the same session, with write access | The diff, with tests added or updated |
 | verify | code | The project's checks again, compared with the baseline |
@@ -37,7 +37,7 @@ The engine turns one validated opportunity into one reviewable pull request, or 
 
 Orient, plan and implement share one agent session so the implementer keeps the reasons behind its decisions. Review runs in a fresh session because independence is the point of a second reader. Verification compares against the baseline so a check only counts as regressed if it passed before and fails now; pre-existing failures are never blamed on the change.
 
-Every phase writes its artifact to `.gitgoblin/runs/<runId>/`, plus an `events.jsonl` log, so a run can be inspected, resumed or published later.
+Every phase writes its artifact to the run's directory (`~/.gitgoblin/runs/<runId>/` for the `gitgoblin` command), plus an `events.jsonl` log, so a run can be inspected or published later.
 
 ## When it continues, retries, asks or stops
 

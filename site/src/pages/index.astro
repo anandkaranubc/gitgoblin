@@ -67,27 +67,21 @@ const factors = [
   ["novelty", 0.8, "No open PR or issue mentions utcnow."],
 ] as const;
 
-// Captured from a real run; see "Try it today". Descriptions belong to those projects.
-const discoverOutput = ` 1. Bitterbot-AI/bitterbot-desktop  ★ 2.5k · TypeScript · MIT  score 0.91
-    Bitterbot - a mesh of agents that turns shared experience into collective capability.
-    https://github.com/Bitterbot-AI/bitterbot-desktop
-    + CONTRIBUTING guide, code of conduct
-    + last change today, 68 pull requests in the past year
-    + pull requests in ~2 days
+// Captured from a real run on 2026-10-23; see "Try it today". A large, well-known project, so the
+// example sends no attention to a small one that never asked for it.
+const explainOutput = `BurntSushi/ripgrep  ★ 69k · Rust · Unlicense  score 0.73
+goal: adopt
 
- 2. ccch1mneyyy/dsh-TUI  ★ 5.3k · TypeScript · MIT  score 0.90
-    DSH's officially top-recommended TUI plugin — high performance, low overhead, cute pixel whale, smo…
-    https://github.com/ccch1mneyyy/dsh-TUI
-    + CONTRIBUTING guide, code of conduct
-    + last change today, 555 pull requests in the past year
-    + issues close in ~4 days, pull requests in ~21 hours
+activity              █████████░ 0.92 +0.05  last change today, 178 pull requests in the past year
+responsiveness        ██░░░░░░░░ 0.16 −0.04  issues close in ~25 days, pull requests in ~45 days
+busFactor             ██████░░░░ 0.58 +0.01  406 contributors, top committer wrote 70%
+newcomerFriendliness  █████████░ 0.85 +0.00  CONTRIBUTING guide, issue templates; no code of conduct
+docs                  ████████░░ 0.80 +0.03  README, description, changelog; no homepage
+maturity              ██████████ 1.00 +0.07  created 11 years ago, 75 releases
+usage                 ██████░░░░ 0.60 +0.02  5.5k forks, 490 dependents via cargo:grep-regex
+license               ██████████ 1.00 +0.07  Unlicense (permissive)`;
 
- 3. mvschwarz/openrig  ★ 8.1k · TypeScript · Apache-2.0  score 0.90
-    Build your own network of agents from Claude Code, Codex and Pi: persistent teams with roles, share…
-    https://github.com/mvschwarz/openrig
-    + CONTRIBUTING guide, code of conduct
-    + last change today, 282 pull requests in the past year
-    + README, description, homepage, changelog`;
+const mcpInstall = "claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.3/gitgoblin-mcp-0.1.3.tgz";
 
 const never = [
   "push, or change a remote",
@@ -105,7 +99,7 @@ const faq = [
   },
   {
     q: "Does it work yet?",
-    a: "Discovery and repository analysis do, from a clone: gitgoblin discover ranks public repositories for a goal with the reasons behind each ranking, explain shows why one ranked where it did, and analyze profiles one repository and lists its evidence-backed opportunities, with scores still being calibrated. Preparing a contribution with the engine runs end to end on a test repository and is experimental. Nothing is on npm yet, and no single command runs from discovery to pull request. The README keeps the table of what works.",
+    a: "Discovery and repository analysis do: gitgoblin discover ranks public repositories for a goal with the reasons behind each ranking, explain shows why one ranked where it did, and analyze profiles one repository and lists its evidence-backed opportunities, with scores still being calibrated. gitgoblin contribute carries one opportunity on to a prepared pull request; it is experimental and each run costs money. The same discovery and analysis work from your AI agent through the MCP server. Nothing is on npm yet, so the command runs from a clone. GitHub repositories only, for now.",
   },
   {
     q: "Which model does it use, and what does it see?",
@@ -117,7 +111,7 @@ const faq = [
   },
   {
     q: "Can I point it at my own repository?",
-    a: "By design, yes: a repository reference can name a local checkout instead of something to clone, so you can analyze and contribute to your own code with the same pipeline. Like the rest, this is in progress.",
+    a: "Yes. gitgoblin analyze owner/name --local ./path analyzes a checkout you already have, and contribute then works in a git worktree of it instead of a fresh clone.",
   },
   {
     q: "Why a goblin?",
@@ -140,7 +134,7 @@ const faq = [
           <a class="btn btn--quiet" href="#how">See how it works</a>
         </div>
         <p class="hero__status">
-          Early development: discovery and analysis work from a clone, contributing is experimental, nothing on npm yet. MIT licensed.
+          Preview: discovery and analysis work today, contributing is experimental, nothing on npm yet. MIT licensed.
           <a href={href("/docs/status/")}>What works today</a>
         </p>
       </div>
@@ -302,23 +296,29 @@ const faq = [
     <div class="wrap start">
       <div>
         <h2 id="start-title">Try it today</h2>
-        <p>You need Node.js 24 or newer and git. There is no published package yet, so run it from a clone.</p>
+        <p>You need Node.js 24 or newer and git. Nothing is on npm yet, so run it from a clone.</p>
         <pre><code>git clone {repo.url}.git
 cd gitgoblin
 npm install
 npx gitgoblin discover contribute --language typescript</code></pre>
         <p>
-          That ranks ten repositories for contributing, with the reasons behind each rank. Here are the first three from a run on
-          2026-10-22; yours will differ, because the ranking follows what changed on GitHub.
+          That ranks ten repositories for contributing, with the reasons behind each rank. To see every signal behind one
+          repository's score:
         </p>
         <figure class="run">
-          <figcaption>npx gitgoblin discover contribute --language typescript --limit 3</figcaption>
-          <pre><code set:html={discoverOutput} /></pre>
+          <figcaption>npx gitgoblin explain BurntSushi/ripgrep --goal adopt</figcaption>
+          <pre><code set:html={explainOutput} /></pre>
         </figure>
         <p>
           It works without any configuration; a GitHub token unlocks more data and a higher rate limit. The <a
-            href={`${repo.url}/blob/main/docs/getting-started.md`}>getting started tutorial</a
-          > walks through the five goals, the filters, the <code>explain</code> command and the token.
+            href={href("/docs/getting-started/")}>getting started guide</a
+          > goes on to analyzing a repository and preparing a contribution.
+        </p>
+        <p>Or let the agent you already use do the digging. For Claude Code:</p>
+        <pre><code>{mcpInstall}</code></pre>
+        <p>
+          <a href={`${repo.url}/blob/main/docs/agents.md`}>docs/agents.md</a> has the command for Codex, Cursor, Gemini CLI, VS Code
+          and other clients.
         </p>
       </div>
       <div>
@@ -356,7 +356,7 @@ npx gitgoblin discover contribute --language typescript</code></pre>
     <div class="wrap follow">
       <div>
         <h2 id="follow-title">Watch the goblin grow</h2>
-        <p class="lede">Nothing to install yet. Star the repository to follow the build, or open an issue if anything here is unclear.</p>
+        <p class="lede">Star the repository to follow the build, or open an issue if anything here is unclear.</p>
         <a class="btn" href={repo.url}><GitHubIcon /> gitgoblin on GitHub</a>
       </div>
       <Mascot pose="found" width={192} />
@@ -426,7 +426,8 @@ npx gitgoblin discover contribute --language typescript</code></pre>
     font-weight: 900;
     font-size: 2.6rem;
     line-height: 1;
-    color: var(--goblin);
+    /* Goblin green is for graphics on light backgrounds; text takes the accent, which passes contrast in both themes. */
+    color: var(--accent);
   }
 
   .stages h3 {

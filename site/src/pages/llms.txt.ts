@@ -11,7 +11,7 @@ export const GET: APIRoute = async ({ site }) => {
     "",
     `> ${description}`,
     "",
-    "gitgoblin is in early development: no release, no end-to-end command yet. The repository README has the current status table.",
+    "gitgoblin is in preview. Discovery and repository analysis work, through the gitgoblin command or an MCP server for AI coding agents; preparing a contribution with an AI agent is experimental. Nothing is on npm yet. The repository README says what works today.",
     "",
     "## Docs",
     "",
