@@ -4,7 +4,7 @@ gitgoblin explores public repositories and helps people contribute to them. The 
 
 It is written for three readers: maintainers who have received a gitgoblin-assisted contribution, people using gitgoblin, and people building it.
 
-> **Where this stands (October 2026).** gitgoblin is in preview. The contribution engine enforces the first commitment in code: it publishes nothing until a person confirms at a terminal, and it runs the model in a sandbox without network access. It reads a project's contributing guide and templates and quotes them to the model, and it skips an issue someone is already working on (an assignee, an open pull request, or a comment claiming it). Two things are not built yet: detecting a project's policy on AI-generated contributions, and refusing projects on the excluded list automatically. Until they are, the person approving a contribution checks both by hand.
+> **Where this stands (October 2026).** gitgoblin is in preview. The contribution engine enforces the first commitment in code: it publishes nothing until a person confirms at a terminal, and it runs the model in a sandbox without network access. It reads a project's contributing guide and templates and quotes them to the model, and it skips an issue someone is already working on (an assignee, an open pull request, or a comment claiming it). Two things are not built yet: detecting a project's policy on AI-generated contributions ([#79](https://github.com/anandkaranubc/gitgoblin/issues/79)), and refusing projects on the excluded list automatically ([#78](https://github.com/anandkaranubc/gitgoblin/issues/78)). Until they are, the person approving a contribution checks both by hand.
 
 ## Commitments
 
