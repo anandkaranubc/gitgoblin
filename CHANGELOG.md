@@ -23,6 +23,9 @@ The first release of the `gitgoblin` command.
   or posted without that last yes. `runs`, `show` and `publish` come back to prepared changes later.
 - The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
   `bwrap` on Linux when installed).
+- `contribute --check-isolation strict` also hides your home directory from those commands, except
+  toolchains and caches; use it for repositories you do not trust. The chosen mode is stated in the
+  first question, before anything runs.
 - Works without configuration. A GitHub token, or a `gh` login, raises rate limits and adds
   starter-issue data.
 
