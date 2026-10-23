@@ -10,9 +10,9 @@ what we consider one.
 Please do not open a public issue for security problems.
 
 Use GitHub's private vulnerability reporting: open the repository's
-**Security** tab and choose **Report a vulnerability**. If that option is not
-available, contact the maintainer, [@anandkaranubc](https://github.com/anandkaranubc),
-privately at the email address on that GitHub profile.
+**Security** tab and choose **Report a vulnerability**. If you cannot use it,
+open an ordinary issue that asks the maintainer for a private contact, with no
+details of the problem.
 
 Include what you found, how to reproduce it, and what an attacker could do
 with it. A proof of concept helps; a working exploit against a real
@@ -25,8 +25,11 @@ you in the fix unless you prefer otherwise.
 
 ## Supported versions
 
-gitgoblin has not published a release yet. Only the `main` branch receives
-fixes. Once releases exist, this section will say which ones are supported.
+Fixes go to `main` and into the next release of each published package, the
+`gitgoblin` command and the `@gitgoblin/mcp` server. Older versions are not
+patched; a release with a known vulnerability is deprecated and its release
+notes name the version to upgrade to. [CHANGELOG.md](CHANGELOG.md) lists the
+releases.
 
 ## What counts as a vulnerability
 
@@ -68,10 +71,12 @@ refusing to do something.
   the token when you are done experimenting.
 - Treat every prepared pull request as untrusted until you have read the diff
   yourself. Approval is the safety boundary; use it.
-- Keep the sandboxes on. `--no-sandbox` and `--check-isolation none` exist for
-  platforms without one; a repository's install script still runs as you with
-  network access, so run the engine in a container for repositories you do not
-  trust.
+- Keep the sandboxes on. Even inside one, a repository's install script runs
+  as you with network access, so for a repository you do not trust, use
+  `--check-isolation strict` (an option of `gitgoblin-engine run`), which also
+  hides your home directory from its commands, or run the engine in a
+  container. `--no-sandbox` and `--check-isolation none` are for platforms
+  without a sandbox.
 - Run it on repositories you are allowed to contribute to. Discovery and
   analysis use public read-only data, but publishing a pull request is an
   action in someone else's project. See [docs/etiquette.md](docs/etiquette.md).

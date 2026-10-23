@@ -1,6 +1,6 @@
 # Architecture
 
-gitgoblin is a set of small TypeScript packages that hand each other plain data. This page explains what each one does, how data flows between them, and the ideas they all share. It describes the design; the status column says how much of it exists.
+gitgoblin is a set of small TypeScript packages that hand each other plain data. This page explains what each one does, how data flows between them, and the ideas they all share. It describes the design; the [README](../README.md#what-works-today) says what works today.
 
 ## The flow
 
@@ -20,23 +20,23 @@ gitgoblin is a set of small TypeScript packages that hand each other plain data.
 
 ## Packages
 
-| Package | Owns | Key types | Status |
-| --- | --- | --- | --- |
-| `@gitgoblin/core` | Repository identity, discovery goals and signals | `RepoRef`, `parseRepoRef`, `Goal`, `DiscoveryQuery`, `DiscoveryResult`, `Discoverer` | Working |
-| `@gitgoblin/sources` | Talking to GitHub (REST and GraphQL) and the [ecosyste.ms](https://ecosyste.ms) open APIs, with a local SQLite cache and token discovery | HTTP clients | Working |
-| `@gitgoblin/discovery` | Ranking repositories for a goal: candidate strategies, signals, scoring with human-readable reasons | `Discoverer` implementation | Working |
-| `gitgoblin` (`packages/cli`) | The command line: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish` | | Working from a clone |
-| `@gitgoblin/intel` | Profiling a repository and finding opportunities | `RepositoryProfile`, `ContributionOpportunity`, `AnalysisReport` | Working; scores being calibrated |
-| `@gitgoblin/engine` | Turning one opportunity into a reviewable pull request | `Task`, `runContribution`, `publishRun` | Runs end to end on a test repository; see its [README](../packages/engine/README.md) |
-| `@gitgoblin/mcp` | gitgoblin as an MCP server: discovery and intel for any AI coding agent | `createServer`, the tools `discover_repositories`, `explain_repository`, `analyze_repository`, `get_opportunity` | Released on GitHub (`mcp-v0.1.3`) and listed in the MCP Registry; npm publish pending |
+| Package | Owns | Key types |
+| --- | --- | --- |
+| `@gitgoblin/core` | Repository identity, discovery goals and signals | `RepoRef`, `parseRepoRef`, `Goal`, `DiscoveryQuery`, `DiscoveryResult`, `Discoverer` |
+| `@gitgoblin/sources` | Talking to GitHub (REST and GraphQL) and the [ecosyste.ms](https://ecosyste.ms) open APIs, with a local SQLite cache and token discovery | HTTP clients |
+| `@gitgoblin/discovery` | Ranking repositories for a goal: candidate strategies, signals, scoring with human-readable reasons | `Discoverer` implementation |
+| `gitgoblin` (`packages/cli`) | The command line: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish` | |
+| `@gitgoblin/intel` | Profiling a repository and finding opportunities | `RepositoryProfile`, `ContributionOpportunity`, `AnalysisReport` |
+| `@gitgoblin/engine` | Turning one opportunity into a reviewable pull request | `Task`, `runContribution`, `publishRun` |
+| `@gitgoblin/mcp` | gitgoblin as an MCP server: discovery and intel for any AI coding agent | `createServer`, the tools `discover_repositories`, `explain_repository`, `analyze_repository`, `get_opportunity` |
 
-Each package is independently testable and has its own `package.json`, `tsconfig.json`, tests, and README. Root scripts (`npm test`, `npm run typecheck`) fan out to every package. The two packages with non-trivial internal design each have a design note: [packages/intel/docs/design.md](../packages/intel/docs/design.md) and [packages/engine/docs/design.md](../packages/engine/docs/design.md).
+Each package is independently testable and has its own `package.json`, `tsconfig.json`, tests, and README. Root scripts (`npm test`, `npm run typecheck`) fan out to every package. Only two packages are published to npm, `gitgoblin` and `@gitgoblin/mcp`, and each bundles the packages it uses when it is packed ([docs/releasing.md](releasing.md)). The packages with non-trivial internal design each have a design note: [intel](../packages/intel/docs/design.md), [engine](../packages/engine/docs/design.md) and [mcp](../packages/mcp/docs/design.md).
 
 ## The contracts between them
 
 Packages share data shapes, not internals. `core` is plain TypeScript types with no dependencies. `intel` and `engine` declare [Zod](https://zod.dev) schemas for the shapes they consume and validate at their boundaries, where JSON arrives from a file, a model, or another process. Where a package needs only a slice of another's type, it declares that slice itself; the engine's intake projections are the example.
 
-- **`RepoRef`** (`core`) identifies a repository: `host`, `owner`, `name`. `host` is a hostname such as `github.com` or `codeberg.org`, not an enum, so identity works for self-hosted forges without code changes. Publishing pull requests is GitHub-only for now. `repoId` gives a stable lowercase key.
+- **`RepoRef`** (`core`) identifies a repository: `host`, `owner`, `name`. `host` is a hostname such as `github.com` or `codeberg.org`, not an enum, so identity works for self-hosted forges without code changes. Today only GitHub repositories work, because repository metadata, issues and publishing all go through GitHub's API. `repoId` gives a stable lowercase key.
 - **`DiscoveryResult`** (`core`) is one ranked repository: its facts, a score that is only comparable within the same goal, the normalized signals behind the score, the raw evidence behind the signals, and a list of reasons. A missing signal means unknown, never zero.
 - **`AnalysisReport`** (`intel`) is what understanding a repository produces: a `RepositoryProfile`, a ranked list of `ContributionOpportunity`, the findings that were dropped and why, and the budget spent. Every opportunity carries at least one piece of `Evidence` a human can check, and every score decomposes into named factors with reasons.
 - **`Task`** (`engine`) is the few fields the engine needs from a profile and an opportunity. The engine projects intel's types loosely, declaring only what it reads and passing the rest through, so intel can grow its schemas without breaking the engine. Text that came from a third party (issue bodies, commit subjects) is sanitized on the way in.

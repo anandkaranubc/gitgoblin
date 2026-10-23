@@ -9,11 +9,11 @@
 
 **Find open-source projects worth your time, work out what they really need, and turn that into a pull request a maintainer would be glad to merge.**
 
-[Website](https://anandkaranubc.github.io/gitgoblin/) · [Getting started](docs/getting-started.md) · [How it works](#how-it-works) · [Contributing](CONTRIBUTING.md)
+[Website](https://anandkaranubc.github.io/gitgoblin/) · [Getting started](docs/getting-started.md) · [Use it from your agent](docs/agents.md) · [Contributing](CONTRIBUTING.md)
 
-gitgoblin is a free, open-source companion for contributing to other people's software. It digs through the forgotten corners of public repositories for work that matters, explains why it matters, and helps you do that work to the project's own standards.
+gitgoblin is a free, open-source companion for contributing to other people's software. It is for anyone who wants their open-source time to count: a first contribution, a project to learn from or depend on, or a quiet project worth reviving. It digs through public repositories for work that matters, shows the evidence, and helps you do that work to the project's own standards.
 
-> **Status: early development.** There is no release yet. Discovery and repository analysis work from a clone today; preparing a contribution is experimental. See [what works today](#what-works-today).
+> **Status: preview.** Discovery and analysis work today; preparing a contribution with an AI agent is experimental. Nothing is on npm yet, so the command runs from a clone, and the MCP server installs from a GitHub release. See [what works today](#what-works-today).
 
 ## Why
 
@@ -23,28 +23,14 @@ gitgoblin looks for those instead. It ranks projects against what you want, read
 
 ## How it works
 
-1. **Discover.** Search public repositories by goal (contribute, learn, adopt, revive, explore), language, topic, or similarity to a project you already like. Every result comes with the reasons it ranked where it did.
+1. **Discover.** Rank public repositories for a goal (contribute, learn, adopt, revive, explore), with filters for language, topic and stars, or "more like this one". Every result says why it ranked where it did.
 2. **Understand.** Profile a repository: what it is, how it is built and tested, how it treats outside contributors, and which conventions it follows.
-3. **Find the work.** Surface concrete, evidence-backed opportunities: issues nobody is working on, CI about to break, docs that contradict the code, dead links, tests missing where the code changes most.
-4. **Contribute.** For one opportunity, the engine investigates, plans, implements, runs the project's checks against a baseline, gets an independent review, and prepares a commit and PR description. You read it and decide whether to publish.
-
-## What works today
-
-| Part | Package | Status |
-| --- | --- | --- |
-| Shared types: repository identity, discovery goals and signals | [packages/core](packages/core) | Working |
-| Clients for GitHub and package registries, with a local cache | [packages/sources](packages/sources) | Working |
-| Ranking repositories for a goal, with reasons | [packages/discovery](packages/discovery) | Working |
-| The `gitgoblin` command: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish` | [packages/cli](packages/cli) | Working from a clone; not published to npm |
-| Repository profiling and opportunity discovery (`analyze`) | [packages/intel](packages/intel) | Working from a clone; scores still being calibrated |
-| Plan, implement, review, verify, prepare a PR | [packages/engine](packages/engine) | Runs end to end on a test repository; experimental |
-| MCP server for Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents, plus an agent skill | [packages/mcp](packages/mcp) | Released on GitHub (`mcp-v0.1.3`) and listed in the MCP Registry; npm publish pending |
-
-[docs/architecture.md](docs/architecture.md) explains how the parts fit together.
+3. **Find the work.** List concrete opportunities, each with evidence you can check: issues nobody is working on, CI about to break, docs that contradict the code, tests missing where the code changes most.
+4. **Contribute.** For one opportunity, an AI agent investigates, plans, implements, runs the project's checks against a baseline, and gets an independent review. You read the result and decide whether to open the pull request.
 
 ## Try it
 
-You need [Node.js](https://nodejs.org) 24 or newer and git. There is no published package yet, so run it from a clone:
+You need [Node.js](https://nodejs.org) 24 or newer and git. Run it from a clone:
 
 ```sh
 git clone https://github.com/anandkaranubc/gitgoblin.git
@@ -53,17 +39,40 @@ npm install
 npx gitgoblin discover contribute --language typescript
 ```
 
-That prints ten ranked repositories with the reasons behind each ranking. It works without any configuration; a GitHub token unlocks more data and a higher rate limit. [docs/getting-started.md](docs/getting-started.md) walks through the goals, filters, the `explain` command, the token, and analyzing a repository.
+That prints ten ranked repositories with the reasons behind each ranking. To see every signal for one repository:
+
+```
+$ npx gitgoblin explain BurntSushi/ripgrep --goal adopt
+BurntSushi/ripgrep  ★ 69k · Rust · Unlicense  score 0.73
+goal: adopt
+
+activity              █████████░ 0.92 +0.05  last change today, 178 pull requests in the past year
+responsiveness        ██░░░░░░░░ 0.16 −0.04  issues close in ~25 days, pull requests in ~45 days
+busFactor             ██████░░░░ 0.58 +0.01  406 contributors, top committer wrote 70%
+```
+
+No configuration is needed; a GitHub token, or a `gh` login, raises the rate limit and adds data. [docs/getting-started.md](docs/getting-started.md) goes from here to analyzing a repository and preparing a contribution.
 
 ## Use it from your AI agent
 
-gitgoblin also runs as an MCP server, so the agent you already use can discover repositories, analyze them and brief you on one piece of work:
+gitgoblin also runs as an MCP server, so the agent you already use can discover repositories, analyze them and brief you on one piece of work. For Claude Code:
 
 ```sh
 claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.3/gitgoblin-mcp-0.1.3.tgz
 ```
 
-That installs the server from [release `mcp-v0.1.3`](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.3). [docs/agents.md](docs/agents.md) has the command for Codex, Cursor, Gemini CLI, VS Code and other clients, the skill that teaches agents when to use the tools (`npx skills add anandkaranubc/gitgoblin`), and which clients were verified. Do not use `npx -y @gitgoblin/mcp` until that npm name is published: `npx -y` runs whatever package first claims it.
+[docs/agents.md](docs/agents.md) has the command for Codex, Cursor, Gemini CLI, VS Code and other clients, says which ones were checked, and covers the skill that teaches agents when to use the tools. Do not use `npx -y @gitgoblin/mcp` until that npm name is published: `npx -y` runs whatever package first claims it.
+
+## What works today
+
+| What | Commands | Status |
+| --- | --- | --- |
+| Rank repositories for a goal and explain each ranking | `discover`, `explain`, `goals` | Works |
+| Profile a repository and find evidence-backed work | `analyze` | Works; scores are still being calibrated |
+| Prepare a contribution with an AI agent, then publish it after you approve | `contribute`, `runs`, `show`, `publish` | Experimental; needs an Anthropic API key or Claude Code login, and each run costs money |
+| MCP server and agent skill | | Released on GitHub and listed in the MCP Registry |
+
+GitHub repositories only, for now. Developed on macOS and tested on Linux in CI; Windows is untested. [docs/architecture.md](docs/architecture.md) explains how the packages fit together, and [CHANGELOG.md](CHANGELOG.md) lists what changed in each release.
 
 ## How gitgoblin behaves in other people's projects
 
@@ -84,6 +93,7 @@ The full policy, including how maintainers can opt their project out, is in [doc
 - [CONTRIBUTING.md](CONTRIBUTING.md): working on gitgoblin itself
 - [SECURITY.md](SECURITY.md): reporting vulnerabilities and the boundaries we defend
 - [packages/engine/README.md](packages/engine/README.md): using the contribution engine; its design is in [docs/design.md](packages/engine/docs/design.md)
+- [CHANGELOG.md](CHANGELOG.md): what changed in each release
 
 ## Contributing
 
