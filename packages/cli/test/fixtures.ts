@@ -5,13 +5,14 @@ import type { AnalysisReport, ContributionOpportunity } from "@gitgoblin/intel";
 const AT = "2026-10-22T00:00:00Z";
 
 /** Writes the files the engine leaves in runs/<id>/ (see packages/engine/README.md). */
-export function writeRun(workdir: string, runId: string, overrides: { status?: string; reason?: string; title?: string; costUsd?: number; prepared?: boolean } = {}): string {
+export function writeRun(workdir: string, runId: string, overrides: { status?: string; reason?: string; title?: string; costUsd?: number; prepared?: boolean; install?: { exitCode: number | null; output: string; timedOut?: boolean } } = {}): string {
   const dir = join(workdir, "runs", runId);
   mkdirSync(dir, { recursive: true });
   const status = overrides.status ?? "awaiting_approval";
   writeFileSync(join(dir, "result.json"), JSON.stringify({ runId, runDir: dir, status, reason: overrides.reason ?? "ready for human review", questions: [], workspace: join(dir, "workspace"), branch: "gitgoblin/fix-42", costUsd: overrides.costUsd ?? 0.42, durationMs: 61_000 }));
   writeFileSync(join(dir, "task.json"), JSON.stringify({ id: "opp-aaaa1111", repo: { host: "github.com", owner: "acme", name: "widget" }, title: overrides.title ?? "Fix #42: --color flag is ignored on Windows", kind: "issue" }));
   writeFileSync(join(dir, "report.md"), `# gitgoblin run ${runId}\n\n- Status: **${status}**\n`);
+  if (overrides.install) writeInstall(dir, overrides.install);
   if (overrides.prepared ?? status === "awaiting_approval") {
     writeFileSync(join(dir, "pr-title.txt"), "fix: honour --color on Windows\n");
     writeFileSync(join(dir, "pr.md"), "## Summary\n\nFixes #42\n");
@@ -108,4 +109,14 @@ function defaultOpportunities(): ContributionOpportunity[] {
       issue: { number: 61, url: "https://github.com/acme/widget/issues/61", title: "unclear feature request", labels: [], assignees: [], inFlight: false, createdAt: AT, updatedAt: AT },
     }),
   ];
+}
+
+/** The engine's record of the install step: an event in events.jsonl and the full output beside it. */
+export function writeInstall(dir: string, install: { exitCode: number | null; output: string; timedOut?: boolean }): void {
+  const events = [
+    { ts: "2026-10-23T16:30:19.000Z", phase: "run", type: "start" },
+    { ts: "2026-10-23T16:30:20.000Z", phase: "install", type: "end", exitCode: install.exitCode, durationMs: 68, timedOut: install.timedOut ?? false, outputTail: install.output.slice(-2000) },
+  ];
+  writeFileSync(join(dir, "events.jsonl"), events.map((e) => JSON.stringify(e)).join("\n") + "\n");
+  writeFileSync(join(dir, "install-output.txt"), install.output);
 }
