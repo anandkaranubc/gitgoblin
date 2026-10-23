@@ -13,7 +13,8 @@ Optimise for contributions a maintainer would merge, not for throughput. Every e
 
 - Finding or ranking opportunities (intel/discovery own this).
 - Running many tasks in parallel or a scheduler.
-- Docker/VM isolation (interface allows it later; v0.1 uses the Agent SDK sandbox + hooks).
+- Docker/VM isolation (interface allows it later; v0.1 uses the Agent SDK sandbox + hooks for the
+  agent and an OS sandbox for the repository's own commands).
 - Reacting to CI or maintainer review after the PR is open.
 
 ## Pipeline
@@ -76,17 +77,22 @@ Escalations and stops still write a full report so a human can pick up where the
 - The engine's own git calls disable repository hooks and the filesystem monitor, and publishing
   resets any repository-local credential helper, so nothing the agent writes into the checkout can
   run code on the host.
-- Install and verification commands run on the host (the setup phase needs the network) with an
-  environment stripped of every credential, including model keys. Commands the model discovers
-  during orientation are accepted only as plain invocations of known tool runners: no shell
-  operators, no inline code or preload flags, no paths outside the checkout, no installs or
-  download-and-run forms. Running a hostile repository's install script is still running its code:
-  use a container for repositories you do not trust.
+- Install and verification commands run on the host with an environment stripped of every
+  credential, including model keys, and by default inside an OS sandbox of their own (`hostbox.ts`:
+  `sandbox-exec` on macOS, bubblewrap on Linux when installed). Inside it, writes are limited to the
+  workspace (never its `.git`), the temp directory and tool caches under the home directory;
+  credential paths are unreadable; the network is cut except on localhost, and open only for the
+  install phase. `checkIsolation: "sandbox"` fails the run when no OS sandbox exists; `"none"` runs
+  bare, and the report says which happened. Commands the model discovers during orientation are
+  accepted only as plain invocations of known tool runners: no shell operators, no inline code or
+  preload flags, no paths outside the checkout, no installs or download-and-run forms. The install
+  phase still runs the repository's own scripts with network access: use a container for
+  repositories you do not trust.
 - The agent edits the tree before verification runs on the host, so an edit to the files that decide
   what the check commands execute (package.json scripts, Makefiles, test-runner and linter config
   that is code, hook managers, package-manager settings) escalates before the checks run; a person
   reads that diff first. A test file the agent adds still runs under the repository's test command,
-  which is why the container advice above stands.
+  inside the OS sandbox when there is one.
 - Repository guidance (CONTRIBUTING.md, AGENTS.md, pull request templates) is quoted into prompts
   only when the path resolves to a regular file inside the checkout, so a symlink named
   CONTRIBUTING.md pointing at a credential file is skipped; the text is read as a bounded prefix and

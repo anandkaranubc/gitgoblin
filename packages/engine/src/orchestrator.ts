@@ -4,6 +4,7 @@ import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type 
 import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
 import { execShell } from "./exec.ts";
 import { commandEnv, isInside, isSafeCommand, scrubEnv } from "./guard.ts";
+import { hostSandboxFor, specFor, type CheckIsolation, type HostIsolation } from "./hostbox.ts";
 import { parseTask, sanitizeText, taskFromIntel } from "./intake.ts";
 import { consoleReporter, RunJournal, type Reporter } from "./journal.ts";
 import {
@@ -69,6 +70,12 @@ export interface RunOptions {
   model?: string;
   effort?: Effort;
   isolation?: "sandbox" | "none";
+  /**
+   * OS sandbox for the repository's own commands (install, tests, lint, build), which run on this
+   * machine: "auto" (default) uses sandbox-exec on macOS or bwrap on Linux when present and runs
+   * bare otherwise with a warning; "sandbox" fails the run when none is available; "none" runs bare.
+   */
+  checkIsolation?: CheckIsolation;
   /** Timeout for each repository command (install, test, lint...). */
   checkTimeoutMs?: number;
   skipInstall?: boolean;
@@ -195,6 +202,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   const journal = RunJournal.create(workdir);
   const started = Date.now();
   const phases: PhaseSummary[] = [];
+  let checkIsolation: string | undefined;
   let costUsd = 0;
   let workspace: Workspace | undefined;
   let investigation: Investigation | undefined;
@@ -254,10 +262,21 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     if (options.isolation === "none" && workspace.source === "worktree") {
       reporter.warn("running without a sandbox on a worktree: the agent could reach the original checkout's git directory");
     }
-    const checkOptions = { cwd: workspace.path, env: hostEnv, ...(options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {}) };
+    const hostBox: HostIsolation = hostSandboxFor(options.checkIsolation ?? "auto");
+    checkIsolation = hostBox.kind;
+    journal.event("run", "check-isolation", { kind: hostBox.kind });
+    if (hostBox.kind === "none") {
+      reporter.warn("repository commands run on this machine without an OS sandbox (none available or disabled); use a container for repositories you do not trust");
+    } else {
+      reporter.info(`repository commands run under ${hostBox.kind}: writes limited to the workspace and tool caches, credential paths hidden, network only during install`);
+    }
+    const wrapFor = (network: boolean) => (hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network)) });
+    const timeout = options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {};
+    const checkOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(false) };
+    const installOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(true) };
     if (task.commands.install && !options.skipInstall) {
       reporter.phase("install", task.commands.install);
-      const install = await execShell(task.commands.install, checkOptions);
+      const install = await execShell(task.commands.install, installOptions);
       journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs });
       if (install.exitCode !== 0) reporter.warn(`install failed (exit ${install.exitCode}); continuing, checks may fail`);
     }
@@ -425,6 +444,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
         ...(verification ? { verification } : {}),
         ...(review ? { review } : {}),
         ...(delivery ? { prTitle: delivery.prTitle } : {}),
+        ...(checkIsolation ? { checkIsolation } : {}),
       }),
     );
     journal.event("run", "end", { status, reason, costUsd });

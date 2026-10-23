@@ -17,6 +17,8 @@ export interface ExecOptions {
   env: Record<string, string>;
   timeoutMs?: number;
   maxOutputBytes?: number;
+  /** Runs the shell command inside something else, for example an OS sandbox. Only `execShell` uses it. */
+  wrap?: (command: string) => { file: string; args: string[] };
 }
 
 const DEFAULT_TIMEOUT_MS = 10 * 60_000;
@@ -112,7 +114,8 @@ function run(file: string, args: string[], display: string, opts: ExecOptions): 
 
 /** Runs a command line through `/bin/sh -c`. Use for repository commands written by humans (`npm test`). */
 export function execShell(command: string, opts: ExecOptions): Promise<ExecResult> {
-  return run("/bin/sh", ["-c", command], command, opts);
+  const wrapped = opts.wrap ? opts.wrap(command) : { file: "/bin/sh", args: ["-c", command] };
+  return run(wrapped.file, wrapped.args, command, opts);
 }
 
 /** Runs an executable with explicit arguments and no shell. Use for git and gh. */
