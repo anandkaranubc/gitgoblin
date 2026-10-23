@@ -10,7 +10,7 @@ import { describeLlmError } from "../llm/client.ts";
 import { type IssueReview, reviewIssues } from "../llm/issue-review.ts";
 import { DiskCache } from "../util/cache.ts";
 import { applyIssueDrift, assessIssueDrift, permalinks } from "./issue-drift.ts";
-import { issueBody, problemStatement } from "./issue-text.ts";
+import { asksMaintainersToChoose, issueBody, problemStatement } from "./issue-text.ts";
 import { type Analyzer, type Finding, type FindingSignals, evidence } from "./types.ts";
 
 const BUG_LABEL = /\b(bug|defect|regression|crash|broken|error)\b/i;
@@ -380,11 +380,19 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
   if (review) ev.push(evidence(ctx, "computed", `llm:${ctx.llm?.model ?? "model"}`, { excerpt: review.quote || "(no supporting phrase found in the issue text)", note: `${review.verdict}, ${review.actionable ? "actionable" : "not directly actionable"}, maintainer stance ${review.maintainerStance} (${review.confidence.toFixed(2)}): ${review.rationale}` }));
   for (const pr of issue.linkedPrs.filter((p) => isSameRepoPr(p.url, `https://${ctx.ref.host}/${ctx.ref.owner}/${ctx.ref.name}`))) ev.push(evidence(ctx, "pull_request", pr.url, { note: `linked PR is ${pr.state.toLowerCase()}${pr.isDraft ? " (draft)" : ""}, updated ${pr.updatedAt.slice(0, 10)}` }));
 
+  // An issue that ends by asking maintainers to pick an approach needs their answer before code. Until a maintainer
+  // has replied, the work may be rejected whichever option is built: flag it the way the picker can show.
+  const decision = feature || a.endorsed || issue.lastComments.some((c) => isMaintainer(c.association)) ? undefined : asksMaintainersToChoose(issue.body);
+  if (decision) {
+    risks.unshift(`The issue asks maintainers to choose between approaches and none has answered; ask which they prefer before writing code (${decision}).`);
+    feasibility -= 0.1;
+    feasWhy.push("waits on a maintainer decision");
+  }
   const signals: FindingSignals = {
     value: Math.min(0.95, value), valueReason: valueWhy.join("; "),
     feasibility: Math.max(0.1, Math.min(0.95, feasibility)), feasibilityReason: feasWhy.join("; "),
-    confidence: a.rescued ? 0.65 : a.confirmedLabel || a.endorsed ? 0.85 : review && review.confidence >= 0.8 && (review.verdict === "defect" || review.verdict === "docs") ? 0.75 : 0.6,
-    confidenceReason: a.rescued ? `the lexical pass was unsure; the model judged it a ${review?.verdict ?? "defect"} (${review?.rationale ?? ""}); verify before investing` : a.confirmedLabel || a.endorsed ? "maintainers labelled or confirmed it" : review && review.confidence >= 0.8 ? `issue text plus model agreement: ${review.rationale}` : "inferred from the issue text alone",
+    confidence: decision ? 0.45 : a.rescued ? 0.65 : a.confirmedLabel || a.endorsed ? 0.85 : review && review.confidence >= 0.8 && (review.verdict === "defect" || review.verdict === "docs") ? 0.75 : 0.6,
+    confidenceReason: decision ? `a maintainer decision is pending: ${decision}` : a.rescued ? `the lexical pass was unsure; the model judged it a ${review?.verdict ?? "defect"} (${review?.rationale ?? ""}); verify before investing` : a.confirmedLabel || a.endorsed ? "maintainers labelled or confirmed it" : review && review.confidence >= 0.8 ? `issue text plus model agreement: ${review.rationale}` : "inferred from the issue text alone",
     novelty: a.novelty, noveltyReason: a.noveltyReason,
     welcomenessFactor: a.confirmedLabel ? 1.1 : 1,
     welcomenessReason: a.confirmedLabel ? `help label "${a.confirmedLabel}" invites contributions` : undefined,
