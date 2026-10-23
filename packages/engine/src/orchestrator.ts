@@ -271,8 +271,9 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       reporter.warn("running without a sandbox on a worktree: the agent could reach the original checkout's git directory");
     }
     const hostBox: HostIsolation = hostSandboxFor(options.checkIsolation ?? "auto");
-    checkIsolation = hostBox.kind;
-    journal.event("run", "check-isolation", { kind: hostBox.kind });
+    const strict = options.checkIsolation === "strict";
+    checkIsolation = strict ? `${hostBox.kind} (strict)` : hostBox.kind;
+    journal.event("run", "check-isolation", { kind: hostBox.kind, strict });
     if (hostBox.kind === "none") {
       reporter.warn("repository commands run on this machine without an OS sandbox (none available or disabled); use a container for repositories you do not trust");
     } else {
@@ -285,7 +286,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     hostEnv = commandEnv(env);
     journal.event("run", "toolchain", { notes: toolchain.notes, writeDirs: toolchain.writeDirs });
     for (const note of toolchain.notes) reporter.info(note);
-    const wrapFor = (network: boolean) => (hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network, { extraWrite: toolchain.writeDirs })) });
+    const wrapFor = (network: boolean) => (hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network, { extraWrite: toolchain.writeDirs, strict })) });
     const timeout = options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {};
     const checkOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(false) };
     const installOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(true) };

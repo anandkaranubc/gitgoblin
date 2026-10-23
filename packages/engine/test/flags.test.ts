@@ -22,6 +22,7 @@ describe("parseEffort", () => {
 describe("parseCheckIsolation", () => {
   it("accepts auto, sandbox and none", () => {
     expect(parseCheckIsolation("sandbox")).toBe("sandbox");
+    expect(parseCheckIsolation("strict")).toBe("strict");
     expect(parseCheckIsolation(undefined)).toBeUndefined();
     expect(() => parseCheckIsolation("maybe")).toThrow(/check-isolation/);
   });
