@@ -19,7 +19,7 @@ if (arg === "--help" || arg === "-h") {
       "gitgoblin-mcp: gitgoblin as an MCP server over stdio.",
       "",
       "It takes no arguments. Register it with your agent, for example:",
-      "  claude mcp add gitgoblin -- npx -y <tarball URL from https://github.com/anandkaranubc/gitgoblin/releases>",
+      "  claude mcp add gitgoblin -- npx -y @gitgoblin/mcp",
       "",
       "Optional: GITHUB_TOKEN or GH_TOKEN (or a GitHub CLI login) for higher rate limits.",
       "Docs: https://github.com/anandkaranubc/gitgoblin/tree/main/packages/mcp",

@@ -64,7 +64,7 @@ The answer is a single bundled file, produced only when packing:
 
 One package, several doors:
 
-- **Any MCP client**: the stdio server, `npx -y <release tarball URL>` until `@gitgoblin/mcp` is published to npm. Docs never show the npm name before then: `npx -y` would run whatever package first claimed it. `docs/agents.md` has the exact command or config for each client and says which were connected and which only configured.
+- **Any MCP client**: the stdio server, `npx -y @gitgoblin/mcp`, published by the release workflow with build provenance. Until the first npm release the docs installed the release tarball instead and warned against the npm name, which anyone could have claimed first. `docs/agents.md` has the exact command or config for each client and says which were connected and which only configured.
 - **Claude Code plugin**: `.claude-plugin/plugin.json` at the repository root bundles the MCP server with the agent skill, so one `/plugin install` gives both.
 - **Agent skill**: `skills/gitgoblin/SKILL.md` follows the Agent Skills format that Claude Code, Codex, Cursor, Gemini CLI and others read. It teaches the agent when to reach for gitgoblin, how to read scores and evidence, and how to behave in someone else's repository, which is the part a tool list cannot carry.
 - **GitHub release**: `mcp-v<version>` carries the npm tarball and the MCPB bundle, so the server is installable from the day of a release, with or without npm.
