@@ -701,3 +701,65 @@ describe("an install without the Agent SDK", () => {
     expect(siblings.calls.filter((c) => c.fn !== "analyzeRepository")).toEqual([]);
   });
 });
+
+describe("errors a first-time user meets", () => {
+  const fetchFailed = (cause?: unknown) => Object.assign(new TypeError("fetch failed"), cause === undefined ? {} : { cause });
+
+  it("names the host and the cause when the network cannot be reached", async () => {
+    const offline = fakeRuntime({
+      discover: async () => {
+        throw fetchFailed(Object.assign(new Error("getaddrinfo ENOTFOUND api.github.com"), { code: "ENOTFOUND", hostname: "api.github.com" }));
+      },
+    });
+    expect(await run(["discover", "learn"], offline.runtime)).toBe(1);
+    expect(offline.err.join("\n")).toBe("error: could not reach api.github.com (ENOTFOUND). Check your internet connection or proxy settings.");
+  });
+
+  it("finds the cause inside an aggregate of connection attempts, and still helps when there is none", async () => {
+    const refused = fakeRuntime({
+      discover: async () => {
+        throw fetchFailed(Object.assign(new AggregateError([Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:443"), { code: "ECONNREFUSED", address: "127.0.0.1" })], ""), { code: "ECONNREFUSED" }));
+      },
+    });
+    expect(await run(["discover", "learn"], refused.runtime)).toBe(1);
+    expect(refused.err.join("\n")).toMatch(/^error: could not reach the network \(ECONNREFUSED\)/);
+
+    const bare = fakeRuntime({
+      discover: async () => {
+        throw fetchFailed();
+      },
+    });
+    expect(await run(["discover", "learn"], bare.runtime)).toBe(1);
+    expect(bare.err.join("\n")).toBe("error: could not reach the network (fetch failed). Check your internet connection or proxy settings.");
+  });
+
+  it("explains certificate failures, which usually mean a proxy that inspects TLS", async () => {
+    const tls = fakeRuntime({
+      discover: async () => {
+        throw fetchFailed(Object.assign(new Error("self-signed certificate in certificate chain"), { code: "SELF_SIGNED_CERT_IN_CHAIN" }));
+      },
+    });
+    expect(await run(["discover", "learn"], tls.runtime)).toBe(1);
+    expect(tls.err.join("\n")).toMatch(/certificate.*NODE_EXTRA_CA_CERTS/);
+  });
+
+  it("says a repository was not found, as explain does, when analyze gets a 404 for it", async () => {
+    const siblings = fakeSiblings();
+    (siblings.modules["@gitgoblin/intel"] as { analyzeRepository: unknown }).analyzeRepository = async () => {
+      throw Object.assign(new Error("HTTP 404 for https://api.github.com/repos/not/a-real-repo"), { name: "GitHubError", status: 404 });
+    };
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["analyze", "not/a-real-repo"], runtime)).toBe(1);
+    expect(err.join("\n")).toBe("error: not/a-real-repo was not found on github.com (or it is private and your token cannot see it).");
+  });
+
+  it("leaves other 404s alone, since they are not about the repository asked for", async () => {
+    const siblings = fakeSiblings();
+    (siblings.modules["@gitgoblin/intel"] as { analyzeRepository: unknown }).analyzeRepository = async () => {
+      throw Object.assign(new Error("HTTP 404 for https://api.github.com/repos/acme/widget/actions/runs"), { status: 404 });
+    };
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["analyze", "acme/widget"], runtime)).toBe(1);
+    expect(err.join("\n")).toBe("error: HTTP 404 for https://api.github.com/repos/acme/widget/actions/runs");
+  });
+});

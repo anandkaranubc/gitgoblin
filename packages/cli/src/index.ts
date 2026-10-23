@@ -12,6 +12,7 @@ import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, default
 import { Command, InvalidArgumentError } from "commander";
 import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
+import { explainMissingRepository, explainNetworkFailure } from "./errors.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
 import { formatRuns, installSummary, listRuns, readInstall, readRun } from "./runs.ts";
 import { type IntelModule, type ModuleLoader, importSibling, loadEngine, loadIntel } from "./siblings.ts";
@@ -140,6 +141,8 @@ function explainFailure(error: unknown, runtime: Runtime): string {
     return `${error.message}. ${hint}`;
   }
   if (error instanceof MissingTokenError) return error.message;
+  const friendly = explainNetworkFailure(error) ?? explainMissingRepository(error);
+  if (friendly) return friendly;
   return error instanceof Error ? error.message : String(error);
 }
 

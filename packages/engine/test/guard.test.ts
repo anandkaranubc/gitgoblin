@@ -249,3 +249,19 @@ describe("commandEnv", () => {
     expect(commandEnv({ PATH: "/bin", ANTHROPIC_API_KEY: "k", AWS_REGION: "x", HOME: "/h" })).toEqual({ PATH: "/bin", HOME: "/h" });
   });
 });
+
+describe("oversized input", () => {
+  // Some deny patterns are polynomial in the input length; the hooks run in the engine's own process
+  // on every command the model issues, so length is bounded before any pattern runs.
+  const huge = `rm -rf ${"x ".repeat(30_000)}`;
+  it("refuses a command too long to check, quickly", () => {
+    const started = Date.now();
+    expect(bashDenyReason(huge)).toMatch(/too long/);
+    expect(reviewerBashDenyReason(huge)).toMatch(/too long/);
+    expect(isSafeCommand(`npm test ${"'a' ".repeat(20_000)}`)).toBe(false);
+    expect(Date.now() - started).toBeLessThan(200);
+  });
+  it("still checks ordinary long commands", () => {
+    expect(bashDenyReason(`grep -rn ${"pattern ".repeat(200)} src/`)).toBeNull();
+  });
+});

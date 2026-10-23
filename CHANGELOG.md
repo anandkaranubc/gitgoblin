@@ -17,14 +17,35 @@ The first release of the `gitgoblin` command.
   contributors, its install and test commands, its conventions) and lists contribution
   opportunities, each with evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo
   repositories (Codeberg among them), and gives any other git host a clone-only analysis.
+- `analyze` checks its own findings: an issue whose quoted code is gone from the default branch, or
+  that a later commit cites, is marked as possibly fixed; a dependency update an open pull request
+  already makes is skipped; code that only quotes a pattern (rule tables, test fixtures) and
+  generated files are not reported. A missing repository gets a plain "not found" message.
+- `analyze --llm` asks Claude for a second opinion on issue triage. It is off by default, costs
+  money, and needs an Anthropic API key; the model can demote or rescue an issue but never
+  overrides facts such as a merged pull request.
+- Analysis treats repository content as untrusted: reads never follow symlinks out of the clone,
+  and link checks only contact public addresses on standard ports.
 - `contribute` (experimental) has an AI agent investigate, plan, implement and verify one
   opportunity in a local clone, gets an independent review, and prepares a pull request. It asks
   before running the agent, before implementing the plan, and before publishing; nothing is pushed
   or posted without that last yes. `runs`, `show` and `publish` come back to prepared changes later.
+- When choosing what to work on, `contribute` marks opportunities the engine would refuse (`!`) and
+  those intel doubts (`?`, for example an issue whose quoted code is gone, so it may already be
+  fixed), and pressing Enter skips both.
 - The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
   `bwrap` on Linux when installed).
+- `--check-isolation strict` is the setting for repositories you do not trust: your home directory
+  is hidden from the repository's commands except toolchains and caches, and the install can reach
+  package registries only; hosts it tried and was refused are listed in the run report.
+- Prepared pull requests are written for the maintainers who will read them: the title describes
+  the fix, the summary says what changed and why, checks that already failed before the change are
+  marked as such, and notes about gitgoblin's own environment stay in your run report.
 - Works without configuration. A GitHub token, or a `gh` login, raises rate limits and adds
   starter-issue data.
+- Errors say what to do next: an unreachable network names the host and the cause, a TLS
+  certificate failure points at `NODE_EXTRA_CA_CERTS`, and a repository that does not exist is
+  reported as not found rather than as an HTTP status.
 
 Needs Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the
 CLI (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude
@@ -32,7 +53,22 @@ Code login. Each run costs money, capped by `--max-cost`. Known limits: `discove
 `publish` work with GitHub only; opportunity scores are still being calibrated; `contribute` has been
 tested on a small number of real repositories.
 
+## @gitgoblin/mcp 0.1.5 - 2026-10-23
+
+Replaces the withdrawn 0.1.4.
+
+- Analysis parses issue text in linear time; 0.1.4 could stall for hours on a crafted issue body.
+- Each analysis runs in its own worker thread and is stopped after five minutes or as soon as the
+  client cancels the request, so a repository that makes analysis slow can no longer freeze the
+  other tools.
+- Everything 0.1.4 added stays: `analyze_repository` and `get_opportunity` read GitLab and Codeberg
+  repositories, and the bundle tool is pinned in the lockfile.
+- The bundle is back to about 2 MB: analysis now loads the Anthropic SDK only for its optional model
+  review, which the server never turns on, so the SDK is no longer included.
+
 ## @gitgoblin/mcp 0.1.4 - 2026-10-23
+
+**Do not install 0.1.4.** Its analysis includes a regular expression that can take minutes or hours on a crafted issue body, freezing `analyze_repository` for any repository with such an issue. Use 0.1.5.
 
 - `analyze_repository` and `get_opportunity` read GitLab and Codeberg repositories again, now that
   analysis reads those forges through their own public APIs. Discovery and `explain_repository` still

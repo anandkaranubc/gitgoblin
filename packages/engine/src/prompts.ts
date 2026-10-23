@@ -9,6 +9,22 @@ export interface RepositoryGuidance {
 const MAX_GUIDANCE_CHARS = 12_000;
 const MAX_PATCH_CHARS = 60_000;
 
+/**
+ * A Markdown code fence around `content` that the content cannot close: one backtick longer than the
+ * longest run of backticks inside it, never fewer than three. Repository files, check output and diffs
+ * are all text a hostile repository controls.
+ */
+export function fence(content: string, lang = ""): string {
+  const longest = Math.max(0, ...(content.match(/`+/g) ?? []).map((run) => run.length));
+  const ticks = "`".repeat(Math.max(3, longest + 1));
+  return `${ticks}${lang}\n${content}\n${ticks}`;
+}
+
+/** Issue text goes inside <issue_body> tags; a body cannot contain a tag of that name, open or close. */
+function issueBody(body: string): string {
+  return body.replace(/<(\/?)(issue_body)/gi, "&lt;$1$2");
+}
+
 function section(title: string, body: string | undefined): string {
   return body && body.trim() ? `## ${title}\n${body.trim()}\n` : "";
 }
@@ -29,7 +45,7 @@ function guidanceText(guidance: RepositoryGuidance): string {
     if (budget <= 0) break;
     const content = file.content.length > budget ? `${file.content.slice(0, budget)}\n[truncated]` : file.content;
     budget -= content.length;
-    parts.push(`### ${file.path}\n\`\`\`\n${content.trim()}\n\`\`\``);
+    parts.push(`### ${file.path}\n${fence(content.trim())}`);
   }
   return parts.join("\n\n");
 }
@@ -68,7 +84,7 @@ export function builderSystemPrompt(task: Task, workspace: string, guidance: Rep
 
 function taskText(task: Task): string {
   const issue = task.issue
-    ? [`Issue #${task.issue.number}${task.issue.title ? `: ${task.issue.title}` : ""}`, task.issue.url ?? "", task.issue.labels.length ? `Labels: ${task.issue.labels.join(", ")}` : "", task.issue.body ? `\n<issue_body>\n${task.issue.body}\n</issue_body>` : ""]
+    ? [`Issue #${task.issue.number}${task.issue.title ? `: ${task.issue.title}` : ""}`, task.issue.url ?? "", task.issue.labels.length ? `Labels: ${task.issue.labels.join(", ")}` : "", task.issue.body ? `\n<issue_body>\n${issueBody(task.issue.body)}\n</issue_body>` : ""]
         .filter(Boolean)
         .join("\n")
     : "";
@@ -111,7 +127,7 @@ export function planPrompt(maxFiles: number): string {
     "- Describe each step so another engineer could follow it.",
     "- List tests to add or update, and what must stay out of scope.",
     "- Set `needsNewDependency` honestly; a dependency change stops the run for a human decision.",
-    "- Propose `commitSubject`: one imperative line of at most 72 characters, in the style of the repository's recent commit subjects (including a type and scope if they use them), without an issue number.",
+    "- Propose `commitSubject`: one imperative line of at most 72 characters counting any type and scope, in the style of the repository's recent commit subjects (including a type and scope if they use them), without an issue number. Describe the fix, not the bug.",
   ].join("\n");
 }
 
@@ -138,7 +154,7 @@ export function fixVerificationPrompt(verification: Verification): string {
     "# Verification failed",
     "The engine ran the repository's checks on your change. Fix the failures below without widening the scope. If a failure is pre-existing and unrelated, say so in `knownGaps` instead of changing unrelated code.",
     "",
-    ...failed.map((c) => `## ${c.name} (${c.status}): \`${c.command}\`\n\`\`\`\n${c.outputTail}\n\`\`\``),
+    ...failed.map((c) => `## ${c.name} (${c.status}): \`${c.command}\`\n${fence(c.outputTail)}`),
     "",
     "Return ImplementationNotes when done.",
   ].join("\n");
@@ -197,9 +213,7 @@ export function reviewPrompt(task: Task, plan: ChangePlan, notes: Implementation
     `Diff: ${verification.diff.files} files, +${verification.diff.insertions} -${verification.diff.deletions}`,
     "",
     "# Diff",
-    "```diff",
-    patchText,
-    "```",
+    fence(patchText, "diff"),
     "",
     "Review the diff against the checks in your instructions and return the structured Review.",
   ].join("\n");

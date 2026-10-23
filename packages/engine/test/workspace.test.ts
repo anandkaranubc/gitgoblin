@@ -20,6 +20,14 @@ async function sampleRepo(): Promise<string> {
 }
 
 describe("naming", () => {
+  it("handles a hostile, enormous title in linear time", () => {
+    const started = Date.now();
+    const title = `${"-".repeat(60_000)}x${"-".repeat(60_000)}`;
+    const task = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n" }, title, issue: { number: 1 } });
+    expect(branchNameFor(task).length).toBeLessThan(80);
+    expect(slugify(`a${" ;".repeat(60_000)}`).length).toBeLessThanOrEqual(40);
+    expect(Date.now() - started).toBeLessThan(200);
+  });
   it("slugifies", () => expect(slugify("Fix Off-by-one in paginate()!")).toBe("fix-off-by-one-in-paginate"));
   it("derives a branch from the task", () => {
     const task = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n" }, title: "Fix off-by-one in paginate()", issue: { number: 42 }, kind: "issue" });

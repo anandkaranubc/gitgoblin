@@ -20,6 +20,9 @@ const result = await build({
   target: "node24",
   // Node built-ins stay external automatically; everything else is inlined.
   packages: "bundle",
+  // Intel loads the Anthropic SDK only when its optional model review runs, which the server never
+  // turns on, so the SDK stays out of the bundle (about 1 MB less for every cold start).
+  external: ["@anthropic-ai/sdk", "@anthropic-ai/sdk/*"],
   // Some dependencies are CommonJS and call require(); an ESM bundle needs a real one in scope.
   banner: { js: "import { createRequire as __gitgoblinCreateRequire } from \"node:module\"; const require = __gitgoblinCreateRequire(import.meta.url);" },
   sourcemap: false,
