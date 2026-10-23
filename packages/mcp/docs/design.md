@@ -35,7 +35,7 @@ The repository a tool reads is usually chosen by a model, and a model can be ste
 
 - **Git is hardened before anything else loads.** `src/env.ts` (imported first by `main.ts`) appends `core.symlinks=false`, `protocol.allow=never` and `protocol.https.allow=always` to git's environment configuration. A committed symlink such as `README.md -> ~/.git-credentials` or `-> /dev/zero` is checked out as a small file holding the target path, so no read can leave the clone; clones can only use HTTPS. The cost: a repository whose README is itself a symlink is analyzed with the path text in place of the README until intel resolves in-repository links safely.
 - **The server's clones live in their own cache** (`<cache>/mcp`), so every one was made with those settings; a clone made earlier by the command line could still hold a real symlink.
-- **Only public forges are accepted** (github.com, gitlab.com, codeberg.org). Intel fetches `https://<host>/<owner>/<name>.git` as given, so any other host would let a model point the server at the person's own network. `GITGOBLIN_MCP_HOSTS` adds a self-hosted forge.
+- **Only github.com is accepted.** Intel fetches `https://<host>/<owner>/<name>.git` as given, so an open host list would let a model point the server at the person's own network; and discovery and intel read metadata from GitHub's API by owner and name, so another forge would be answered with whatever GitHub repository shares the name. Other forges come back when both can read them.
 - **External links are never fetched.** Intel's link probe follows redirects to any address, so `analyze_repository` has no `check_links` option; relative links inside the repository are still checked.
 - **Output is cleaned and labelled.** Control characters and bidirectional overrides are stripped from every result, and the server instructions tell the agent that quoted repository text is data, never instructions.
 
@@ -63,7 +63,7 @@ The answer is a single bundled file, produced only when packing:
 
 One package, several doors:
 
-- **Any MCP client**: the stdio server, `npx -y @gitgoblin/mcp`. The README has the exact command or config for each client, verified against the installed client where that was possible.
+- **Any MCP client**: the stdio server, `npx -y <release tarball URL>` until `@gitgoblin/mcp` is published to npm. Docs never show the npm name before then: `npx -y` would run whatever package first claimed it. `docs/agents.md` has the exact command or config for each client and says which were connected and which only configured.
 - **Claude Code plugin**: `.claude-plugin/plugin.json` at the repository root bundles the MCP server with the agent skill, so one `/plugin install` gives both.
 - **Agent skill**: `skills/gitgoblin/SKILL.md` follows the Agent Skills format that Claude Code, Codex, Cursor, Gemini CLI and others read. It teaches the agent when to reach for gitgoblin, how to read scores and evidence, and how to behave in someone else's repository, which is the part a tool list cannot carry.
 - **GitHub release**: `mcp-v<version>` carries the npm tarball and the MCPB bundle, so the server is installable from the day of a release, with or without npm.

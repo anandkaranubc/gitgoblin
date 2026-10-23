@@ -2,7 +2,7 @@
 name: gitgoblin
 description: Find open-source projects worth contributing to, learning from, adopting or reviving, understand what a repository actually needs, and pick an evidence-backed piece of work. Use when someone asks where to contribute, wants a good first issue or a project to learn from, asks whether a library is healthy or maintained, or wants to help a specific repository and does not know what to do there. Uses the gitgoblin MCP tools when connected and explains how to connect them otherwise.
 license: MIT
-compatibility: Works best with the gitgoblin MCP server connected (npx -y @gitgoblin/mcp). Needs Node.js 24 and git on the machine; a GitHub token is optional.
+compatibility: Works best with the gitgoblin MCP server connected (installed from a gitgoblin GitHub release). Needs Node.js 24 and git on the machine; a GitHub token is optional. Reads github.com repositories only.
 metadata:
   author: gitgoblin
   homepage: https://github.com/anandkaranubc/gitgoblin
@@ -50,26 +50,25 @@ The person has picked something and wants to do it. gitgoblin's etiquette toward
 2. **Read the project's contributing guide** and the briefing's rules: issue first, CLA or DCO, tests, changelog, PR template, commit style. Follow them even when they slow you down.
 3. **Work the way the project works.** Clone it, run its own install and test commands from the briefing, match its conventions and typical pull request size. One change, finished, tested.
 4. **Never publish on the person's behalf.** Do not open issues, pull requests or comments, push, star or fork unless the person explicitly asks for that specific action, from their own account, after reading the change. Prepare the branch and the pull request text; they decide.
-5. **Say what was AI-assisted** if the project asks about it, and respect projects that decline AI-assisted contributions.
+5. **Disclose AI assistance** in the pull request description, as gitgoblin's etiquette commits to, and follow the project's policy on AI-assisted contributions, including a refusal.
 6. **Quiet projects get one careful contribution,** easy to merge or easy to ignore, never a stream.
 
 ## Connecting the server
 
-One line per agent; all run the same stdio server with `npx -y @gitgoblin/mcp`.
+One line per agent; all run the same stdio server from the tarball attached to the latest gitgoblin release (https://github.com/anandkaranubc/gitgoblin/releases). The commands below name release 0.1.2; use the newest one listed there.
 
 ```sh
-claude mcp add gitgoblin -- npx -y @gitgoblin/mcp          # Claude Code
-codex mcp add gitgoblin -- npx -y @gitgoblin/mcp           # Codex
-gemini mcp add -s user gitgoblin npx -y @gitgoblin/mcp     # Gemini CLI
-code --add-mcp '{"name":"gitgoblin","type":"stdio","command":"npx","args":["-y","@gitgoblin/mcp"]}'   # VS Code
+claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.2/gitgoblin-mcp-0.1.2.tgz          # Claude Code
+codex mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.2/gitgoblin-mcp-0.1.2.tgz           # Codex
+gemini mcp add -s user gitgoblin npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.2/gitgoblin-mcp-0.1.2.tgz     # Gemini CLI
 ```
 
-Cursor and other clients take the standard JSON block:
+Cursor, VS Code and other clients take the standard JSON block:
 
 ```json
-{ "mcpServers": { "gitgoblin": { "command": "npx", "args": ["-y", "@gitgoblin/mcp"] } } }
+{ "mcpServers": { "gitgoblin": { "command": "npx", "args": ["-y", "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.2/gitgoblin-mcp-0.1.2.tgz"] } } }
 ```
 
-While `@gitgoblin/mcp` is not yet on npm, use the tarball URL from the [latest GitHub release](https://github.com/anandkaranubc/gitgoblin/releases) in its place; the commands are otherwise identical.
+Never substitute `npx -y @gitgoblin/mcp`: that npm name is not published yet, and `npx -y` would run whatever package first claims it.
 
 A GitHub token is optional. `GITHUB_TOKEN`, `GH_TOKEN`, or a GitHub CLI login (`gh auth login`) raises the limits and unlocks starter-issue data. The full install guide with every client is at https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md.
