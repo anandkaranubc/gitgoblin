@@ -87,7 +87,9 @@ entries that expired more than a week ago.
 Deep analysis through `@gitgoblin/intel`: repository profile, conventions and
 contribution opportunities, rendered as Markdown. Discovery's result for the
 repository is passed along as hints. When opportunities were found it ends, on
-stderr, with the `contribute` command for the best one.
+stderr, with the `contribute` command for the best one. If the repository's issues could not be read
+(GitHub refused the request, for example), it says so and why, because most
+opportunities come from issues; `contribute` shows the same line above its list.
 
 | Option | Meaning |
 | --- | --- |
