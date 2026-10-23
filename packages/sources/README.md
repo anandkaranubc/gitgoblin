@@ -27,15 +27,21 @@ sources.close();
 | Rate limits | `429`, and GitHub's `403` with `x-ratelimit-remaining: 0` or `retry-after`, trigger one wait of up to 30 s, otherwise a `RateLimitError` with `resetAt`. |
 | Retries | Network errors and `5xx` retry twice with backoff, then fall back to a stale copy if one exists. |
 | Concurrency | At most 4 in-flight requests per host. |
-| Observability | `onEvent` reports hits, misses, revalidations, retries and waits; `rateLimits()` exposes the latest headers per host and resource. |
+| Body limit | Responses over `maxBodyBytes` (32 MiB) are dropped mid-stream and reported as an `HttpError`, never buffered or cached. |
+| Self-healing | A cached body that no longer parses as JSON is discarded and fetched again. |
+| Observability | `onEvent` reports hits, misses, revalidations, retries, waits, discarded entries and the cache fallback; `rateLimits()` exposes the latest headers per host and resource. |
 
 Caches implement `HttpCache`. `SqliteCache` uses Node's built-in `node:sqlite`
-(no native build), gzips bodies, and drops entries that expired more than a
-week ago each time it opens. `MemoryCache` is for tests and one-off scripts.
+(no native build), gzips bodies, drops entries that expired more than a week
+ago each time it opens, and evicts the oldest entries past `maxBytes`
+(512 MiB). A row it cannot decode is treated as a miss and deleted.
+`MemoryCache` is for tests and one-off scripts.
 
 The on-disk cache lives at `$GITGOBLIN_CACHE_DIR/http-cache.sqlite`, else
-`$XDG_CACHE_HOME/gitgoblin/`, else `~/.cache/gitgoblin/`. Only public API
-responses are stored; tokens never are.
+`$XDG_CACHE_HOME/gitgoblin/`, else `~/.cache/gitgoblin/`, created readable by
+the current user only (the responses are whatever the token could see). When
+that location cannot be opened, `createSources` falls back to a memory cache and
+reports a `cache-fallback` event rather than failing. Tokens are never stored.
 
 ## GitHubClient
 

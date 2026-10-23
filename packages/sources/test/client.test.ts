@@ -148,3 +148,37 @@ describe("HttpClient resilience", () => {
     expect(peak).toBe(2);
   });
 });
+
+describe("HttpClient defensive limits", () => {
+  it("refuses response bodies larger than the limit instead of buffering them", async () => {
+    const { fetch } = fetchStub(() => new Response("x".repeat(10_000), { status: 200, headers: { "content-type": "text/plain" } }));
+    const { client } = makeClient(fetch, virtualClock(), { maxBodyBytes: 1000 });
+    await expect(client.text(URL_A)).rejects.toThrow(/larger than 1000 bytes/);
+    await expect(client.text(URL_A)).rejects.toBeInstanceOf(HttpError);
+  });
+
+  it("streams bodies under the limit intact", async () => {
+    const body = JSON.stringify({ items: Array.from({ length: 50 }, (_, i) => i) });
+    const { fetch } = fetchStub(() => jsonResponse(JSON.parse(body)));
+    const { client } = makeClient(fetch, virtualClock(), { maxBodyBytes: 10_000 });
+    expect(await client.text(URL_A)).toBe(body);
+  });
+
+  it("discards a cached body that no longer parses and fetches again", async () => {
+    const clock = virtualClock();
+    const { fetch, calls } = fetchStub(() => jsonResponse({ n: 2 }));
+    const cache = new MemoryCache();
+    cache.set(`GET ${URL_A}`, { status: 200, body: "{ not json", etag: null, fetchedAt: clock.now(), ttlMs: 60_000 });
+    const { client, events } = makeClient(fetch, clock, { cache });
+    expect(await client.json(URL_A)).toEqual({ n: 2 });
+    expect(calls).toHaveLength(1);
+    expect(cache.get(`GET ${URL_A}`)?.body).toBe('{"n":2}');
+    expect(events.map((e) => e.type)).toContain("hit");
+  });
+
+  it("still reports a server's unparsable JSON as an error", async () => {
+    const { fetch } = fetchStub(() => new Response("<html>", { status: 200 }));
+    const { client } = makeClient(fetch);
+    await expect(client.json(URL_A)).rejects.toThrow();
+  });
+});
