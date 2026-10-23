@@ -41,6 +41,13 @@ issue to trigger.
   must not write outside its workspace, reach the network, run privileged
   commands, or load the target repository's own agent configuration (hooks,
   settings, instruction files) as instructions it obeys.
+- **The repository's own commands stay in theirs.** The install, test, lint
+  and build commands the engine runs on your machine run inside an OS sandbox
+  when one exists (`sandbox-exec` on macOS, `bwrap` on Linux): writes only to
+  the checkout and tool caches, credential files unreadable, no network except
+  during install. A change that edits what those commands execute (package
+  scripts, Makefiles, test-runner configuration) must stop for a person before
+  the engine runs it. A way around either is a vulnerability.
 - **Credentials never reach the agent.** GitHub tokens, cloud credentials, and
   anything else beyond what the agent needs for model access must stay in the
   operator's process.
@@ -61,6 +68,10 @@ refusing to do something.
   the token when you are done experimenting.
 - Treat every prepared pull request as untrusted until you have read the diff
   yourself. Approval is the safety boundary; use it.
+- Keep the sandboxes on. `--no-sandbox` and `--check-isolation none` exist for
+  platforms without one; a repository's install script still runs as you with
+  network access, so run the engine in a container for repositories you do not
+  trust.
 - Run it on repositories you are allowed to contribute to. Discovery and
   analysis use public read-only data, but publishing a pull request is an
   action in someone else's project. See [docs/etiquette.md](docs/etiquette.md).
