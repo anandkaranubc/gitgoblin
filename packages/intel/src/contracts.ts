@@ -235,6 +235,11 @@ export const Structure = z.object({
   testDirs: z.array(z.string()),
   docsDirs: z.array(z.string()),
   entryPoints: z.array(z.string()),
+  /**
+   * Modules most imported by the rest of the code: the places a change ripples from. Go entries are
+   * package directories. Optional so profiles written before it existed, and typed fixtures, stay valid.
+   */
+  centralFiles: z.array(z.object({ path: z.string(), importedBy: z.number().int().nonnegative() })).optional(),
 });
 export type Structure = z.infer<typeof Structure>;
 
@@ -324,7 +329,7 @@ export const Conventions = z.object({
   /** Observed branch naming pattern on merged PRs, e.g. "fix/<topic>". */
   branchNaming: z.string().optional(),
   /** Real recent commit subjects, so a contributor can match the house style. */
-  recentCommitSubjects: z.array(z.string()),
+  recentCommitSubjects: z.array(z.string()).default([]),
   testFramework: z.string().optional(),
   formatter: z.string().optional(),
   linter: z.string().optional(),
@@ -365,7 +370,7 @@ export const RepositoryProfile = z.object({
   conventions: Conventions,
   hotFiles: z.array(HotFile),
   /** Instruction files for contributors and coding agents: CLAUDE.md, AGENTS.md, .cursorrules, copilot-instructions.md. */
-  instructionFiles: z.array(z.string()),
+  instructionFiles: z.array(z.string()).default([]),
   /** Plain-language observations that did not fit a field. */
   notes: z.array(z.string()),
 });
