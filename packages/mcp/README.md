@@ -6,7 +6,7 @@ gitgoblin as a [Model Context Protocol](https://modelcontextprotocol.io) server.
 claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
 ```
 
-[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The package is not on npm yet; until it is, run it from a clone: `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`.
+[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The package is not on npm yet; until it is, use the tarball from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.0) in place of `@gitgoblin/mcp` (`npx -y <tarball url>`), or run it from a clone with `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`. Claude Desktop users install the release's `gitgoblin.mcpb` directly.
 
 ## Tools
 
@@ -35,6 +35,7 @@ npm test -w @gitgoblin/mcp                                       # protocol test
 npm run typecheck -w @gitgoblin/mcp
 GITGOBLIN_E2E=1 npx vitest run --root packages/mcp test/e2e      # the real server over stdio, against GitHub
 npm run bundle -w @gitgoblin/mcp                                 # what `npm pack` ships: dist/gitgoblin-mcp.mjs
+npm run mcpb -w @gitgoblin/mcp                                   # the Claude Desktop bundle: dist/gitgoblin.mcpb
 ```
 
-`src/server.ts` builds the server from an injectable `ServerDeps` (discovery and intel); `src/format.ts` renders results for a model; `src/deps.ts` wires the real packages; `bin/gitgoblin-mcp.mjs` is the launcher. Development runs the TypeScript source on Node 24. Publishing bundles the source and the sibling packages into one file with no runtime dependencies, because Node will not strip types under `node_modules`. [docs/design.md](docs/design.md) explains the decisions; `server.json` is the manifest for the MCP Registry.
+`src/server.ts` builds the server from an injectable `ServerDeps` (discovery and intel); `src/format.ts` renders results for a model; `src/deps.ts` wires the real packages; `bin/gitgoblin-mcp.mjs` is the launcher. Development runs the TypeScript source on Node 24. Publishing bundles the source and the sibling packages into one file with no runtime dependencies, because Node will not strip types under `node_modules`. [docs/design.md](docs/design.md) explains the decisions; `server.json` is the manifest for the MCP Registry; it points at the release's `.mcpb` and its SHA-256. A release is `npm pack` plus `npm run mcpb`, both files attached to a `mcp-v<version>` GitHub release.

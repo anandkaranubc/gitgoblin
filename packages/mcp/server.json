@@ -12,11 +12,9 @@
   },
   "packages": [
     {
-      "registryType": "npm",
-      "registryBaseUrl": "https://registry.npmjs.org",
-      "identifier": "@gitgoblin/mcp",
-      "version": "0.1.0",
-      "runtimeHint": "npx",
+      "registryType": "mcpb",
+      "identifier": "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.0/gitgoblin.mcpb",
+      "fileSha256": "96e929801863a329220eb6d9eb49965b5d2261738dae4d6c81a78ae8a5474d5d",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
