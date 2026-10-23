@@ -29,6 +29,7 @@ import { licenseFromText } from "../src/profile/license.ts";
 import { earlyClosedReason, findDeprecationNotice, findRefusal } from "../src/profile/welcomeness.ts";
 import { maskCodeLiterals } from "../src/util/mask.ts";
 import { inline, stripControl } from "../src/util/text.ts";
+import { renderIssue } from "../src/llm/issue-review.ts";
 
 export const SIZE = Number(process.env.REDOS_SIZE ?? 65_536);
 export const CEILING_MS = Number(process.env.REDOS_CEILING_MS ?? 1500);
@@ -133,6 +134,7 @@ export const FUNCTIONS: [string, (t: string) => unknown][] = [
   ["stemWords", (t) => stemWords(t.slice(0, 255))],
   ["applySetupCfg", (t) => applySetupCfg(emptyManifest(), t)],
   ["applySetupPy", (t) => applySetupPy(emptyManifest(), t)],
+  ["renderIssue", (t) => renderIssue(issue(t.slice(0, 256), t), new Date("2026-06-01T00:00:00Z"))],
   ["stripControl", stripControl],
   ["inline", (t) => inline(t)],
 ];
