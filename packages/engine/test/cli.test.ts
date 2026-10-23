@@ -26,3 +26,12 @@ describe("gitgoblin-engine publish", () => {
     expect(cli(["--help"]).stdout).not.toContain("--yes");
   });
 });
+
+describe("gitgoblin-engine clean", () => {
+  it("is listed and needs a run id", () => {
+    expect(cli(["--help"]).stdout).toContain("gitgoblin-engine clean <runId>");
+    const r = cli(["clean"]);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/needs a run id/);
+  });
+});
