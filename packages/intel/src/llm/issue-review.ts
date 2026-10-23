@@ -5,6 +5,7 @@ import type { IssueSample } from "../github/types.ts";
 import { isMaintainer } from "../github/types.ts";
 import type { DiskCache } from "../util/cache.ts";
 import { daysAgo } from "../util/time.ts";
+import { issueBody } from "../analyzers/issue-text.ts";
 import { stripControl, truncate } from "../util/text.ts";
 import type { LlmClient } from "./client.ts";
 
@@ -17,17 +18,19 @@ export const IssueReview = z.object({
   /** Only from comments marked [maintainer]. */
   maintainerStance: z.enum(["endorsed", "neutral", "pushback", "unknown"]),
   /** One sentence restating the problem in plain words. */
-  problem: z.string().max(600),
+  problem: z.string(),
   /** Verbatim phrase from the issue (at most 15 words) that best supports the verdict. */
-  quote: z.string().max(300),
-  rationale: z.string().max(400),
+  quote: z.string(),
+  // No length limits in the schema: the SDK checks them only after the call and throws, losing the whole batch.
+  // Lengths are capped after parsing instead.
+  rationale: z.string(),
   confidence: z.number().min(0).max(1),
 });
 export type IssueReview = z.infer<typeof IssueReview>;
 
 const Batch = z.object({ reviews: z.array(IssueReview) });
 
-export const PROMPT_VERSION = "2";
+export const PROMPT_VERSION = "3";
 export const BATCH_SIZE = 15;
 const CACHE_TTL_MS = 14 * 24 * 3_600_000;
 
@@ -50,7 +53,7 @@ export interface ReviewInput {
   issues: IssueSample[];
   now: Date;
   cache?: DiskCache | undefined;
-  /** Called once per failed batch; reviewing continues with the next batch. */
+  /** Called once per failed batch. Reviewing continues with the next batch unless credentials are missing or the API rate-limits. */
   onError?: ((error: unknown) => void) | undefined;
 }
 
@@ -74,18 +77,20 @@ export async function reviewIssues(input: ReviewInput): Promise<Map<number, Issu
         if (!issue) continue; // the model may not invent issue numbers
         // Model text is data: no control or format characters reach the report. (Done here, not in the
         // schema: the SDK's structured output cannot represent zod transforms.)
-        review.problem = stripControl(review.problem);
-        review.quote = stripControl(review.quote);
-        review.rationale = stripControl(review.rationale);
-        // A stance needs a real maintainer comment; text in the body claiming to be one does not count.
-        if (!issue.lastComments.some((c) => isMaintainer(c.association))) review.maintainerStance = "unknown";
+        review.problem = truncate(stripControl(review.problem), 600);
+        review.quote = truncate(stripControl(review.quote), 300);
+        review.rationale = truncate(stripControl(review.rationale), 400);
+        // A stance needs a real maintainer comment among those the model was shown; text claiming to be one does not count.
+        if (!promptComments(issue).some((c) => c.role === "maintainer")) review.maintainerStance = "unknown";
         if (!quoteOccurs(review.quote, issue)) review.quote = "";
         results.set(review.number, review);
         await cache?.set(cacheKey(llm.model, profile, issue), review);
       }
     } catch (error) {
       input.onError?.(error);
-      break;
+      // Missing credentials or a rate limit will fail every batch; anything else (one malformed answer) is local.
+      const status = (error as { status?: unknown }).status;
+      if (status === 401 || status === 403 || status === 429 || /ANTHROPIC_API_KEY|credentials|apiKey/i.test(String((error as Error).message))) break;
     }
   }
   return results;
@@ -98,29 +103,38 @@ function cacheKey(model: string, profile: ReviewInput["profile"], issue: IssueSa
 export function renderBatch(profile: ReviewInput["profile"], issues: IssueSample[], now: Date): string {
   const head = [
     `Repository: ${profile.repo.owner}/${profile.repo.name} (${profile.nature.replace("_", " ")}; ${profile.languages.slice(0, 3).map((l) => l.name).join(", ") || "language unknown"})`,
-    profile.description ? `Description: ${profile.description}` : "",
+    ...(profile.description ? [`Description: ${userText(profile.description, 300)}`] : []),
     `Review the following ${issues.length} issue${issues.length === 1 ? "" : "s"}. Return one review per issue, keyed by its number.`,
-    "",
-  ].filter((l) => l !== "").join("\n");
-  return head + issues.map((issue) => renderIssue(issue, now)).join("\n\n");
+  ].join("\n");
+  return `${head}\n\n${issues.map((issue) => renderIssue(issue, now)).join("\n\n")}`;
 }
 
-/** Repository-authored text as model input: no control or bidi characters, and no "[maintainer]" or "### Issue" imitating the structure of the prompt. */
+/** Spellings of a role marker an issue author might use to pass as a maintainer: [maintainer], [ maintainer ], fullwidth brackets. */
+const ROLE_MARKER = /[[［]\s{0,3}(maintainer|author|user)\s{0,3}[\]］]/gi;
+/** Zero-width characters that could split a marker so it survives replacement (`[main<ZWJ>tainer]`). Removed from model input only. */
+const ZERO_WIDTH = /[\u200b-\u200d\u2060\ufeff]/g;
+
+/** Repository-authored text as model input: no control or bidi characters, and nothing imitating the prompt's role markers or headings. */
 function userText(text: string, max: number): string {
-  return truncate(stripControl(text).replace(/\[(maintainer|author|user)\]/gi, "($1)").replace(/^#{1,6}\s*(Issue\s*#|Title:|Body:)/gim, "$1"), max);
+  return truncate(stripControl(text).replace(ZERO_WIDTH, "").replace(ROLE_MARKER, "($1)").replace(/^#{1,6}[ \t]{0,3}(Issue[ \t]{0,3}#|Title:|Body:)/gim, "$1"), max);
+}
+
+/** The comments the model is shown, with the role it is told: the last four from people, labelled by real association. */
+export function promptComments(issue: IssueSample): { role: "author" | "maintainer" | "user"; createdAt: string; body: string }[] {
+  return issue.lastComments
+    .slice(-4)
+    .filter((c) => c.body && !c.author?.isBot)
+    .map((c) => ({ role: c.author?.login === issue.author?.login ? "author" as const : isMaintainer(c.association) ? "maintainer" as const : "user" as const, createdAt: c.createdAt, body: c.body! }));
 }
 
 export function renderIssue(issue: IssueSample, now: Date): string {
   const lines = [
     `### Issue #${issue.number} (opened ${Math.round(daysAgo(issue.createdAt, now))} days ago, ${issue.commentCount} comments, ${issue.reactions} reactions, labels: ${issue.labels.map((l) => userText(l, 40)).join(", ") || "none"})`,
     `Title: ${userText(issue.title, 200)}`,
-    `Body: ${userText(issue.body.replace(/<!--[\s\S]*?-->/g, " "), 1500) || "(empty)"}`,
+    // The template-free body (linear-time, comments and checklists gone) is what a reader would look at.
+    `Body: ${userText(issueBody(issue.body), 1500) || "(empty)"}`,
   ];
-  for (const c of issue.lastComments.slice(-4)) {
-    if (!c.body || c.author?.isBot) continue;
-    const who = c.author?.login === issue.author?.login ? "author" : isMaintainer(c.association) ? "maintainer" : "user";
-    lines.push(`[${who}] ${c.createdAt.slice(0, 10)}: ${userText(c.body, 300)}`);
-  }
+  for (const c of promptComments(issue)) lines.push(`[${c.role}] ${c.createdAt.slice(0, 10)}: ${userText(c.body, 300)}`);
   return lines.join("\n");
 }
 
