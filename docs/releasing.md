@@ -19,6 +19,8 @@ Pushing a tag starts [.github/workflows/release.yml](../.github/workflows/releas
 2. **Draft release.** It creates a draft GitHub release with those files, using the CHANGELOG section as the notes. Nobody sees a draft until the maintainer publishes it.
 3. **npm.** After the draft exists and the maintainer approves the job in the `npm` environment, it checks the files against `SHA256SUMS` and publishes the same tarball it built. npm records provenance that links the package to the workflow run.
 
+The build also fails on a high-severity advisory in a runtime dependency (`npm audit --omit=dev --audit-level=high`). Dependencies that are only used to build or test are not checked there; Dependabot alerts cover them. Known build-only advisories, reviewed on 2026-10-23: `@anthropic-ai/mcpb` (which packs the `.mcpb` bundle) pulls in `node-forge` and `tmp` versions with advisories that have no upstream fix. They matter only to an interactive or signing use of that tool, and the release job runs it non-interactively on files it just built.
+
 To rehearse without a tag, run the workflow by hand: **Actions → Release → Run workflow**, then pick the package. It builds and checks from any branch, and attests, drafts and publishes nothing.
 
 ## Cutting a release
