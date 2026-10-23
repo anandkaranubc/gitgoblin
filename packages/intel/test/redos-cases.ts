@@ -11,7 +11,7 @@ import { matchDeprecations, isCompatModule } from "../src/analyzers/deprecations
 import { cliFlagsInCode, cliFlagsInDocs, codeBlocks, installCommands } from "../src/analyzers/docs-drift.ts";
 import { looksAnnotated } from "../src/analyzers/hygiene.ts";
 import { permalinks, quotedCodeLines, tracebackFrames } from "../src/analyzers/issue-drift.ts";
-import { issueBody, problemStatement } from "../src/analyzers/issue-text.ts";
+import { asksMaintainersToChoose, issueBody, problemStatement } from "../src/analyzers/issue-text.ts";
 import { assessIssue, looksLikeRequestTitle, plainText } from "../src/analyzers/issues.ts";
 import { anchorsIn, extractLinks, siteSlugify, slugify } from "../src/analyzers/links.ts";
 import { parseLockfile } from "../src/analyzers/lockfiles.ts";
@@ -81,6 +81,7 @@ const none = new Set<string>();
 export const FUNCTIONS: [string, (t: string) => unknown][] = [
   ["issueBody", issueBody],
   ["problemStatement", problemStatement],
+  ["asksMaintainersToChoose", asksMaintainersToChoose],
   ["plainText", plainText],
   ["looksLikeRequestTitle", (t) => looksLikeRequestTitle(t.slice(0, 256))],
   ["assessIssue", (t) => assessIssue(issue(t.slice(0, 256), t), new Date("2026-06-01T00:00:00Z"), true, "https://github.com/o/r")],
