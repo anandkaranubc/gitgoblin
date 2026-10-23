@@ -35,7 +35,7 @@ gitgoblin looks for those instead. It ranks projects against what you want, read
 | Shared types: repository identity, discovery goals and signals | [packages/core](packages/core) | Working |
 | Clients for GitHub and package registries, with a local cache | [packages/sources](packages/sources) | Working |
 | Ranking repositories for a goal, with reasons | [packages/discovery](packages/discovery) | Working |
-| The `gitgoblin` command: `discover`, `explain`, `goals`, `cache` | [packages/cli](packages/cli) | Working from a clone; not published to npm |
+| The `gitgoblin` command: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish` | [packages/cli](packages/cli) | Working from a clone; not published to npm |
 | Repository profiling and opportunity discovery (`analyze`) | [packages/intel](packages/intel) | Working from a clone; scores still being calibrated |
 | Plan, implement, review, verify, prepare a PR | [packages/engine](packages/engine) | Runs end to end on a test repository; experimental |
 | MCP server for Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents, plus an agent skill | [packages/mcp](packages/mcp) | Working from a clone; npm release pending |
