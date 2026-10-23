@@ -69,3 +69,13 @@ describe("formatRuns", () => {
     expect(formatRuns([], { color: false })).toMatch(/No runs yet/);
   });
 });
+
+describe("formatRuns shows task titles without control characters", () => {
+  it("strips escape sequences from the title the engine recorded", () => {
+    const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-runs-"));
+    writeRun(workdir, "20261022-093000-bbbb", { title: "Fix #42: \u001b[31mred\u001b[0m" });
+    const text = formatRuns(listRuns(workdir), { color: false });
+    expect(text).toContain("acme/widget  Fix #42: red");
+    expect(text).not.toContain("\u001b");
+  });
+});

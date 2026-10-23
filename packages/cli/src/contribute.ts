@@ -2,6 +2,7 @@ import { styleText } from "node:util";
 import type { ChangePlan, RunResult } from "@gitgoblin/engine";
 import type { AnalysisReport, ContributionOpportunity } from "@gitgoblin/intel";
 import type { Style } from "./format.ts";
+import { plain } from "./text.ts";
 
 /** How the person named the opportunity they want: an issue number, or an id or rank from the list. */
 export interface Choice {
@@ -32,11 +33,11 @@ export function formatOpportunities(report: AnalysisReport, style: Style): strin
   const repo = `${report.profile.repo.owner}/${report.profile.repo.name}`;
   if (report.opportunities.length === 0) return `No contribution opportunities found in ${repo}.`;
   const blocks = report.opportunities.map((o, index) => {
-    const lines = [`${String(index + 1).padStart(2)}. ${paint("bold", o.title)}`];
+    const lines = [`${String(index + 1).padStart(2)}. ${paint("bold", plain(o.title))}`];
     lines.push(`    ${paint("dim", `${o.kind} · score ${o.score.toFixed(2)} · ${o.effort} effort · id ${o.id}`)}`);
     if (o.summary) lines.push(`    ${oneLine(o.summary, 180)}`);
     const evidence = o.evidence[0];
-    if (evidence) lines.push(`    ${paint("dim", `evidence: ${evidence.locator}${o.evidence.length > 1 ? ` and ${o.evidence.length - 1} more` : ""}`)}`);
+    if (evidence) lines.push(`    ${paint("dim", `evidence: ${plain(evidence.locator)}${o.evidence.length > 1 ? ` and ${o.evidence.length - 1} more` : ""}`)}`);
     const refusal = engineWillRefuse(o);
     if (refusal) lines.push(`    ${paint("yellow", "!")} ${refusal}`);
     return lines.join("\n");
@@ -75,16 +76,19 @@ export function selectOpportunity(report: AnalysisReport, choice: Choice): Contr
 
 /** Collapses whitespace and cuts at `max` characters; the list is for choosing, the report for reading. */
 function oneLine(text: string, max: number): string {
-  const clean = text.replace(/\s+/g, " ").trim();
+  const clean = plain(text).replace(/\s+/g, " ").trim();
   return clean.length <= max ? clean : `${clean.slice(0, max - 1).trimEnd()}…`;
 }
 
 export function label(o: ContributionOpportunity): string {
-  return o.issue ? `#${o.issue.number} ${o.title}` : o.title;
+  return plain(o.issue ? `#${o.issue.number} ${o.title}` : o.title);
 }
 
 /** The engine's plan, for the person to approve before anything is implemented. */
-export function formatPlan(plan: ChangePlan): string {
+export function formatPlan(input: ChangePlan): string {
+  // The plan is model output; keep the terminal safe from anything it echoed from the repository.
+  const clean = (values: string[]) => values.map(plain);
+  const plan = { ...input, goal: plain(input.goal), steps: clean(input.steps), filesToModify: clean(input.filesToModify), filesToCreate: clean(input.filesToCreate), testsToAdd: clean(input.testsToAdd), outOfScope: clean(input.outOfScope), risks: clean(input.risks) };
   const lines = [`Plan: ${plan.goal}`, ...plan.steps.map((step, index) => `  ${index + 1}. ${step}`)];
   const files = plan.filesToModify.join(", ");
   const created = plan.filesToCreate.join(", ");
@@ -106,7 +110,7 @@ function firstSentence(reason: string, max = 200): string {
 
 /** The lines a person reads first when a run ends: what happened, what it cost, where the artifacts are. */
 export function describeRun(result: RunResult): string[] {
-  const lines = [`Run ${result.status}: ${firstSentence(result.reason)}`, `Cost: $${result.costUsd.toFixed(2)} in ${Math.round(result.durationMs / 1000)}s`, `Run directory: ${result.runDir}`];
-  for (const question of result.questions) lines.push(`Question for you: ${question}`);
+  const lines = [`Run ${result.status}: ${firstSentence(plain(result.reason))}`, `Cost: $${result.costUsd.toFixed(2)} in ${Math.round(result.durationMs / 1000)}s`, `Run directory: ${result.runDir}`];
+  for (const question of result.questions) lines.push(`Question for you: ${plain(question)}`);
   return lines;
 }
