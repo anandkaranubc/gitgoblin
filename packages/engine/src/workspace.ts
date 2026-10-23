@@ -102,7 +102,12 @@ async function resolveCloneStart(task: Task, wsPath: string, env: Record<string,
  * Creates an isolated checkout for one run: a git worktree when the task points at a local
  * repository (never touching that checkout), otherwise a fresh clone.
  */
-export async function prepareWorkspace(task: Task, runDir: string, env: Record<string, string>): Promise<Workspace> {
+export interface WorkspaceOptions {
+  /** Shallow clone depth; omitted means full history. Only applies when cloning. */
+  cloneDepth?: number;
+}
+
+export async function prepareWorkspace(task: Task, runDir: string, env: Record<string, string>, options: WorkspaceOptions = {}): Promise<Workspace> {
   const wsPath = path.join(runDir, "workspace");
   const branch = branchNameFor(task);
   await mkdir(runDir, { recursive: true });
@@ -118,7 +123,8 @@ export async function prepareWorkspace(task: Task, runDir: string, env: Record<s
   }
 
   if (!task.repo.cloneUrl) throw new Error("task has neither repo.localPath nor repo.cloneUrl");
-  await git(["clone", "--quiet", "--no-tags", "--", task.repo.cloneUrl, wsPath], runDir, env, 15 * 60_000);
+  const depth = options.cloneDepth ? ["--depth", String(options.cloneDepth), "--no-single-branch"] : [];
+  await git(["clone", "--quiet", "--no-tags", ...depth, "--", task.repo.cloneUrl, wsPath], runDir, env, 15 * 60_000);
   const start = await resolveCloneStart(task, wsPath, env);
   await git(["checkout", "--quiet", "-b", branch, start.ref], wsPath, env);
   const baseSha = await git(["rev-parse", "HEAD"], wsPath, env);

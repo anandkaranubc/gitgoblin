@@ -66,6 +66,8 @@ export interface SdkRunnerOptions {
   extraWrite?: string[];
   onToolUse?: (phase: string, tool: string, summary: string) => void;
   onMessage?: (phase: string, message: SDKMessage) => void;
+  /** The SDK's query function; tests substitute a scripted one. */
+  query?: typeof query;
 }
 
 function summarizeToolInput(name: string, input: unknown): string {
@@ -79,14 +81,18 @@ function summarizeToolInput(name: string, input: unknown): string {
 const WRAP_UP_PROMPT =
   "You have used the turns or budget available. Stop working and return the requested structured output now, " +
   "describing honestly what is done, what is not, and anything a human must know.";
+const RESUME_PROMPT =
+  "The previous attempt was interrupted by a transient error before you returned a result. Continue from where you were, " +
+  "check the state of the workspace rather than assuming your last edits landed, and return the requested structured output.";
 
 /** Runs phases on the Claude Agent SDK with the engine's security boundaries applied. */
 export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
   const env = opts.env ?? scrubEnv();
   const isolation = opts.isolation ?? "sandbox";
   const costs = new SessionCostTracker();
+  const run = opts.query ?? query;
 
-  async function runOnce<T>(spec: PhaseSpec<T>, prompt: string, overrides: Partial<Options>): Promise<PhaseResult<T> & { needsWrapUp: boolean }> {
+  async function runOnce<T>(spec: PhaseSpec<T>, prompt: string, overrides: Partial<Options>): Promise<PhaseResult<T> & { needsWrapUp: boolean; interrupted: boolean }> {
     const denials: PhaseResult<T>["denials"] = [];
     const guard: GuardContext = {
       workspace: opts.workspace,
@@ -124,9 +130,10 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
     const errors: string[] = [];
     let structured: unknown;
     let needsWrapUp = false;
+    let interrupted = false;
 
     try {
-      for await (const message of query({ prompt, options })) {
+      for await (const message of run({ prompt, options })) {
         opts.onMessage?.(spec.name, message);
         if (message.type === "system" && message.subtype === "init") sessionId = message.session_id;
         if (message.type === "assistant" && message.parent_tool_use_id === null) {
@@ -144,6 +151,8 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
             if (message.result) text = message.result;
           } else {
             needsWrapUp = message.subtype === "error_max_turns" || message.subtype === "error_max_budget_usd";
+            // A connection or server failure mid-run; the session itself is intact and can be resumed once.
+            interrupted = message.subtype === "error_during_execution";
             errors.push(message.subtype, ...message.errors);
           }
         }
@@ -167,23 +176,31 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
       errors,
       denials,
       needsWrapUp,
+      interrupted,
     };
   }
 
+  const combine = <T>(a: PhaseResult<T>, b: PhaseResult<T>): PhaseResult<T> => ({
+    ...b,
+    costUsd: a.costUsd + b.costUsd,
+    turns: a.turns + b.turns,
+    durationMs: a.durationMs + b.durationMs,
+    errors: [...a.errors, ...b.errors],
+    denials: [...a.denials, ...b.denials],
+  });
+
   return {
     async run<T>(spec: PhaseSpec<T>): Promise<PhaseResult<T>> {
-      const first = await runOnce(spec, spec.prompt, {});
+      let first = await runOnce(spec, spec.prompt, {});
+      if (!first.ok && first.interrupted && first.sessionId) {
+        // One resume after a transient failure; a second failure is reported, not retried.
+        const again = await runOnce({ ...spec, resume: first.sessionId }, RESUME_PROMPT, {});
+        first = { ...combine(first, again), needsWrapUp: again.needsWrapUp, interrupted: again.interrupted };
+      }
       if (first.ok || !first.needsWrapUp || !first.sessionId) return first;
       // Out of turns or budget: give the session one tool-free chance to report its state.
       const wrap = await runOnce({ ...spec, resume: first.sessionId }, WRAP_UP_PROMPT, { allowedTools: [], maxTurns: 2, maxBudgetUsd: 1 });
-      return {
-        ...wrap,
-        costUsd: first.costUsd + wrap.costUsd,
-        turns: first.turns + wrap.turns,
-        durationMs: first.durationMs + wrap.durationMs,
-        errors: [...first.errors, ...wrap.errors],
-        denials: [...first.denials, ...wrap.denials],
-      };
+      return combine(first, wrap);
     },
   };
 }

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
-import { parseCheckIsolation, parseCostLimit, parseEffort } from "./flags.ts";
+import { parseCheckIsolation, parseCloneDepth, parseCostLimit, parseEffort, unsandboxedAllowed } from "./flags.ts";
 import { RunJournal } from "./journal.ts";
 import { publishRun, runContribution } from "./orchestrator.ts";
 
@@ -22,7 +22,8 @@ Run options:
   --effort LEVEL      low | medium | high | xhigh | max
   --confirm-plan      pause after planning and ask before implementing
   --skip-install      do not run the repository's install command
-  --no-sandbox        rely on hooks only (not recommended)
+  --no-sandbox        rely on hooks only (not recommended; also needs GITGOBLIN_UNSAFE_NO_SANDBOX=1)
+  --clone-depth N     shallow clone with N commits of history, for very large repositories
   --check-isolation   how the repository's own commands run on this machine:
                       auto (default: OS sandbox when available), sandbox (required), none
 
@@ -66,6 +67,7 @@ async function main(argv: string[]): Promise<void> {
         "skip-install": { type: "boolean" },
         "no-sandbox": { type: "boolean" },
         "check-isolation": { type: "string" },
+        "clone-depth": { type: "string" },
       },
     });
     let input;
@@ -81,7 +83,11 @@ async function main(argv: string[]): Promise<void> {
     }
     const effort = parseEffort(values.effort);
     const checkIsolation = parseCheckIsolation(values["check-isolation"]);
-    if (values["no-sandbox"]) process.stderr.write("warning: --no-sandbox: the agent's commands run on this machine with only text-matching hooks between them and your files\n");
+    const cloneDepth = parseCloneDepth(values["clone-depth"]);
+    if (values["no-sandbox"]) {
+      if (!unsandboxedAllowed()) fail("--no-sandbox runs the agent's commands on this machine with only text-matching hooks in the way; set GITGOBLIN_UNSAFE_NO_SANDBOX=1 as well if that is really what you want");
+      process.stderr.write("warning: --no-sandbox: the agent's commands run on this machine with only text-matching hooks between them and your files\n");
+    }
     const result = await runContribution(input, {
       workdir: path.resolve(values.workdir ?? ".gitgoblin"),
       ...(values["max-cost"] ? { limits: { maxCostUsd: parseCostLimit(values["max-cost"]) } } : {}),
@@ -90,6 +96,7 @@ async function main(argv: string[]): Promise<void> {
       ...(values["skip-install"] ? { skipInstall: true } : {}),
       ...(values["no-sandbox"] ? { isolation: "none" as const } : {}),
       ...(checkIsolation ? { checkIsolation } : {}),
+      ...(cloneDepth ? { cloneDepth } : {}),
       ...(values["confirm-plan"]
         ? {
             approvePlan: async (plan) => {

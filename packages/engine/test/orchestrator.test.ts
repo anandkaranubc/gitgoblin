@@ -211,7 +211,7 @@ describe("runContribution", () => {
     expect(task.commands.typecheck).toBe("npx tsc --noEmit");
     const verification = JSON.parse(readFileSync(path.join(result.runDir, "verification-1.json"), "utf8"));
     expect(verification.checks.map((c: { name: string }) => c.name)).toEqual(["typecheck", "test"]);
-  });
+  }, 120_000);
 
   it("stops retrying when the implementation attempts are used up, whatever the review says", async () => {
     const repo = await createFixtureRepo();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCheckIsolation, parseCostLimit, parseEffort } from "../src/flags.ts";
+import { parseCheckIsolation, parseCloneDepth, parseCostLimit, parseEffort, unsandboxedAllowed } from "../src/flags.ts";
 
 describe("parseCostLimit", () => {
   it("accepts positive numbers", () => {
@@ -24,5 +24,23 @@ describe("parseCheckIsolation", () => {
     expect(parseCheckIsolation("sandbox")).toBe("sandbox");
     expect(parseCheckIsolation(undefined)).toBeUndefined();
     expect(() => parseCheckIsolation("maybe")).toThrow(/check-isolation/);
+  });
+});
+
+describe("parseCloneDepth", () => {
+  it("accepts positive integers only", () => {
+    expect(parseCloneDepth("50")).toBe(50);
+    expect(parseCloneDepth(undefined)).toBeUndefined();
+    expect(() => parseCloneDepth("0")).toThrow(/clone-depth/);
+    expect(() => parseCloneDepth("1.5")).toThrow(/clone-depth/);
+    expect(() => parseCloneDepth("deep")).toThrow(/clone-depth/);
+  });
+});
+
+describe("unsandboxedAllowed", () => {
+  it("requires the environment variable as a second, deliberate step", () => {
+    expect(unsandboxedAllowed({})).toBe(false);
+    expect(unsandboxedAllowed({ GITGOBLIN_UNSAFE_NO_SANDBOX: "0" })).toBe(false);
+    expect(unsandboxedAllowed({ GITGOBLIN_UNSAFE_NO_SANDBOX: "1" })).toBe(true);
   });
 });
