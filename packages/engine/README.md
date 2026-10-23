@@ -33,7 +33,10 @@ run on your machine with a credential-free environment and, by default, inside a
 caches, credential files hidden, network only during install. Python projects get a virtualenv
 under the run directory (so `pip install -e .` never touches your interpreter) and Ruby projects a
 per-run `BUNDLE_PATH`. `--check-isolation sandbox` makes the run fail when no OS sandbox is
-available; `none` turns it off, for example when a tool needs to write outside those places. The install command still runs the repository's own scripts: for
+available; `strict` additionally hides your home directory from those commands except toolchain
+and cache directories (nvm, pyenv, cargo, npm and the like), which is the setting for repositories
+you do not trust; `none` turns the sandbox off, for example when a tool needs to write outside
+those places. The install command still runs the repository's own scripts: for
 repositories you do not trust, run the engine itself inside a container.
 
 ## Library

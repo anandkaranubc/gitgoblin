@@ -18,7 +18,7 @@ export function parseEffort(value: string | undefined): Effort | undefined {
   throw new Error(`--effort must be one of ${EFFORTS.join(", ")}, got ${JSON.stringify(value)}`);
 }
 
-const CHECK_ISOLATIONS: readonly CheckIsolation[] = ["auto", "sandbox", "none"];
+const CHECK_ISOLATIONS: readonly CheckIsolation[] = ["auto", "sandbox", "strict", "none"];
 
 export function parseCheckIsolation(value: string | undefined): CheckIsolation | undefined {
   if (value === undefined) return undefined;

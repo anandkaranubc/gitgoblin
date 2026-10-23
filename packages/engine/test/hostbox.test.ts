@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { execShell } from "../src/exec.ts";
-import { detectHostSandbox, hostSandboxFor, sandboxExecProfile, type HostSandboxSpec } from "../src/hostbox.ts";
+import { detectHostSandbox, hostSandboxFor, sandboxExecProfile, specFor, type HostSandboxSpec } from "../src/hostbox.ts";
 
 const env = { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "", TMPDIR: process.env["TMPDIR"] ?? os.tmpdir() };
 const available = detectHostSandbox();
@@ -41,6 +41,32 @@ describe("hostSandboxFor", () => {
     expect(hostSandboxFor("none", () => undefined)).toEqual({ kind: "none" });
     expect(hostSandboxFor("auto", () => undefined)).toEqual({ kind: "none" });
     expect(() => hostSandboxFor("sandbox", () => undefined)).toThrow(/no OS sandbox/);
+    expect(() => hostSandboxFor("strict", () => undefined)).toThrow(/no OS sandbox/);
+  });
+});
+
+describe("specFor strict mode", () => {
+  it("hides the home directory except toolchain and cache directories, the run prefix and the temp dir", () => {
+    const home = mkdtempSync(path.join(os.tmpdir(), "gg-home-"));
+    mkdirSync(path.join(home, ".nvm"));
+    mkdirSync(path.join(home, ".npm"));
+    mkdirSync(path.join(home, "Documents"));
+    const runPrefix = path.join(home, "project", ".gitgoblin", "runs", "x", "toolchain");
+    const spec = specFor("/ws", false, { home, strict: true, extraWrite: ["/run/toolchain", runPrefix] });
+    expect(spec.denyRead).toContain(home);
+    // Only paths under the home directory need carving back out; the run prefix under it does, one elsewhere does not.
+    expect(spec.allowRead).toEqual(expect.arrayContaining([path.join(home, ".nvm"), path.join(home, ".npm"), runPrefix]));
+    expect(spec.allowRead).not.toContain("/run/toolchain");
+    expect(spec.allowRead).not.toContain(path.join(home, "Documents"));
+    expect(spec.allowRead).not.toContain(home);
+    const profile = sandboxExecProfile(spec);
+    expect(profile.indexOf(`(deny file-read* (subpath "${home}"))`)).toBeGreaterThan(-1);
+    expect(profile.indexOf(`(deny file-read* (subpath "${home}"))`)).toBeLessThan(profile.indexOf(`(allow file-read* (subpath "${path.join(home, ".nvm")}"))`));
+    // Credential paths are denied again after the allows, so ~/.npm/.npmrc-style secrets stay hidden.
+    expect(profile.lastIndexOf("(deny file-read*")).toBeGreaterThan(profile.lastIndexOf("(allow file-read*"));
+    const relaxed = specFor("/ws", false, { home });
+    expect(relaxed.denyRead).not.toContain(home);
+    expect(relaxed.allowRead ?? []).toEqual([]);
   });
 });
 
@@ -85,5 +111,28 @@ describe.skipIf(!available)("host sandbox (OS)", () => {
     expect(test.output).toContain("tests ok");
     const dns = await execShell(`node -e "require('dns').promises.lookup('localhost').then(()=>console.log('resolved'))"`, { cwd: ws, env, wrap: wrap({ ...spec, network: true }), timeoutMs: 20_000 });
     expect(dns.output).toContain("resolved");
+  });
+});
+
+describe.skipIf(!available)("host sandbox strict mode (OS)", () => {
+  const sandbox = available!;
+  it("lets commands read toolchains under a home directory but nothing else in it", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "gg-strict-"));
+    const home = path.join(root, "home");
+    const ws = path.join(root, "ws");
+    mkdirSync(path.join(home, ".nvm"), { recursive: true });
+    mkdirSync(path.join(home, "Documents"), { recursive: true });
+    mkdirSync(ws);
+    writeFileSync(path.join(home, ".nvm", "version.txt"), "v24");
+    writeFileSync(path.join(home, "Documents", "taxes.txt"), "PRIVATE");
+    const spec = specFor(ws, false, { home, strict: true });
+    const run = (command: string) => execShell(command, { cwd: ws, env, wrap: (c) => sandbox.wrap(c, spec) });
+    const toolchain = await run(`cat "${path.join(home, ".nvm", "version.txt")}"`);
+    expect(toolchain.output).toContain("v24");
+    const documents = await run(`cat "${path.join(home, "Documents", "taxes.txt")}"`);
+    expect(documents.output).not.toContain("PRIVATE");
+    expect(documents.exitCode).not.toBe(0);
+    const listing = await run(`ls "${home}"`);
+    expect(listing.exitCode).not.toBe(0);
   });
 });

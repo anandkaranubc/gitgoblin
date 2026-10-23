@@ -329,6 +329,17 @@ describe("runContribution", () => {
     }
   });
 
+  it("runs the fixture under strict isolation, with the home directory hidden from the repository's commands", async () => {
+    const repo = await createFixtureRepo();
+    const result = await run(happyPath, [], { checkIsolation: "strict" })(repo, workdir());
+    if (detectHostSandbox()) {
+      expect(result.status).toBe("awaiting_approval");
+      expect(readFileSync(path.join(result.runDir, "events.jsonl"), "utf8")).toMatch(/"type":"check-isolation","kind":"(sandbox-exec|bwrap)","strict":true/);
+    } else {
+      expect(result.status).toBe("failed");
+    }
+  });
+
   it("records when repository commands ran without an OS sandbox", async () => {
     const repo = await createFixtureRepo();
     const result = await run(happyPath, [], { checkIsolation: "none" })(repo, workdir());
