@@ -38,7 +38,7 @@ gitgoblin looks for those instead. It ranks projects against what you want, read
 | The `gitgoblin` command: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish` | [packages/cli](packages/cli) | Working from a clone; not published to npm |
 | Repository profiling and opportunity discovery (`analyze`) | [packages/intel](packages/intel) | Working from a clone; scores still being calibrated |
 | Plan, implement, review, verify, prepare a PR | [packages/engine](packages/engine) | Runs end to end on a test repository; experimental |
-| MCP server for Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents, plus an agent skill | [packages/mcp](packages/mcp) | Released on GitHub (`mcp-v0.1.0`); npm publish pending |
+| MCP server for Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents, plus an agent skill | [packages/mcp](packages/mcp) | Released on GitHub (`mcp-v0.1.0`) and listed in the MCP Registry; npm publish pending |
 
 [docs/architecture.md](docs/architecture.md) explains how the parts fit together.
 
