@@ -98,6 +98,18 @@ describe("welcomeness", () => {
     expect(w.level).toBe("open");
   });
 
+  it("needs evidence of replies within two weeks before calling a project eager", () => {
+    const merged = Array.from({ length: 8 }, (_, i) => pr({ number: i + 1, url: `https://github.com/o/r/pull/${i + 1}` }));
+    const base = { meta, samples: samples({ closedPrs: merged, labels: [{ name: "good first issue", openIssues: 4 }] }), inventory: inventoryOf(["CONTRIBUTING.md", ".github/PULL_REQUEST_TEMPLATE.md"]), docs: { contributing: "Thanks for helping!" }, now };
+    // Merges most outside work, but answers in about three weeks: open, not eager.
+    const slowish = assessWelcomeness({ ...base, activity: { ...activity, externalPrMergeRate: 0.67, medianPrResponseHours: 465, medianIssueResponseHours: 736, sampleSizes: { issues: 43, pullRequests: 43, externalPullRequests: 33 } } });
+    expect(slowish.level).toBe("open");
+    expect(slowish.signals.map((s) => s.signal)).toContain("capped at open: eager needs replies within two weeks and a merge rate of at least 50%");
+    // No reply times at all: paperwork and merges alone do not make it eager either.
+    const unknown = assessWelcomeness({ ...base, activity: { ...activity, externalPrMergeRate: 1, sampleSizes: { issues: 0, pullRequests: 0, externalPullRequests: 8 } } });
+    expect(unknown.level).not.toBe("eager");
+  });
+
   it("marks a long-silent repository dormant", () => {
     const w = assessWelcomeness({ meta: { ...meta, pushedAt: "2024-01-01T00:00:00Z" }, samples: undefined, activity: { ...activity, lastPushAt: "2024-01-01T00:00:00Z", commits365d: 0, commits90d: 0 }, inventory: inventoryOf(["README.md"]), docs: {}, now });
     expect(w.level).toBe("dormant");
