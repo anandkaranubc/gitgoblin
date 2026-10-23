@@ -62,7 +62,9 @@ continue, retry, escalate (needs a human) or stop:
 - review `revise` -> retry implement with findings, up to `maxReviewRounds` and within
   `maxImplementRounds`; a blocker that survives a revise round -> escalate. review `reject` ->
   escalate. The commit must equal the reviewed diff, or the run escalates.
-- budget (USD, wall clock) exceeded at any gate -> stop.
+- budget (USD, wall clock) exceeded at any gate -> stop. Each model phase is also given only the
+  wall-clock time the run has left and is aborted when it passes, so a stalled session cannot hold
+  the run past its limit.
 - a phase interrupted by a transient failure (`error_during_execution`: connection or server
   error mid-run) is resumed once in the same session; a second failure fails the run. Out of turns
   or budget gets one tool-free wrap-up turn so the report says where things stand.
