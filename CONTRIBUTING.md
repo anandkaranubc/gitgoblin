@@ -40,6 +40,7 @@ packages/
   cli/       the gitgoblin command line
   intel/     repository profiling and contribution opportunities
   engine/    plan, implement, review, verify, prepare a pull request
+  mcp/       the MCP server that exposes discovery and intel to AI coding agents
 docs/        project-wide documentation
 site/        the website, a standalone app with its own package.json
 brand/       logo, banner, favicons and brand guidelines

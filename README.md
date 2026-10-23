@@ -38,6 +38,7 @@ gitgoblin looks for those instead. It ranks projects against what you want, read
 | The `gitgoblin` command: `discover`, `explain`, `goals`, `cache` | [packages/cli](packages/cli) | Working from a clone; not published to npm |
 | Repository profiling and opportunity discovery (`analyze`) | [packages/intel](packages/intel) | Working from a clone; scores still being calibrated |
 | Plan, implement, review, verify, prepare a PR | [packages/engine](packages/engine) | Runs end to end on a test repository; experimental |
+| MCP server for Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents, plus an agent skill | [packages/mcp](packages/mcp) | Working from a clone; npm release pending |
 
 [docs/architecture.md](docs/architecture.md) explains how the parts fit together.
 
@@ -54,6 +55,17 @@ npx gitgoblin discover contribute --language typescript
 
 That prints ten ranked repositories with the reasons behind each ranking. It works without any configuration; a GitHub token unlocks more data and a higher rate limit. [docs/getting-started.md](docs/getting-started.md) walks through the goals, filters, the `explain` command, the token, and analyzing a repository.
 
+## Use it from your AI agent
+
+gitgoblin also runs as an MCP server, so the agent you already use can discover repositories, analyze them and brief you on one piece of work:
+
+```sh
+claude mcp add gitgoblin -- npx -y @gitgoblin/mcp     # Claude Code
+codex mcp add gitgoblin -- npx -y @gitgoblin/mcp      # Codex
+```
+
+[docs/agents.md](docs/agents.md) has the one-liner for Cursor, Gemini CLI, VS Code and every other client, the skill that teaches agents when to use the tools (`npx skills add anandkaranubc/gitgoblin`), and what has been verified. Until the first npm release, point the command at `packages/mcp/bin/gitgoblin-mcp.mjs` in a clone instead.
+
 ## How gitgoblin behaves in other people's projects
 
 Maintainers did not ask for gitgoblin, so it holds itself to three rules:
@@ -67,6 +79,7 @@ The full policy, including how maintainers can opt their project out, is in [doc
 ## Documentation
 
 - [docs/getting-started.md](docs/getting-started.md): install, discover, and read the results
+- [docs/agents.md](docs/agents.md): connect gitgoblin to Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents
 - [docs/architecture.md](docs/architecture.md): how the packages fit together and the ideas they share
 - [docs/etiquette.md](docs/etiquette.md): how gitgoblin treats the projects it contributes to
 - [CONTRIBUTING.md](CONTRIBUTING.md): working on gitgoblin itself
