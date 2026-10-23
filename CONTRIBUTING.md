@@ -57,6 +57,7 @@ Packages talk to each other only through the types they export, never by reachin
 - **Match the surrounding code.** Strict TypeScript, ES modules, no default exports, comments that explain *why* rather than *what*. Follow the import style of the package you are in.
 - **No new dependencies without discussion.** Each one is something every user installs and every maintainer tracks.
 - **Update the docs in the same PR.** If behavior changes, the documentation that describes it changes with it. Run `npm run docs:check` to catch broken links.
+- **Note what users will notice.** A change to the `gitgoblin` command or the MCP server that users will see gets a line in [CHANGELOG.md](CHANGELOG.md), under that package's `Unreleased` section (add one if there is none). [docs/releasing.md](docs/releasing.md) covers the rest of a release.
 - **Write the pull request for the next person.** Its title and description become the one commit on `main`; [Commits and pull requests](#commits-and-pull-requests) says how.
 
 ### Working with AI tools
@@ -82,7 +83,7 @@ Every change reaches `main` through a pull request, and pull requests are squash
 
 2. **Keep it small and finished.** One concern, with its tests and docs. A change you cannot describe in one title is two pull requests. The commits on your branch can be as rough as you like; the squash merge replaces them.
 
-3. **Title it like a commit subject**, in [Conventional Commits](https://www.conventionalcommits.org/) form: `type(scope): what the change does`, in the imperative, no final period, 72 characters at most. Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore` and `revert`. The scope is the package or area: `core`, `sources`, `discovery`, `cli`, `intel`, `engine`, `site`, `brand` or `docs`. Put `!` before the colon when the change breaks a contract another package relies on. A check on every pull request reads the title and says what to fix. A future changelog will be generated from these types.
+3. **Title it like a commit subject**, in [Conventional Commits](https://www.conventionalcommits.org/) form: `type(scope): what the change does`, in the imperative, no final period, 72 characters at most. Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore` and `revert`. The scope is the package or area: `core`, `sources`, `discovery`, `cli`, `intel`, `engine`, `mcp`, `site`, `brand` or `docs`. Put `!` before the colon when the change breaks a contract another package relies on. A check on every pull request reads the title and says what to fix.
 
 4. **Describe it in the template**: what changed and why, and how you tested it. "`npm test` and `npm run typecheck` pass" is a fine answer when it is true. That text becomes the commit body, so keep it about the change. Link the issue with `Fixes #123` when there is one.
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Commit } from "../src/git/repo.ts";
-import { busFactor, firstResponseHours } from "../src/profile/activity.ts";
+import { busFactor, computeActivity, firstResponseHours } from "../src/profile/activity.ts";
+import type { GitHubSamples, IssueSample } from "../src/github/types.ts";
 import { branchPattern, inferConventions } from "../src/profile/conventions.ts";
 
 const commit = (subject: string, authorEmail = "a@x"): Commit => ({ sha: "s", authorEmail, authorName: "A", date: "2026-01-01T00:00:00Z", subject, files: [] });
@@ -28,6 +29,16 @@ describe("activity helpers", () => {
     expect(busFactor(commits)).toBe(1);
     expect(busFactor([commit("s", "a@x"), commit("s", "b@x"), commit("s", "c@x"), commit("s", "d@x")])).toBe(2);
     expect(busFactor([])).toBe(0);
+  });
+
+  it("leaves issues with unfetched comments out of response statistics", () => {
+    const now = new Date("2026-10-22T00:00:00Z");
+    const base: IssueSample = { number: 1, title: "t", url: "u", body: "", createdAt: "2022-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", closedAt: undefined, locked: false, author: { login: "a", isBot: false }, association: "NONE", labels: [], assignees: [], reactions: 0, commentCount: 5, firstComments: [], lastComments: [], linkedPrs: [] };
+    const answered: IssueSample = { ...base, number: 2, createdAt: "2026-10-01T00:00:00Z", commentCount: 1, firstComments: [{ createdAt: "2026-10-02T00:00:00Z", author: { login: "m", isBot: false }, association: "MEMBER", body: undefined }] };
+    const samples: GitHubSamples = { isMirror: false, openIssueCount: 2, openPrCount: 0, labels: [], openIssues: [base, answered], closedIssues: [], openPrs: [], closedPrs: [] };
+    const a = computeActivity({ commits: [], samples, releases: [], pushedAt: undefined, openIssues: 2, openPrs: 0, now });
+    expect(a.sampleSizes.issues).toBe(1);
+    expect(a.medianIssueResponseHours).toBe(24);
   });
 
   it("measures first response, ignoring the author and bots, and counts long silence", () => {

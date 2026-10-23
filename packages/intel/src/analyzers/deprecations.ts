@@ -3,6 +3,7 @@ import type { AnalysisContext } from "../context.ts";
 import { compareVersions } from "../manifests/python.ts";
 import { minimumPython } from "./tech-debt.ts";
 import { DEPRECATED_CRATES, DEPRECATED_GO_MODULES, DEPRECATED_NPM, DEPRECATION_RULES, type DeprecationRule, type Ecosystem, LATEST_PYTHON, PYTHON_EOL } from "./deprecation-rules.ts";
+import { maskCodeLiterals, maskLangFor } from "../util/mask.ts";
 import { type Analyzer, type Finding, evidence, textFiles } from "./types.ts";
 
 const EXT: Record<Ecosystem, RegExp> = { python: /\.pyi?$/, node: /\.[cm]?[jt]sx?$/, go: /\.go$/, rust: /\.rs$/ };
@@ -40,17 +41,34 @@ export interface RuleMatch {
 export function matchDeprecations(path: string, text: string, rules: DeprecationRule[]): RuleMatch[] {
   const out: RuleMatch[] = [];
   const lines = text.split("\n");
+  // Strings, comments and regex literals are blanked so a quoted API name (rule tables, changelogs, fixtures) never matches.
+  const lang = maskLangFor(path);
+  const masked = maskCodeLiterals(text, lang).split("\n");
+  const withStrings = rules.some((r) => r.quoted) ? maskCodeLiterals(text, lang, { strings: false }).split("\n") : masked;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
-    const code = line.replace(/\s(#|\/\/).*$/, "");
-    if (/^\s*(#|\/\/|\*|\/\*)/.test(line)) continue;
+    if ((withStrings[i] ?? "").trim() === "") continue;
     for (const rule of rules) {
+      const code = (rule.quoted ? withStrings[i] : masked[i]) ?? "";
       if (!rule.pattern.test(code)) continue;
-      const guarded = isGuarded(lines, i) || /\s#\s*(noqa|type: ignore|pragma)/.test(line);
+      // An import of a removed module inside a function body is deferred on purpose: the module may be absent at load time.
+      const deferredImport = /^\s+(import|from)\s/.test(line);
+      const guarded = isGuarded(lines, i) || deferredImport || isCompatModule(path, line) || /\s#\s*(noqa|type: ignore|pragma)/.test(line);
       out.push({ rule, path, line: i + 1, text: line.trim(), guarded });
     }
   }
   return out;
+}
+
+/**
+ * A compatibility module uses old APIs on purpose: a file named after the module it wraps
+ * (pip's `_distutils.py`), or a compat/shim/polyfill/backport module.
+ */
+export function isCompatModule(path: string, line: string): boolean {
+  const base = (path.split("/").pop() ?? "").replace(/\.[^.]+$/, "").replace(/^_+/, "").toLowerCase();
+  if (/^(compat|compatibility|shims?|polyfills?|backports?|legacy|py2|py3|py2compat|py3compat|six)$|_compat$|^compat_/.test(base)) return true;
+  const imported = /^\s*(?:import|from)\s+([A-Za-z_]\w*)/.exec(line)?.[1]?.toLowerCase();
+  return imported !== undefined && base.split(/[_\-.]+|(?<=[a-z])(?=\d)/).includes(imported);
 }
 
 /** Inside a try/except, version check or TYPE_CHECKING block that starts on a less-indented line above. */
@@ -88,11 +106,37 @@ export const deprecationsAnalyzer: Analyzer = {
     if (rules.length === 0) return findings;
 
     const matcher = new RegExp(active.map((e) => EXT[e].source).join("|"));
+    // Fixtures and snapshots hold code that is old on purpose; so do the test suites of linters and formatters.
+    const FIXTURE = /(^|\/)(fixtures?|testdata|snapshots?|__snapshots__|resources\/test|test_?data|golden|corpus|vectors)(\/|$)/i;
+    const codeTool = /\b(lint(er|ing)?|formatter|codemod|upgrade|checker|static analysis|type checker|style guide)\b/i.test(`${ctx.meta.name} ${ctx.meta.description ?? ""}`);
     let scanned = 0;
-    for await (const { path, text } of textFiles(ctx, (p) => matcher.test(p) && ctx.inventory.byPath.get(p)?.category !== "docs", 3000)) {
+    const matches: { m: RuleMatch; removed: boolean; inTests: boolean }[] = [];
+    const STUB = /\.(pyi|d\.[cm]?ts)$/;
+    const NON_SHIPPING = /(^|\/)(examples?|docs?|scripts?|tools?|bench(marks)?|demos?|samples?)\//i;
+    for await (const { path, text } of textFiles(ctx, (p) => matcher.test(p) && !STUB.test(p) && ctx.inventory.byPath.get(p)?.category !== "docs" && !FIXTURE.test(p), 3000)) {
       scanned++;
-      for (const m of matchDeprecations(path, text, rules)) {
+      // Examples, docs helpers, scripts and benchmarks do not ship; a merely deprecated call there gets the same treatment as one in tests.
+      const inTests = ctx.inventory.byPath.get(path)?.category === "test" || NON_SHIPPING.test(path);
+      if (inTests && codeTool) continue;
+      // Only this file's own ecosystem rules apply: a Python snippet quoted inside a Rust test is not Python code.
+      const fileRules = rules.filter((r) => EXT[r.ecosystem].test(path));
+      for (const m of matchDeprecations(path, text, fileRules)) {
         const removed = m.rule.severity === "removed";
+        // A deprecated call inside a test is noise; a removed one still breaks the suite.
+        if (!removed && inTests) continue;
+        matches.push({ m, removed, inTests });
+      }
+      if (matches.length > 300) {
+        ctx.budget.cut("stopped collecting deprecations after 300 matches");
+        break;
+      }
+    }
+    // When every use of an API in the code proper is guarded, the project already handles it; guarded uses and uses in
+    // tests only join a rule that also has an unguarded use in source.
+    const unguardedRules = new Set(matches.filter((x) => !x.m.guarded && !x.inTests).map((x) => x.m.rule.id));
+    for (const { m, removed, inTests } of matches) {
+      if ((m.guarded || inTests) && !unguardedRules.has(m.rule.id)) continue;
+      {
         findings.push({
           kind: "deprecation",
           clusterKey: m.rule.id,
@@ -117,10 +161,6 @@ export const deprecationsAnalyzer: Analyzer = {
             welcomenessFactor: removed ? 1 : 0.85,
           },
         });
-      }
-      if (findings.length > 300) {
-        ctx.budget.cut("stopped collecting deprecations after 300 matches");
-        break;
       }
     }
     void scanned;

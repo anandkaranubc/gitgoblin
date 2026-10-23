@@ -3,6 +3,7 @@ import type { AnalysisContext } from "../context.ts";
 import { mapLimit } from "../util/limit.ts";
 import { truncate } from "../util/text.ts";
 import { type LockedPackage, dedupePackages, parseLockfile } from "./lockfiles.ts";
+import type { PrSample } from "../github/types.ts";
 import { type Analyzer, type Finding, evidence } from "./types.ts";
 
 const LOCKFILES = /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|poetry\.lock|uv\.lock|Pipfile\.lock|Cargo\.lock|Gemfile\.lock|composer\.lock|go\.mod)$/;
@@ -50,6 +51,22 @@ export function fixedVersion(v: OsvVuln, pkg: LockedPackage): string | undefined
 }
 
 const RANK: Record<Vulnerability["severity"], number> = { CRITICAL: 4, HIGH: 3, MODERATE: 2, LOW: 1, UNKNOWN: 1.5 };
+
+/** An open pull request whose title names the package (a Dependabot or Renovate bump, or a person's): the work is in flight. */
+export function openPrFor(prs: PrSample[], name: string): PrSample | undefined {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const named = new RegExp(`(^|[\\s"'\`(\\[])${escaped}($|[\\s"'\`)\\],:@])`, "i");
+  return prs.find((p) => p.state === "OPEN" && named.test(p.title));
+}
+
+/** Mark a finding as already handled by an open PR, so the evaluator skips it and says why. */
+function inFlight(ctx: AnalysisContext, finding: Finding, pr: PrSample): Finding {
+  const who = pr.author?.isBot ? `${pr.author.login.replace(/\[bot\]$/, "")} PR` : "Open PR";
+  finding.signals.novelty = 0.05;
+  finding.signals.noveltyReason = `${who} #${pr.number} already updates it ("${truncate(pr.title, 80)}"); review that instead`;
+  finding.evidence.push(evidence(ctx, "pull_request", pr.url, { excerpt: pr.title, note: `open${pr.isDraft ? " draft" : ""} PR by ${pr.author?.login ?? "unknown"}` }));
+  return finding;
+}
 
 export const dependenciesAnalyzer: Analyzer = {
   name: "dependencies",
@@ -123,6 +140,9 @@ export const dependenciesAnalyzer: Analyzer = {
       }
       const worst = details.reduce<Vulnerability["severity"]>((acc, d) => (RANK[d.severity] > RANK[acc] ? d.severity : acc), "UNKNOWN");
       const isDirect = direct.has(pkg.name);
+      // A library's lockfile pins its development environment, not what users install.
+      const runtimeDeps = new Set([...(ctx.manifests.python?.dependencies ?? []), ...(ctx.manifests.node?.dependencies ?? []), ...(ctx.manifests.rust?.dependencies ?? [])].filter((d) => !d.dev).map((d) => d.name));
+      if (["library", "framework", "plugin"].includes(profile.nature) && !runtimeDeps.has(pkg.name) && pkg.ecosystem !== "Go") pkg.dev = true;
       const fixed = details.map((d) => d.fixed).filter((f): f is string => Boolean(f)).sort().pop();
       const bot = profile.welcomeness.rules.dependencyBot;
       findings.push({
@@ -157,6 +177,8 @@ export const dependenciesAnalyzer: Analyzer = {
           welcomenessReason: bot ? "a dependency bot already handles bumps here" : undefined,
         },
       });
+      const pr = openPrFor(ctx.samples?.openPrs ?? [], pkg.name);
+      if (pr) inFlight(ctx, findings[findings.length - 1]!, pr);
     }
 
     // Direct npm dependencies whose latest release is marked deprecated on the registry.
@@ -191,6 +213,8 @@ export const dependenciesAnalyzer: Analyzer = {
           risks: ["Replacement libraries can differ subtly in behaviour."],
           signals: { value: r.dep.dev ? 0.35 : 0.5, valueReason: "upstream says stop using it; no more fixes will come", feasibility: 0.7, feasibilityReason: "deprecation notices usually name the replacement", confidence: 0.95, confidenceReason: "deprecation flag read from the npm registry", welcomenessFactor: 0.85 },
         });
+        const pr = openPrFor(ctx.samples?.openPrs ?? [], r.dep.name);
+        if (pr) inFlight(ctx, findings[findings.length - 1]!, pr);
       }
     }
     return findings;

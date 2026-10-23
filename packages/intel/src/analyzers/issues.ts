@@ -1,8 +1,16 @@
 import type { IssueRef, RepositoryProfile } from "../contracts.ts";
 import type { AnalysisContext } from "../context.ts";
-import { type CommentSample, type IssueSample, isMaintainer } from "../github/types.ts";
+import { type CommentSample, type IssueSample, isMaintainer, unquoted } from "../github/types.ts";
 import { daysAgo } from "../util/time.ts";
 import { truncate } from "../util/text.ts";
+import { join } from "node:path";
+
+import { fetchHintedIssues } from "../github/hinted.ts";
+import { describeLlmError } from "../llm/client.ts";
+import { type IssueReview, reviewIssues } from "../llm/issue-review.ts";
+import { DiskCache } from "../util/cache.ts";
+import { applyIssueDrift, assessIssueDrift, permalinks } from "./issue-drift.ts";
+import { issueBody, problemStatement } from "./issue-text.ts";
 import { type Analyzer, type Finding, type FindingSignals, evidence } from "./types.ts";
 
 const BUG_LABEL = /\b(bug|defect|regression|crash|broken|error)\b/i;
@@ -12,27 +20,45 @@ const HARD_LABEL = /\bhard\b|complex|difficult|needs[- _]design|rfc|architecture
 const FEATURE_LABEL = /enhancement|feature|improvement|proposal|idea|request/i;
 const DOCS_LABEL = /^docs?$|documentation/i;
 /** Defect language in titles and bodies, including CamelCase exception names. */
-const BUG_WORDS = /\b(bug|crash(es|ed|ing)?|broken|breaks?|fail(s|ed|ing|ure)?|error|exception|regression|incorrect(ly)?|wrong(ly)?|unexpected(ly)?|doesn'?t work|does not work|not work(ing)?|can'?t|cannot|unable|not able|raises?|throws?|hangs?|hanging|leaks?|overflow|unreachable|ignored|inconsistent|traceback|segfault|panics?|deadlock|race condition|stuck|infinite loop|corrupt(ed|s)?|lost|swallow(s|ed)?|silently)\b/i;
+const BUG_WORDS = /\b(bug|crash(es|ed|ing)?|broken|breaks?|fail(s|ed|ing|ure)?|error|exception|regression|incorrect(ly)?|wrong(ly)?|unexpected(ly)?|doesn'?t work|does not work|not work(ing)?|can'?t|cannot|unable|not able|raises?|throws?|hangs?|hanging|leaks?|overflow|unreachable|ignored|inconsistent|traceback|segfault|panics?|deadlock|race condition|stuck|infinite loop|corrupt(ed|s)?|lost|swallow(s|ed)?|silently|unstable|flaky|non-?idempotent|idempotency|regression|mis(handles?|parses?|aligned|placed)|(doesn'?t|does not|didn'?t|won'?t|isn'?t|not) (return|respond|render|load|start|run|match|apply|update|save|send|receive|handle|support|honou?r|respect|recogni[sz]e|detect|trigger|fire|close|open|parse|accept|allow|display|show|refresh|resolve|compile|build|install|work))\b/i;
 const EXCEPTION_NAME = /\b[A-Z]\w+(Error|Exception|Warning)\b/;
 const BUG_TEXT = { test: (t: string) => BUG_WORDS.test(t) || EXCEPTION_NAME.test(t) };
 const FEATURE_TITLE = /^(\[?\s*(feature( request)?|enhancement|proposal|propuesta|proposition|idea|suggestion|rfc)\s*\]?\s*[:\-]?|feat(ure)?:|proposal:|suggestion:|request:|add(ing)?\b|support\b|allow\b|option to|ability to|expose\b|implement\b|provide\b|introduce\b|would be (nice|great|useful)|consider\b|please add|make \w+|(a |an )?(flag|option|setting|way|hook|api) (to|for)\b|restore\b|bring back|re-?add|initiative|roadmap|\w+ should (support|consider|allow|have|use|be able|respect|honou?r))/i;
 const DOCS_TEXT = /\b(docs?|documentation|readme|docstrings?|typo|tutorial|example in the docs)\b/i;
-const NEGATIVE_LABEL = /question|discussion|wontfix|won't fix|invalid|duplicate|blocked|on[- _]hold|stale|waiting|upstream|meta|tracking|roadmap|security|needs[- _](decision|design|discussion)|not[- _]planned/i;
+/** Words that make a title read as a statement about behaviour rather than a bare noun phrase. */
+const TITLE_VERB = /\b(is|are|was|were|be|been|does|do|did|has|have|had|not|no|never|can'?t|cannot|won'?t|doesn'?t|don'?t|isn'?t|aren'?t|should|shouldn'?t|fails?|failed|failing|returns?|throws?|crash\w*|breaks?|broken|hangs?|freez\w+|leaks?|ignores?|ignored|missing|wrong|incorrect\w*|unexpected\w*|inconsistent|regress\w+|segfault|panic\w*|error|exception|slow|stuck|lost|causes?|caused|prevents?|produces?|shows?|gets?|loses?|stops?|triggers?|results? in|when|after|since|while|if|only|always|sometimes|intermittent\w*|randomly|silently|still|again|instead|vs\.?|but|than|adds?|removes?|inserts?|drops?|changes?|converts?|moves?|formats?|prints?|outputs?|reports?|treats?|handles?|parses?|renders?|generates?|emits?|writes?|reads?|loads?|sends?|receives?|uses?|requires?|expects?|allows?|accepts?|rejects?|skips?|keeps?|leaves?|puts?|sets?|makes?|takes?|becomes?|appears?|disappears?|happens?|works?|runs?|starts?|ends?|exits?|opens?|closes?|blocks?|duplicates?|splits?|merges?|wraps?|respects?|follows?|matches?|differs?|depends?|overrides?|replaces?|truncates?|escapes?|strips?|swallows?|resolves?|detects?|warns?|hits?|exceeds?|needs?|wants?|cannot|unable)\b/i;
+
+/** "multiline PDF search" or "Color input fields using FZF scheme colors": a noun phrase, so a wish rather than a report. */
+export function looksLikeRequestTitle(title: string): boolean {
+  const clean = title.replace(/^\[[^\]]*\]\s*/, "").replace(/`[^`]*`/g, "x").trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length === 0 || words.length > 9) return false;
+  if (BUG_TEXT.test(clean) || TITLE_VERB.test(clean) || /\?/.test(clean)) return false;
+  return true;
+}
+const NEGATIVE_LABEL = /question|discuss(ion)?|won'?t[- _]?fix|invalid|duplicate|blocked|on[- _]hold|stale|waiting|upstream|meta|tracking|roadmap|security|needs[- _](decision|design|discussion)|not[- _]planned|propose[- _]close|close[- _]candidate|core[- _]team|maintainers?[- _]only|internal|team[- _]only/i;
+/** Labels maintainers use to say a fix is already underway. */
+const IN_FLIGHT_LABEL = /to[- _]?merge|in[- _]progress|has[- _]pr|pr[- _](ready|open|pending)|fix[- _]pending|\bwip\b|work[- _]in[- _]progress|being[- _]worked/i;
 const TRIAGE_LABEL = /needs?[- _](info|more[- _]info|repro\w*|triage|confirmation)|unconfirmed|untriaged/i;
-const QUESTION_TITLE = /^\[?\s*(question|query|help|support|q|discussion|rfc)\s*\]?\s*[:\-]?\s|^(how (do|can|to|should|does|would|could)|is it possible|is there a way|why (does|is|do|are|can'?t)|what (is|are|does)|can i|could i|should i|does .* support|any way to|possible to|i need help|need help|help (with|needed|wanted:)|use \w+ as\b|using \w+ (with|as)\b)\b|\?\s*$/i;
+const QUESTION_TITLE = /^\[?\s*(question|query|help|support|q|discussion|rfc)\s*\]?\s*[:\-]?\s|^(how (do|can|to|should|does|would|could)|is it possible|is there a way|why (does|is|do|are|can'?t)|what (is|are|does)|can i|could i|should i|does .* support|any way to|possible to|i need help|need help|help (with|needed|wanted:)|use \w+ as\b|using \w+ (with|as)\b|i can'?t|i cannot|i('m| am) (getting|having|unable|trying|facing|stuck)|(my|our) (app|code|project|build|program) (is|isn'?t|doesn'?t|won'?t|crashes|fails))\b|\?\s*$/i;
 const QUESTION_BODY = /^(hi|hello|hey)?[,!\s]*(how (do|can|to|should|would|could) (i|we|you|one)|is it possible|is there a way|can (i|we|someone)|could (i|we|someone)|i('m| am) (trying|wondering|looking)|i want to|i would like to (be able|know)|what('s| is) the (best|right|recommended) way)\b/i;
 
 const ENDORSE = /\b(prs?|pull requests?|patch(es)?|contributions?) (are |would be |very |most )?welcome|happy to (accept|review|merge|take)|would (gladly )?(accept|take|merge|welcome|review)|feel free to (open|submit|send|work)|go ahead|sounds (good|reasonable)|good idea|makes sense|i can reproduce|can repro|reproduced|confirmed|agreed?|we should|should be fixed|needs? (a )?fix|accepting (a )?pr|open to (a )?pr|anyone (want|willing|interested)|up for grabs|help wanted|marking (this )?as (help wanted|good first)/i;
-const REJECT = /\b(not a bug|not planned|won'?t fix|wontfix|out of scope|by design|as intended|working as (intended|expected|designed)|intended behaviou?r|can'?t reproduce|cannot reproduce|unable to reproduce|not able to reproduce|closing (this|as)|duplicate of|need(s)? more (info|information|details)|please provide|user error|not supported)\b/i;
-const CLAIM = /\b(i('|’)?ll|i will|i'?d like to|i would like to|can i|could i|may i|let me|i am|i'?m|i can|happy to|i want to|allow me to|assign (this |it )?to me|please assign)\b.{0,50}\b(take|work|working|look|looking|pick|tackle|handle|fix|fixing|implement|do this|on it|on this|submit|open a pr|send a pr|assign)/i;
+const REJECT = /\b(not a bug|not planned|won'?t fix|wontfix|out of scope|by design|as intended|working as (intended|expected|designed)|intended behaviou?r|can'?t reproduce|cannot reproduce|unable to reproduce|not able to reproduce|closing (this|as)|duplicate of|need(s)? more (info|information|details)|please provide|user error|not supported|move this to|moving this to|belongs (in|to) (the )?\S+ (repo|repository|tracker)|wrong repo(sitory)?|should be (filed|reported|opened) (in|at|against|on)|please (report|file|open) (this|it) (in|at|on|against)|transferr?(ing|ed) (this|the issue))\b/i;
+const CLAIM = /\b(?:i('|’)?ll|i will|i'?d like to|i would like to|can i|could i|may i|let me|i am going to|i'?m going to|i can|happy to|i want to|allow me to|i'?m|i am)\s+(?:also\s+|gladly\s+|try to\s+|start(?:ing)? to\s+)?(?:take|work|working|look|looking|pick|tackle|handle|fix|fixing|implement|implementing|submit|open|send|give|try)\b[^.!?\n]{0,40}?\b(?:this|it|that|one|a pr|a pull request|a fix|a patch|the issue|the bug|on it|on this|a shot|a go)\b|\bassign (?:this |it )?to me\b|\bplease assign\b|\bi'?m on it\b|\bworking on (?:a |the )?(?:fix|pr|patch|this)\b/i;
 const MAINTAINER_HANDLING = /\b(i('|’)?ll|i will|i'?m|i am|we'?ll|we are|we're|i have a|i've got a|working on (a |the )?(fix|patch|pr)|fix (is )?(incoming|coming|in progress)|pr (incoming|coming)|fixed in|should be fixed (by|in) #|on my list)\b/i;
 const REPRO = /steps to reproduce|reproduc|expected (behaviou?r|result|output)|actual (behaviou?r|result|output)|minimal (example|repro|reproduction)|how to reproduce|to reproduce/i;
 const TRACE = /traceback \(most recent|^\s+at .+\(.+:\d+:\d+\)|panic:|goroutine \d+|exception in thread|segmentation fault|^\w*(Error|Exception)(:| )/im;
 const PATH_TOKEN = /(?<![\w/])((?:[\w.-]+\/)+[\w.-]+\.(?:py|js|jsx|ts|tsx|go|rs|rb|java|kt|php|cs|c|h|cpp|md|rst|yml|yaml|toml|json|html|css|scss|vue|svelte)|[\w-]+\.(?:py|go|rs|rb|java|md))\b/g;
 
+/** GitHub `/pull/`, GitLab `/-/merge_requests/` and Gitea `/pulls/` URLs under this repository. */
+export function isSameRepoPr(url: string, repoUrl: string): boolean {
+  return url.startsWith(`${repoUrl}/pull/`) || url.startsWith(`${repoUrl}/pulls/`) || url.startsWith(`${repoUrl}/-/merge_requests/`);
+}
+
 export interface IssueAssessment {
   kind: "issue" | "feature_request" | "triage";
-  skipReason?: string;
+  skipReason?: string | undefined;
   novelty: number;
   noveltyReason: string;
   endorsed: CommentSample | undefined;
@@ -44,22 +70,28 @@ export interface IssueAssessment {
   confirmedLabel: string | undefined;
   claim: { comment: CommentSample; daysAgo: number } | undefined;
   isDocs: boolean;
+  /** The lexical pass had passed it over; a model review brought it back. */
+  rescued?: boolean | undefined;
 }
 
 export function assessIssue(issue: IssueSample, now: Date, repoResponsive: boolean, repoUrl?: string): IssueAssessment {
   const labels = issue.labels;
   // Cross-references can come from other repositories; only this repository's PRs mean in-flight work.
-  const linkedPrs = repoUrl ? issue.linkedPrs.filter((p) => p.url.startsWith(`${repoUrl}/pull/`)) : issue.linkedPrs;
+  const linkedPrs = repoUrl ? issue.linkedPrs.filter((p) => isSameRepoPr(p.url, repoUrl)) : issue.linkedPrs;
   const text = `${issue.title}\n${issue.body}`;
   const maintainerComments = issue.lastComments.filter((c) => c.author && !c.author.isBot && isMaintainer(c.association));
-  const endorsed = maintainerComments.find((c) => c.body && ENDORSE.test(c.body) && !REJECT.test(c.body));
-  const rejected = [...maintainerComments].reverse().find((c) => c.body && REJECT.test(c.body));
+  const endorsed = maintainerComments.find((c) => c.body && ENDORSE.test(unquoted(c.body)) && !REJECT.test(unquoted(c.body)));
+  const rejected = [...maintainerComments].reverse().find((c) => c.body && REJECT.test(unquoted(c.body)));
   const confirmedLabel = labels.find((l) => CONFIRMED_LABEL.test(l));
   const easy = labels.some((l) => EASY_LABEL.test(l));
   const hard = labels.some((l) => HARD_LABEL.test(l));
-  const isFeature = labels.some((l) => FEATURE_LABEL.test(l)) || FEATURE_TITLE.test(issue.title);
+  // A bare noun-phrase title with no defect language reads as a wish; it needs endorsement like any feature.
+  const requestTitle = looksLikeRequestTitle(issue.title) && !TRACE.test(issue.body);
+  const isFeature = labels.some((l) => FEATURE_LABEL.test(l)) || FEATURE_TITLE.test(issue.title) || requestTitle;
+  const bugLabel = labels.some((l) => BUG_LABEL.test(l));
   // Body-only bug words are too loose in support-heavy trackers; require defect language in the title, a trace, or repro steps plus defect words.
-  const isBug = labels.some((l) => BUG_LABEL.test(l)) || TRACE.test(issue.body) || (!isFeature && (BUG_TEXT.test(issue.title) || (REPRO.test(issue.body) && BUG_TEXT.test(issue.body))));
+  // An explicit feature label or title outranks incidental defect words ("Enhancement: include the file name in parse error messages").
+  const isBug = bugLabel || (!isFeature && (TRACE.test(issue.body) || BUG_TEXT.test(issue.title) || (REPRO.test(issue.body) && BUG_TEXT.test(issue.body))));
   const isDocs = labels.some((l) => DOCS_LABEL.test(l)) || (DOCS_TEXT.test(issue.title) && !isFeature);
   const hasRepro = REPRO.test(text) || /```/.test(issue.body);
   const hasTrace = TRACE.test(issue.body);
@@ -73,20 +105,33 @@ export function assessIssue(issue: IssueSample, now: Date, repoResponsive: boole
   if (issue.locked) return skip("issue is locked");
   if (issue.author?.isBot) return skip("opened by a bot");
   if (labels.some((l) => NEGATIVE_LABEL.test(l) && !TRIAGE_LABEL.test(l))) return skip(`labelled ${labels.find((l) => NEGATIVE_LABEL.test(l))}`);
+  if (/\bdup(licate)?s?\b(?! (detection|check|key|entries|values|files|lines|headers|chunks|names|items|records|elements|ids))/i.test(issue.title) && /#\d+|\bof\b/i.test(issue.title)) return skip("title marks it as a duplicate");
   if (rejected && !endorsed) return skip(`a maintainer pushed back: "${truncate(rejected.body ?? "", 100)}"`);
+  // Issue templates apply "bug" to everything; a label only carries weight when a maintainer also confirmed or the title says something.
+  const titleWords = issue.title.trim().split(/\s+/).filter(Boolean).length;
+  const templateLabelOnly = labels.some((l) => BUG_LABEL.test(l)) && !confirmedLabel && !endorsed && (titleWords < 3 || /^(error|bug|help|issue|problem|crash|question|not working|doesn'?t work)$/i.test(issue.title.trim()));
+  if (templateLabelOnly) return skip("bug label looks template-applied; the title gives nothing to act on");
   const looksLikeQuestion = QUESTION_TITLE.test(issue.title) || (QUESTION_BODY.test(issue.body.trim().slice(0, 240)) && !TRACE.test(issue.body));
-  if (looksLikeQuestion && !labels.some((l) => BUG_LABEL.test(l) || CONFIRMED_LABEL.test(l) || FEATURE_LABEL.test(l))) return skip("reads as a question, not a change request");
-  if (linkedPrs.some((p) => p.state === "MERGED")) return skip(`PR #${linkedPrs.find((p) => p.state === "MERGED")!.number} referencing it was merged; likely resolved`);
+  if (looksLikeQuestion && !labels.some((l) => CONFIRMED_LABEL.test(l) || FEATURE_LABEL.test(l)) && !endorsed) return skip("reads as a question, not a change request");
+  // "needs info" or "needs repro" means maintainers cannot act yet; an outsider cannot either, except by helping triage.
+  const awaitingReporter = labels.find((l) => TRIAGE_LABEL.test(l));
+  // A merged PR that references the issue suggests it is resolved, unless work is still open or the merge predates the issue.
+  const mergedAfter = linkedPrs.filter((p) => p.state === "MERGED" && p.updatedAt > issue.createdAt);
+  if (mergedAfter.length > 0 && !linkedPrs.some((p) => p.state === "OPEN")) return skip(`PR #${mergedAfter[0]!.number} referencing it was merged; likely resolved`);
 
   // Who is already on it?
   let novelty = 0.9;
   let noveltyReason = "no assignee, linked PR or recent claim";
   const openPr = linkedPrs.filter((p) => p.state === "OPEN").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
   const closedPr = linkedPrs.find((p) => p.state === "CLOSED");
-  const claimComment = [...issue.lastComments].reverse().find((c) => c.body && c.author && !c.author.isBot && CLAIM.test(c.body) && !REJECT.test(c.body));
+  const claimComment = [...issue.lastComments].reverse().find((c) => c.body && c.author && !c.author.isBot && CLAIM.test(unquoted(c.body)) && !REJECT.test(unquoted(c.body)));
   const claim = claimComment ? { comment: claimComment, daysAgo: daysAgo(claimComment.createdAt, now) } : undefined;
-  const maintainerOnIt = maintainerComments.find((c) => c.body && MAINTAINER_HANDLING.test(c.body) && daysAgo(c.createdAt, now) < 90);
-  if (openPr) {
+  const maintainerOnIt = maintainerComments.find((c) => c.body && MAINTAINER_HANDLING.test(unquoted(c.body)) && daysAgo(c.createdAt, now) < 90);
+  const inFlightLabel = labels.find((l) => IN_FLIGHT_LABEL.test(l));
+  if (inFlightLabel) {
+    novelty = 0.1;
+    noveltyReason = `labelled "${inFlightLabel}": a fix is already underway`;
+  } else if (openPr) {
     const prIdle = daysAgo(openPr.updatedAt, now);
     if (prIdle > 120) {
       novelty = 0.45;
@@ -118,14 +163,21 @@ export function assessIssue(issue: IssueSample, now: Date, repoResponsive: boole
   }
 
   const result = { ...base, claim, novelty, noveltyReason };
+  const triageEligible = nonAuthorComments.length === 0 && age >= 14 && !isMaintainer(issue.association) && repoResponsive && (labels.length === 0 || labels.some((l) => TRIAGE_LABEL.test(l)));
   if (isFeature && !isBug) {
-    if (!endorsed && !confirmedLabel) return { ...result, kind: "feature_request", skipReason: "feature request without maintainer endorsement or a help label" };
+    if (!endorsed && !confirmedLabel) {
+      // An unanswered wish from an outsider is still worth a reply.
+      if (triageEligible && !labels.some((l) => FEATURE_LABEL.test(l))) return { ...result, kind: "triage" };
+      return { ...result, kind: "feature_request", skipReason: "feature request without maintainer endorsement or a help label" };
+    }
     return { ...result, kind: "feature_request" };
   }
-  if (isBug || isDocs || confirmedLabel || endorsed) return { ...result, kind: "issue" };
-  if (nonAuthorComments.length === 0 && age >= 14 && !isMaintainer(issue.association) && repoResponsive && (labels.length === 0 || labels.some((l) => TRIAGE_LABEL.test(l)))) {
-    return { ...result, kind: "triage" };
+  if (awaitingReporter && !endorsed) {
+    if (triageEligible || nonAuthorComments.length <= 2) return { ...result, kind: "triage" };
+    return { ...result, kind: "issue", skipReason: `labelled "${awaitingReporter}": waiting on the reporter, nothing to fix yet` };
   }
+  if (isBug || isDocs || confirmedLabel || endorsed) return { ...result, kind: "issue" };
+  if (triageEligible) return { ...result, kind: "triage" };
   return { ...result, kind: "issue", skipReason: "unclear whether maintainers want this changed (no label, confirmation or repro)" };
 }
 
@@ -140,9 +192,21 @@ export const issuesAnalyzer: Analyzer = {
     const skippedReasons: string[] = [];
     let triage = 0;
     const hinted = new Set((ctx.options.hints?.issues ?? []).map((i) => i.number));
+    const repoUrl = `https://${ctx.ref.host}/${ctx.ref.owner}/${ctx.ref.name}`;
+    // Issues discovery pointed at but the recent-activity sample missed are fetched individually (capped).
+    const sampled = new Set(samples.openIssues.map((i) => i.number));
+    const missingHints = [...hinted].filter((n) => !sampled.has(n)).slice(0, 5);
+    const extra = ctx.github && missingHints.length ? await fetchHintedIssues(ctx.github, ctx.ref.owner, ctx.ref.name, missingHints) : [];
+    if (extra.length) ctx.budget.note(`fetched ${extra.length} hinted issue${extra.length === 1 ? "" : "s"} missing from the sample (#${extra.map((i) => i.number).join(", #")})`);
+    const assessments = [...samples.openIssues, ...extra].map((issue) => ({ issue, a: assessIssue(issue, ctx.now, responsive, repoUrl) }));
+    const reviews = await secondOpinion(ctx, profile, assessments);
 
-    for (const issue of samples.openIssues) {
-      const a = assessIssue(issue, ctx.now, responsive, `https://${ctx.ref.host}/${ctx.ref.owner}/${ctx.ref.name}`);
+    for (const { issue, a: lexical } of assessments) {
+      const review = reviews.get(issue.number);
+      let a = review ? reconcile(lexical, review) : lexical;
+      // Two open issues with near-identical titles: keep the older one as the opportunity, point the newer at it.
+      const twin = a.skipReason ? undefined : findNearDuplicate(issue, samples.openIssues);
+      if (twin && twin.createdAt < issue.createdAt && a.novelty > 0.5) a = { ...a, novelty: 0.5, noveltyReason: `looks like a duplicate of #${twin.number} ("${twin.title.slice(0, 60)}"); work there instead` };
       if (a.skipReason) {
         skippedReasons.push(`#${issue.number}: ${a.skipReason}`);
         continue;
@@ -153,12 +217,47 @@ export const issuesAnalyzer: Analyzer = {
         findings.push(triageFinding(ctx, issue, a, profile));
         continue;
       }
-      findings.push(issueFinding(ctx, issue, a, profile, languages, hinted.has(issue.number)));
+      const finding = issueFinding(ctx, issue, a, profile, languages, hinted.has(issue.number), review);
+      if (a.kind !== "feature_request") {
+        const drift = await assessIssueDrift(ctx, issue, finding.files).catch(() => undefined);
+        if (drift) applyIssueDrift(ctx, finding, issue, drift);
+      }
+      findings.push(finding);
     }
+    // A compact tally first, so a thin or empty report still explains itself; the detailed list follows.
+    const tally = new Map<string, number>();
+    for (const reason of skippedReasons) {
+      const category = /question/.test(reason) ? "questions" : /unclear|template-applied/.test(reason) ? "unconfirmed or unclear" : /endorsement/.test(reason) ? "features without maintainer endorsement" : /is open|assigned|claimed|underway|merged|resolved/.test(reason) ? "already in flight or resolved" : /pushed back|labelled|locked|duplicate|waiting on the reporter|model/.test(reason) ? "declined, labelled out, or waiting on the reporter" : "other";
+      tally.set(category, (tally.get(category) ?? 0) + 1);
+    }
+    const accepted = findings.filter((f) => f.kind !== "triage").length;
+    ctx.budget.note(`issues reviewed: ${assessments.length}; accepted ${accepted}, triage ${findings.length - accepted}${tally.size ? `; passed over: ${[...tally.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v} ${k}`).join(", ")}` : ""}`);
     if (skippedReasons.length) ctx.budget.note(`issues passed over: ${skippedReasons.slice(0, 12).join("; ")}${skippedReasons.length > 12 ? `; +${skippedReasons.length - 12} more` : ""}`);
     return findings;
   },
 };
+
+const STOP = new Set(["the", "a", "an", "of", "in", "on", "for", "to", "with", "and", "or", "is", "are", "not", "when", "using", "after", "from", "by", "at", "as", "it", "this", "that", "be", "does", "doesn", "t", "s", "if", "error", "bug", "issue", "fix", "problem"]);
+function titleTokens(title: string): Set<string> {
+  return new Set(title.toLowerCase().replace(/`[^`]*`/g, " ").split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !STOP.has(w)));
+}
+
+/** Another open issue whose title shares most of its words: likely the same report. */
+export function findNearDuplicate(issue: IssueSample, others: IssueSample[]): IssueSample | undefined {
+  const mine = titleTokens(issue.title);
+  if (mine.size < 3) return undefined;
+  let best: { issue: IssueSample; score: number } | undefined;
+  for (const other of others) {
+    if (other.number === issue.number) continue;
+    const theirs = titleTokens(other.title);
+    if (theirs.size < 3) continue;
+    let shared = 0;
+    for (const w of mine) if (theirs.has(w)) shared++;
+    const score = shared / (mine.size + theirs.size - shared);
+    if (score >= 0.6 && (!best || score > best.score)) best = { issue: other, score };
+  }
+  return best?.issue;
+}
 
 /** Issue body without code blocks, HTML comments, headings and emphasis. */
 export function plainText(markdown: string): string {
@@ -172,12 +271,47 @@ export function plainText(markdown: string): string {
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
 }
 
+/** Which lexical outcomes a model may overturn: the uncertain ones, never the hard facts (locked, merged PR, negative labels). */
+const RECONSIDERABLE = /^(unclear whether|reads as a question|feature request without maintainer endorsement)/;
+
+/** Ask the model about accepted issues and the uncertain rejects; a failure just means no second opinion. */
+async function secondOpinion(ctx: AnalysisContext, profile: RepositoryProfile, assessments: { issue: IssueSample; a: IssueAssessment }[]): Promise<Map<number, IssueReview>> {
+  if (!ctx.llm) return new Map();
+  const accepted = assessments.filter(({ a }) => !a.skipReason && a.kind !== "triage").map(({ issue }) => issue);
+  const uncertain = assessments.filter(({ a }) => a.skipReason && RECONSIDERABLE.test(a.skipReason)).map(({ issue }) => issue).sort((x, y) => y.updatedAt.localeCompare(x.updatedAt));
+  const issues = [...accepted, ...uncertain].slice(0, 60);
+  if (issues.length === 0) return new Map();
+  if (accepted.length + uncertain.length > issues.length) ctx.budget.cut(`model reviewed ${issues.length} of ${accepted.length + uncertain.length} candidate issues`);
+  return reviewIssues({
+    llm: ctx.llm, profile, issues, now: ctx.now,
+    cache: new DiskCache(join(ctx.options.cacheDir, "llm")),
+    onError: (error) => ctx.budget.note(`language-model review stopped: ${describeLlmError(error)}`),
+  });
+}
+
+/** Merge the model's view into the lexical assessment. The model can rescue, demote or annotate, never fabricate. */
+export function reconcile(a: IssueAssessment, r: IssueReview): IssueAssessment {
+  const sure = r.confidence >= 0.75;
+  if (a.skipReason) {
+    if (!RECONSIDERABLE.test(a.skipReason) || !sure || !r.actionable) return a;
+    if ((r.verdict === "defect" || r.verdict === "docs") && r.maintainerStance !== "pushback") return { ...a, skipReason: undefined, kind: "issue", isDocs: r.verdict === "docs", rescued: true };
+    if (r.verdict === "feature" && r.maintainerStance === "endorsed") return { ...a, skipReason: undefined, kind: "feature_request", rescued: true };
+    return a;
+  }
+  if (sure && (r.verdict === "question" || r.verdict === "discussion") && !a.confirmedLabel) return { ...a, skipReason: `model read it as a ${r.verdict}: ${r.rationale}` };
+  if (sure && r.maintainerStance === "pushback" && !a.endorsed) return { ...a, skipReason: `model found maintainer pushback: ${r.rationale}` };
+  return a;
+}
+
 function issueRef(issue: IssueSample, inFlight: boolean): IssueRef {
-  return { number: issue.number, url: issue.url, title: issue.title, labels: issue.labels, assignees: issue.assignees, inFlight, createdAt: issue.createdAt, updatedAt: issue.updatedAt };
+  const ref: IssueRef = { number: issue.number, url: issue.url, title: issue.title, labels: issue.labels, assignees: issue.assignees, inFlight, createdAt: issue.createdAt, updatedAt: issue.updatedAt };
+  const body = issueBody(issue.body);
+  if (body) ref.body = body;
+  return ref;
 }
 
 function mentionedFiles(ctx: AnalysisContext, text: string): string[] {
-  const found: string[] = [];
+  const found: string[] = permalinks(text, ctx.ref).map((l) => l.path).filter((p) => ctx.inventory.byPath.has(p)).slice(0, 5);
   for (const m of text.matchAll(PATH_TOKEN)) {
     const token = m[1]!;
     const hit = ctx.inventory.byPath.has(token) ? token : ctx.inventory.files.find((f) => !f.vendored && (f.path.endsWith(`/${token}`) || f.path === token))?.path;
@@ -187,7 +321,7 @@ function mentionedFiles(ctx: AnalysisContext, text: string): string[] {
   return found;
 }
 
-function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessment, profile: RepositoryProfile, languages: string[], hinted: boolean): Finding {
+function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessment, profile: RepositoryProfile, languages: string[], hinted: boolean, review?: IssueReview): Finding {
   const feature = a.kind === "feature_request";
   const age = daysAgo(issue.createdAt, ctx.now);
   const idle = daysAgo(issue.updatedAt, ctx.now);
@@ -213,6 +347,7 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
   if (bodyLen < 80) { feasibility -= 0.15; feasWhy.push("very short description"); }
   if (a.hard) { feasibility -= 0.2; feasWhy.push("labelled as hard or needing design"); }
   if (feature) { feasibility -= 0.1; feasWhy.push("features need design agreement"); }
+  if (review && review.confidence >= 0.75 && !review.actionable) { feasibility -= 0.15; feasWhy.push(`model: ${review.rationale}`); }
   if (feasWhy.length === 0) feasWhy.push("no reproduction, label or file hints; expect investigation");
 
   const effort = a.easy ? "small" : feature ? (/\b(breaking|architecture|rewrite|redesign)\b/i.test(issue.body) ? "large" : "medium") : a.hasRepro || a.hasTrace ? "small" : "medium";
@@ -228,13 +363,14 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
   const ev = [evidence(ctx, "issue", issue.url, { excerpt: issue.title, note: `labels: ${issue.labels.join(", ") || "none"}; ${issue.commentCount} comments; ${issue.reactions} reactions; opened ${issue.createdAt.slice(0, 10)}` })];
   if (a.endorsed) ev.push(evidence(ctx, "issue", `${issue.url}#issuecomment`, { excerpt: truncate(a.endorsed.body ?? "", 200), note: `maintainer (${a.endorsed.association.toLowerCase()}) on ${a.endorsed.createdAt.slice(0, 10)}` }));
   if (a.claim) ev.push(evidence(ctx, "issue", `${issue.url}#issuecomment`, { excerpt: truncate(a.claim.comment.body ?? "", 160), note: `claim by ${a.claim.comment.author?.login ?? "unknown"} ${Math.round(a.claim.daysAgo)} days ago` }));
-  for (const pr of issue.linkedPrs.filter((p) => p.url.startsWith(`https://${ctx.ref.host}/${ctx.ref.owner}/${ctx.ref.name}/pull/`))) ev.push(evidence(ctx, "pull_request", pr.url, { note: `linked PR is ${pr.state.toLowerCase()}${pr.isDraft ? " (draft)" : ""}, updated ${pr.updatedAt.slice(0, 10)}` }));
+  if (review) ev.push(evidence(ctx, "computed", `llm:${ctx.llm?.model ?? "model"}`, { excerpt: review.quote || "(no supporting phrase found in the issue text)", note: `${review.verdict}, ${review.actionable ? "actionable" : "not directly actionable"}, maintainer stance ${review.maintainerStance} (${review.confidence.toFixed(2)}): ${review.rationale}` }));
+  for (const pr of issue.linkedPrs.filter((p) => isSameRepoPr(p.url, `https://${ctx.ref.host}/${ctx.ref.owner}/${ctx.ref.name}`))) ev.push(evidence(ctx, "pull_request", pr.url, { note: `linked PR is ${pr.state.toLowerCase()}${pr.isDraft ? " (draft)" : ""}, updated ${pr.updatedAt.slice(0, 10)}` }));
 
   const signals: FindingSignals = {
     value: Math.min(0.95, value), valueReason: valueWhy.join("; "),
     feasibility: Math.max(0.1, Math.min(0.95, feasibility)), feasibilityReason: feasWhy.join("; "),
-    confidence: a.confirmedLabel || a.endorsed ? 0.85 : 0.6,
-    confidenceReason: a.confirmedLabel || a.endorsed ? "maintainers labelled or confirmed it" : "inferred from the issue text alone",
+    confidence: a.rescued ? 0.65 : a.confirmedLabel || a.endorsed ? 0.85 : review && review.confidence >= 0.8 && (review.verdict === "defect" || review.verdict === "docs") ? 0.75 : 0.6,
+    confidenceReason: a.rescued ? `the lexical pass was unsure; the model judged it a ${review?.verdict ?? "defect"} (${review?.rationale ?? ""}); verify before investing` : a.confirmedLabel || a.endorsed ? "maintainers labelled or confirmed it" : review && review.confidence >= 0.8 ? `issue text plus model agreement: ${review.rationale}` : "inferred from the issue text alone",
     novelty: a.novelty, noveltyReason: a.noveltyReason,
     welcomenessFactor: a.confirmedLabel ? 1.1 : 1,
     welcomenessReason: a.confirmedLabel ? `help label "${a.confirmedLabel}" invites contributions` : undefined,
@@ -243,7 +379,7 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
     kind: a.kind,
     clusterKey: `issue:${issue.number}`,
     title: `${feature ? "Implement" : a.isDocs ? "Improve docs:" : "Fix"} #${issue.number}: ${truncate(issue.title, 90)}`,
-    summary: truncate(plainText(issue.body), 300) || issue.title,
+    summary: review?.problem && review.confidence >= 0.6 ? review.problem : truncate(plainText(problemStatement(issue.body)), 300) || issue.title,
     evidence: ev,
     files,
     effort,

@@ -155,14 +155,15 @@ function clamp(x: number): number {
   return Math.max(0, Math.min(1, Math.round(x * 100) / 100));
 }
 
-const REFUSAL = /\b(?:not|no longer|n't|never)\s+(?:currently\s+)?(?:accept(?:ing)?|taking|looking for|open to|review(?:ing)?)\s+(?:any\s+|external\s+|outside\s+|new\s+|unsolicited\s+|community\s+)?(?:contributions|pull requests|prs|patches)\b/i;
+// A refusal names who refuses and is unconditional: "we are not accepting pull requests", not "we may not review PRs which fail tests".
+const REFUSAL = /\b(?:we|i|this (?:project|repository|repo|library|package|fork)|the (?:project|maintainers?|team|authors?)|maintainers?)\s*(?:are|is|am|'re|'m|will be|do|does)?\s*(?:currently\s+)?(?:not|n't|never|no longer)\s+(?:currently\s+|actively\s+)?(?:accept(?:ing)?|taking|looking for|open to|seeking)\s+(?:any\s+|external\s+|outside\s+|new\s+|unsolicited\s+|community\s+|public\s+)?(?:contributions|pull requests|prs|patches|merge requests)\b/i;
 const COSMETIC = /typo|spelling|grammar|whitespace|formatting|cosmetic|style[- ]only|trivial|drive-by|dependency|version bump|badge|refactor|hacktoberfest|at this time for features|feature/i;
 
 /** A sentence saying contributions are not accepted at all, as opposed to one kind of change. */
 export function findRefusal(text: string | undefined, path = "CONTRIBUTING.md"): { sentence: string; path: string } | undefined {
   if (!text) return undefined;
   for (const sentence of sentences(text)) {
-    if (REFUSAL.test(sentence) && !COSMETIC.test(sentence) && !/\bunless\b|\bexcept\b|\bwithout (first )?(opening|filing)/i.test(sentence)) {
+    if (REFUSAL.test(sentence) && !COSMETIC.test(sentence) && !/\bunless\b|\bexcept\b|\bwithout (first )?(opening|filing)|\bmay\b|\bmight\b|\bwhich\b|\bthat (?:aren'?t|don'?t|do not|are not|lack|fail)|\buntil\b|\bif\b/i.test(sentence)) {
       return { sentence: sentence.trim(), path };
     }
   }
