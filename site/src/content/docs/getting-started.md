@@ -21,6 +21,16 @@ npx gitgoblin discover contribute --language typescript
 
 That prints ten ranked repositories with the reasons behind each ranking. `npx gitgoblin goals` lists the five goals, `explain owner/name` shows why one repository ranked where it did, `analyze owner/name` profiles one repository and lists its evidence-backed opportunities, and `--json` prints every signal and the evidence behind it. The repository's [getting started tutorial](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/getting-started.md) covers the filters, the token, the cache and analysis.
 
+## Use it from your AI agent
+
+gitgoblin also runs as an MCP server, so the agent you already use can discover repositories, analyze them and brief you on one piece of work:
+
+```sh
+claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
+```
+
+Until the npm package is published, use the tarball URL from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.0) in place of `@gitgoblin/mcp`. [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) has the one-liner for Codex, Cursor, Gemini CLI, VS Code and every other client, plus the skill that teaches agents when to use the tools.
+
 ## Run the tests
 
 ```sh
@@ -40,6 +50,7 @@ npm run typecheck
 | `packages/cli` | The `gitgoblin` command line. In progress. |
 | `packages/intel` | Profiling one repository and finding evidence-backed opportunities. Working from a clone; scores still being calibrated. |
 | `packages/engine` | Turning one opportunity into a reviewable pull request. Pipeline and the `gitgoblin-engine` command written; see [its README](https://github.com/anandkaranubc/gitgoblin/blob/main/packages/engine/README.md). |
+| `packages/mcp` | The MCP server that gives Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents gitgoblin's discovery and analysis. Released on GitHub; see [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md). |
 | `docs/` | [Architecture](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/architecture.md) and [etiquette](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md). |
 | `brand/` | The mark, banners, favicons and social image. |
 | `site/` | This website. |
