@@ -47,6 +47,7 @@ How to read a result:
 - **score** runs from 0 to 1 and is only comparable between results for the same goal.
 - **`+` lines** are the strongest reasons it ranked where it did. **`−` lines** are what counted against it. Each one names the evidence, so you can check it.
 - Stars, language, and license are shown for context, not because they drove the ranking.
+- Stars are not a guide to your odds. In backtests on three past dates, about 300 repositories each ([results](../packages/eval/docs/results-2026-10-23.md)), the more stars a project had, the smaller the share of newcomers' pull requests it merged. The share of pull requests a project merges predicted a newcomer's odds better on two of the three dates; `explain` shows it as `acceptance` (step 4).
 
 Narrow the search with filters. The ones people reach for most:
 
@@ -185,6 +186,7 @@ Every run lives under `~/.gitgoblin/runs/<id>/` (or `$GITGOBLIN_WORKDIR`). To co
 npx gitgoblin runs                       # every run, newest first, with its status
 npx gitgoblin show <runId>               # the report; --diff for the patch, --pr for the PR text, --install for the install log
 npx gitgoblin publish <runId>            # asks, then pushes with your gh login and opens a draft PR
+npx gitgoblin clean --finished           # frees the clones finished runs keep (reports and diffs stay)
 ```
 
 [packages/cli/README.md](../packages/cli/README.md) documents every option. The engine's own command, `gitgoblin-engine`, can drive the same runs directly when given the same directory (`--workdir ~/.gitgoblin`); [packages/engine/README.md](../packages/engine/README.md) covers that and the design behind the pipeline.

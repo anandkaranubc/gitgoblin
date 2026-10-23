@@ -114,6 +114,26 @@ excludes zero, and (2) nDCG@10 does not get worse by more than 0.05 (the
 lower bound of its paired interval is above -0.05). No other candidate is
 tested on 2026-02-15.
 
+Outcome, 2026-10-23 18:58 UTC. On 2026-02-15 (334 covered repositories, 80 with three or
+more decided newcomer pull requests), against the current weights: newcomer
+odds +0.105 [+0.017, +0.194], criterion 1 met; nDCG@10 +0.048 [-0.069,
++0.145], criterion 2 not met (lower bound below -0.05). V2's weights do not
+ship. The `acceptance` signal ships as information only (weight 0 in every
+goal, so no score changes) because it is the measure a newcomer needs and the
+one that predicted their odds on both dates.
+
+Second confirmatory test, written before any data for its date is fetched:
+V2 unchanged, as of 2025-10-15, 120-day window, the same pool design with
+seed 3. V2's weights ship if both criteria above are met on that date. Its
+pool overlaps the other two dates' pools in part; the windows do not overlap.
+Whatever the result, it is reported in the results note.
+
+Outcome, 2026-10-23 20:08 UTC. On 2025-10-15 (329 covered repositories, 73 with three or
+more decided newcomer pull requests): newcomer odds +0.015 [-0.092, +0.112]
+and nDCG@10 -0.012 [-0.084, +0.082]. Neither criterion is met. V2's weights
+do not ship and the candidate is retired; the next attempt starts from a new
+design date.
+
 ### E2. Intel opportunities against later changes
 
 For the calibration and held-out repositories, analyze the default-branch

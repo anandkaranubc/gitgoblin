@@ -125,7 +125,8 @@ Without `--opportunity` or `--issue` it lists the opportunities, best first, wit
 kind, score, effort, id and the first piece of evidence, and marks the ones the
 engine will refuse at intake: an issue someone is already working on, a triage
 item that needs a reply rather than a patch, a pull request that needs its
-author's consent first. When intel has a specific reason to doubt a finding (its
+author's consent first, a dependency update (the agent works offline and cannot
+regenerate the lockfile). When intel has a specific reason to doubt a finding (its
 confidence is below 0.5, for example because code an issue quotes is gone from the
 default branch), a `?` line shows that reason. Press Enter to take the first
 opportunity the engine would accept and intel does not doubt; a typo gets you
@@ -140,7 +141,7 @@ opens it later. The exit code is 1 when the run failed; a run the engine stopped
 or escalated exits 0 and says why. When the repository's install failed, the end
 of its log is printed under the status, since it usually names the cause.
 
-### `gitgoblin runs`, `gitgoblin show <runId>`, `gitgoblin publish <runId>`
+### `gitgoblin runs`, `show`, `publish`, `clean`
 
 The lifecycle of prepared changes, in the same workdir `contribute` uses
 (`--workdir` or `$GITGOBLIN_WORKDIR` on each).
@@ -154,6 +155,13 @@ The lifecycle of prepared changes, in the same workdir `contribute` uses
   report, asks, then pushes with your `gh` login (to a fork when you cannot push
   to the repository) and opens a draft pull request. `--ready` opens it ready for
   review instead. Only a run whose status is `awaiting_approval` can be published.
+
+- `clean <runId...>` frees what a finished run holds on disk: its workspace (a clone with
+  the project's installed dependencies, often several hundred megabytes) and, for a
+  worktree, its `gitgoblin/...` branch. The report, diff, pull request text and every
+  artifact stay, so `show` still works. `clean --finished` does this for every run that
+  is not awaiting approval; `--force` also discards a prepared change. `runs` says when
+  finished runs still keep their workspaces.
 
 Read [docs/etiquette.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md) before publishing to someone else's project.
 

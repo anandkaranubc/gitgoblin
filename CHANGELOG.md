@@ -33,7 +33,8 @@ a pull request a maintainer would want to merge.
   publishing; nothing is pushed or posted without that last yes.
 - The opportunity picker marks the ones the engine would refuse (`!`) and the ones intel doubts
   (`?`), and Enter skips both. `runs`, `show` and `publish` come back to prepared changes later;
-  `publish` can be run again after a partial failure.
+  `publish` can be run again after a partial failure, and `clean` frees the disk a finished run's
+  clone takes while keeping its report and diff.
 
 **Safety**
 
@@ -48,6 +49,8 @@ a pull request a maintainer would want to merge.
 
 - Works without configuration; a GitHub token or a `gh` login raises rate limits and adds
   starter-issue data.
+- The response cache, shared with the MCP server, never fails a command: when it is locked by
+  another process, full or damaged, the answer comes from the network.
 - Errors say what to do next: an unreachable network names the host and the cause, a certificate
   failure points at `NODE_EXTRA_CA_CERTS`, a missing repository is reported as not found, and an
   issue sample GitHub refused is reported instead of silently shortened.
