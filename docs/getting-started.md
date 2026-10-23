@@ -71,18 +71,21 @@ To see every signal for a repository you already have in mind:
 npx gitgoblin explain BurntSushi/ripgrep --goal adopt
 ```
 
+Trimmed, on 23 October 2026:
+
 ```
-BurntSushi/ripgrep  ★ 69k · Rust · Unlicense  score 0.67
+BurntSushi/ripgrep  ★ 69k · Rust · Unlicense  score 0.73
 goal: adopt
 
-activity              ████░░░░░░ 0.42 −0.01  last change 3 months ago, 178 pull requests in the past year
+activity              █████████░ 0.92 +0.05  last change today, 178 pull requests in the past year
 responsiveness        ██░░░░░░░░ 0.16 −0.04  issues close in ~25 days, pull requests in ~45 days
+acceptance            ██░░░░░░░░ 0.15 +0.00  merged 15% of pull requests in the past year (27 of 178)
 busFactor             ██████░░░░ 0.58 +0.01  406 contributors, top committer wrote 70%
 maturity              ██████████ 1.00 +0.07  created 11 years ago, 75 releases
-usage                 ██████░░░░ 0.60 +0.02  used by 490 repositories via nixpkgs:ripgrep
+usage                 ██████░░░░ 0.60 +0.02  5.5k forks, 490 dependents via cargo:grep-regex
 ```
 
-Each row is one signal: its value from 0 to 1, how much it moved the score for this goal, and the evidence. A signal gitgoblin could not measure is left out rather than scored as zero.
+Each row is one signal: its value from 0 to 1, how much it moved the score for this goal, and the evidence. A signal gitgoblin could not measure is left out rather than scored as zero. `acceptance`, the share of pull requests the project merged in the past year, is worth a look before you contribute: a project that merges few outside changes may not merge yours. It is shown for information and does not move any goal's score yet.
 
 ## 5. Add a GitHub token (optional, recommended)
 
@@ -182,6 +185,7 @@ Every run lives under `~/.gitgoblin/runs/<id>/` (or `$GITGOBLIN_WORKDIR`). To co
 npx gitgoblin runs                       # every run, newest first, with its status
 npx gitgoblin show <runId>               # the report; --diff for the patch, --pr for the PR text, --install for the install log
 npx gitgoblin publish <runId>            # asks, then pushes with your gh login and opens a draft PR
+npx gitgoblin clean --finished           # frees the clones finished runs keep (reports and diffs stay)
 ```
 
 [packages/cli/README.md](../packages/cli/README.md) documents every option. The engine's own command, `gitgoblin-engine`, can drive the same runs directly when given the same directory (`--workdir ~/.gitgoblin`); [packages/engine/README.md](../packages/engine/README.md) covers that and the design behind the pipeline.

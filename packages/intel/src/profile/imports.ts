@@ -1,4 +1,7 @@
-import { dirname, posix } from "node:path";
+import { posix } from "node:path";
+
+// Repository paths are POSIX on every OS.
+const { dirname } = posix;
 
 import type { FileInventory } from "../fs/scan.ts";
 

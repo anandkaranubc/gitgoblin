@@ -200,3 +200,32 @@ describe("HttpClient.forget", () => {
     expect(calls).toHaveLength(4);
   });
 });
+
+describe("HttpClient with a failing cache", () => {
+  // The CLI and the MCP server share one SQLite file; a write that loses the lock, a full disk or a
+  // damaged file must cost the cache entry, not the answer the network already gave.
+  class BrokenCache extends MemoryCache {
+    reads = 0;
+    override get(key: string) {
+      this.reads += 1;
+      if (this.reads === 1) throw new Error("database is locked");
+      return super.get(key);
+    }
+    override set(): void {
+      throw new Error("database is locked");
+    }
+    override delete(): void {
+      throw new Error("database is locked");
+    }
+  }
+
+  it("serves the network answer when the cache cannot be read or written, and says so", async () => {
+    const { fetch, calls } = fetchStub(() => jsonResponse({ n: 1 }));
+    const events: HttpEvent[] = [];
+    const client = new HttpClient({ cache: new BrokenCache(), fetch, onEvent: (e) => events.push(e) });
+    expect(await client.json(URL_A)).toEqual({ n: 1 });
+    expect(await client.json(URL_A)).toEqual({ n: 1 });
+    expect(calls).toHaveLength(2);
+    expect(events.filter((e) => e.type === "cache-error").length).toBeGreaterThanOrEqual(2);
+  });
+});

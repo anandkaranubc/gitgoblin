@@ -157,7 +157,9 @@ function journeyRuntime(localPath: string, answers: string[]) {
   return { runtime, out, err, asked };
 }
 
-describe("the contribute journey against the real engine", () => {
+// The engine needs an OS sandbox for repository commands (sandbox-exec or bubblewrap) and does not
+// support Windows; issue #80 tracks which commands do. The rest of the CLI is tested on Windows.
+describe.skipIf(process.platform === "win32")("the contribute journey against the real engine", () => {
   it("runs a fixture bug to a prepared pull request, shows it, and publishes as a dry run; then runs/show find it", { timeout: 120_000 }, async () => {
     const repo = createFixtureRepo();
     const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-journey-"));

@@ -1,5 +1,8 @@
 import { trimEnd } from "../util/text.ts";
-import { dirname, normalize, posix } from "node:path";
+import { posix } from "node:path";
+
+// Repository paths are POSIX on every OS; node:path's defaults would turn them into backslashes on Windows.
+const { dirname, normalize } = posix;
 
 import type { RepositoryProfile } from "../contracts.ts";
 import type { AnalysisContext } from "../context.ts";
@@ -97,7 +100,8 @@ export function siteSlugify(heading: string): string {
     .replace(/<[^>]+>/g, "")
     .replace(/[`*~]/g, "")
     .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/^-+/, "")
+    .replace(/-{1,200}$/, "");
 }
 
 /** Anchors a Markdown file exposes, in GitHub style and in static-site style. */

@@ -8,7 +8,7 @@ import type * as intel from "@gitgoblin/intel";
  * contracts without depending on them at run time.
  */
 export type IntelModule = Pick<typeof intel, "analyzeRepository" | "renderMarkdown" | "AnalysisReport">;
-export type EngineModule = Pick<typeof engine, "runContribution" | "publishRun"> & { DEFAULT_LIMITS?: typeof engine.DEFAULT_LIMITS };
+export type EngineModule = Pick<typeof engine, "runContribution" | "publishRun"> & { DEFAULT_LIMITS?: typeof engine.DEFAULT_LIMITS; cleanRun?: typeof engine.cleanRun };
 
 export type ModuleLoader = (name: string) => Promise<Record<string, unknown> | undefined>;
 

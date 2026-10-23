@@ -31,7 +31,8 @@ The first release of the `gitgoblin` command.
 - `contribute` (experimental) has an AI agent investigate, plan, implement and verify one
   opportunity in a local clone, gets an independent review, and prepares a pull request. It asks
   before running the agent, before implementing the plan, and before publishing; nothing is pushed
-  or posted without that last yes. `runs`, `show` and `publish` come back to prepared changes later.
+  or posted without that last yes. `runs`, `show` and `publish` come back to prepared changes later,
+  and `clean` frees the disk a finished run's clone takes while keeping its report and diff.
 - When choosing what to work on, `contribute` marks opportunities the engine would refuse (`!`) and
   those intel doubts (`?`, for example an issue whose quoted code is gone, so it may already be
   fixed), and pressing Enter skips both.
@@ -54,6 +55,8 @@ The first release of the `gitgoblin` command.
   certificate failure points at `NODE_EXTRA_CA_CERTS`, and a repository that does not exist is
   reported as not found rather than as an HTTP status. When GitHub refuses the issue sample, `analyze`
   and `contribute` say that issues were not analyzed and why, instead of showing a shorter list.
+- The response cache, shared with the MCP server, never fails a command: when it is locked by
+  another process, full or damaged, the answer comes from the network and the cache entry is skipped.
 
 Needs Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the
 CLI (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude
