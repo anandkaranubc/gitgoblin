@@ -1,8 +1,8 @@
-import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync } from "node:fs";
 import path from "node:path";
 import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
 import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
-import { REGISTRY_HOSTS, startEgressProxy, proxyEnv, type EgressProxy } from "./egress.ts";
+import { forwardedCommand, REGISTRY_HOSTS, startEgressProxy, proxyEnv, type EgressProxy } from "./egress.ts";
 import { execShell, tail } from "./exec.ts";
 import { commandEnv, isInside, isSafeCommand, scrubEnv } from "./guard.ts";
 import { hostSandboxFor, OFFLINE_ENV, specFor, type CheckIsolation, type HostIsolation } from "./hostbox.ts";
@@ -312,7 +312,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     hostEnv = commandEnv(env);
     journal.event("run", "toolchain", { notes: toolchain.notes, writeDirs: toolchain.writeDirs });
     for (const note of toolchain.notes) reporter.info(note);
-    const wrapFor = (network: boolean) => (hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network, { extraWrite: toolchain.writeDirs, strict })) });
+    const wrapFor = (network: boolean, extra: string[] = []) =>
+      hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network, { extraWrite: [...toolchain.writeDirs, ...extra], strict })) };
     const timeout = options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {};
     // Checks run with the network cut when sandboxed; say so to the package managers so they fail fast.
     const checkEnv = hostBox.kind === "none" ? hostEnv : { ...hostEnv, ...OFFLINE_ENV };
@@ -325,17 +326,33 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       // network namespace, which cannot reach a proxy on the host's loopback, so there the install's
       // network stays open and the run says so.
       let egress: EgressProxy | undefined;
-      if (strict && hostBox.kind === "sandbox-exec") egress = await startEgressProxy([...REGISTRY_HOSTS, ...(options.installHosts ?? [])]);
+      const hosts = [...REGISTRY_HOSTS, ...(options.installHosts ?? [])];
+      // sandbox-exec: the proxy on the host's 127.0.0.1, which the sandbox allows. bubblewrap: the
+      // install has its own network namespace, so the proxy listens on a Unix socket in a folder bound
+      // into the sandbox and a forwarder inside offers it on the namespace's 127.0.0.1.
+      const egressDir = path.join(journal.dir, "egress");
+      let installCommand = task.commands.install;
+      let installEnv: Record<string, string> = hostEnv;
+      if (strict && hostBox.kind === "sandbox-exec") {
+        egress = await startEgressProxy(hosts);
+        installEnv = { ...hostEnv, ...proxyEnv(egress.url) };
+      } else if (strict && hostBox.kind === "bwrap") {
+        mkdirSync(egressDir, { recursive: true });
+        const socketPath = path.join(egressDir, "proxy.sock");
+        egress = await startEgressProxy(hosts, { socketPath });
+        const forwarded = forwardedCommand(task.commands.install, socketPath);
+        installCommand = forwarded.command;
+        installEnv = { ...hostEnv, ...forwarded.env };
+      }
       const installNetwork = egress ? "registries" : hostBox.kind === "none" ? "unsandboxed" : "open";
       journal.event("install", "start", { network: installNetwork });
-      if (strict && !egress) reporter.warn(`strict isolation: the install's network is not limited to package registries under ${hostBox.kind}`);
       const installOptions = egress
-        ? { cwd: workspace.path, env: { ...hostEnv, ...proxyEnv(egress.url) }, ...timeout, ...wrapFor(false) }
-        : { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(true) };
+        ? { cwd: workspace.path, env: installEnv, ...timeout, ...wrapFor(false, hostBox.kind === "bwrap" ? [egressDir] : []) }
+        : { cwd: workspace.path, env: installEnv, ...timeout, ...wrapFor(true) };
       let install: Awaited<ReturnType<typeof execShell>>;
       let denied: string[] = [];
       try {
-        install = await execShell(task.commands.install, installOptions);
+        install = await execShell(installCommand, installOptions);
       } finally {
         if (egress) {
           denied = egress.denied();
