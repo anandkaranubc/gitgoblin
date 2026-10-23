@@ -230,9 +230,12 @@ treats all of it as data.
   parsed by git as an option.
 - The link checker requests only `http(s)` on standard ports to hosts whose
   every resolved address is public (no loopback, private, link-local,
-  carrier-NAT or documentation ranges, IPv4 or IPv6), follows redirects by hand
-  and re-checks each hop. DNS rebinding between the lookup and the request is
-  not covered.
+  carrier-NAT or documentation ranges, IPv4 or IPv6, compared numerically so
+  mapped spellings are caught), follows redirects by hand and re-checks each
+  hop. Requests go through `node:http(s)` with a lookup that validates the
+  addresses it hands to the socket, so a DNS answer that changes after the
+  check (rebinding) is refused before connecting. A host that does not resolve
+  at all is reported as a broken link.
 - Model input is stripped of control and format characters; `[maintainer]`
   markers and prompt headings written in issue text are neutralised, so the
   model cannot be told a reporter is a maintainer. Model output is bounded,
