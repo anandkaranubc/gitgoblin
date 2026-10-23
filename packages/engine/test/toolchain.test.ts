@@ -60,7 +60,7 @@ describe("prepareToolchain", () => {
   });
 
   it("makes sure the Node package manager's home and caches exist so the sandbox can allow writes to them", async () => {
-    const home = mkdtempSync(path.join(os.tmpdir(), "gg-home-"));
+    const home = realpathSync(mkdtempSync(path.join(os.tmpdir(), "gg-home-")));
     const { ws, runDir } = layout({ "package.json": JSON.stringify({ packageManager: "pnpm@9.0.0" }), "pnpm-lock.yaml": "" });
     const tc = await prepareToolchain(task({ install: "pnpm install", test: "pnpm test" }), ws, runDir, env, { home });
     const pnpmHome = process.platform === "darwin" ? path.join(home, "Library", "pnpm") : path.join(home, ".local", "share", "pnpm");

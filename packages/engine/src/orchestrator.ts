@@ -35,6 +35,7 @@ import {
   ReviewSchema,
   TaskSchema,
   type ChangePlan,
+  type Check,
   type Commands,
   type ImplementationNotes,
   type Investigation,
@@ -54,6 +55,17 @@ export interface RunInput {
   /** Alternatively, intel's RepositoryProfile and ContributionOpportunity. */
   profile?: unknown;
   opportunity?: unknown;
+}
+
+/** What a person deciding on a plan should know about the environment it will be verified in. */
+export interface PlanContext {
+  /**
+   * Present when the repository's install command ran and did not exit 0. `exitCode` is -1 when the
+   * process was killed (timeout or signal); `timedOut` says which.
+   */
+  install?: { exitCode: number; logPath: string; timedOut: boolean };
+  /** The repository's own checks before any change. */
+  baseline: Check[];
 }
 
 export interface RunnerContext {
@@ -84,8 +96,12 @@ export interface RunOptions {
   /** Timeout for each repository command (install, test, lint...). */
   checkTimeoutMs?: number;
   skipInstall?: boolean;
-  /** Optional human checkpoint between planning and implementation. */
-  approvePlan?: (plan: ChangePlan) => Promise<boolean>;
+  /**
+   * Optional human checkpoint between planning and implementation. The engine always passes the
+   * context (how install and baseline went); it is optional in the type so one-argument callbacks
+   * and callers written before it existed keep compiling.
+   */
+  approvePlan?: (plan: ChangePlan, context?: PlanContext) => Promise<boolean>;
   /** Largest patch the engine will review and commit; bigger ones escalate. Default 32 MiB. */
   maxPatchBytes?: number;
   /** Shallow clone depth for very large repositories; omitted means full history. */
@@ -245,7 +261,10 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   const phase = async <T>(runner: AgentRunner, spec: PhaseSpec<T>): Promise<PhaseResult<T> & { output: T }> => {
     reporter.phase(spec.name);
     journal.event(spec.name, "start", { resume: spec.resume ?? null });
-    const result = await runner.run({ ...spec, maxBudgetUsd: Math.max(0.5, limits.maxCostUsd - costUsd) });
+    // The remaining wall-clock budget bounds the phase itself, not just the gate after it, so a
+    // stalled session cannot hold the run past its limit.
+    const remainingMs = Math.max(30_000, limits.maxWallClockMs - (Date.now() - started));
+    const result = await runner.run({ ...spec, maxBudgetUsd: Math.max(0.5, limits.maxCostUsd - costUsd), timeoutMs: remainingMs });
     costUsd += result.costUsd;
     phases.push({ name: spec.name, costUsd: result.costUsd, turns: result.turns, durationMs: result.durationMs, ok: result.ok, denials: result.denials.length });
     journal.event(spec.name, "end", { ok: result.ok, costUsd: result.costUsd, turns: result.turns, errors: result.errors, denials: result.denials });
@@ -290,12 +309,16 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const timeout = options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {};
     const checkOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(false) };
     const installOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(true) };
+    let installFailure: PlanContext["install"];
     if (task.commands.install && !options.skipInstall) {
       reporter.phase("install", task.commands.install);
       const install = await execShell(task.commands.install, installOptions);
       journal.text("install-output.txt", install.output);
       journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs, timedOut: install.timedOut, outputTail: tail(install.output, 2000) });
-      if (install.exitCode !== 0) reporter.warn(`install failed (exit ${install.exitCode}); continuing, checks may fail. Output: ${journal.pathFor("install-output.txt")}`);
+      if (install.exitCode !== 0) {
+        installFailure = { exitCode: install.exitCode ?? -1, logPath: journal.pathFor("install-output.txt"), timedOut: install.timedOut };
+        reporter.warn(`install failed (exit ${install.exitCode}); checks may fail. Output: ${installFailure.logPath}`);
+      }
     }
     const guidance = readGuidance(workspace.path, task);
     reporter.phase("baseline", checkSpecs(task.commands).map((s) => s.name).join(", ") || "no commands known");
@@ -303,6 +326,15 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const baseline = compareWithBaseline(baselineChecks, undefined, { files: 0, insertions: 0, deletions: 0, changedFiles: [] });
     journal.artifact("baseline", baseline);
     for (const c of baselineChecks.filter((c) => c.status !== "pass")) reporter.warn(`baseline ${c.name}: ${c.status}`);
+    // A failed install that leaves the checks broken means nothing the agent does could be verified;
+    // stop here, before any model spend, with the log a person needs.
+    if (installFailure && baselineChecks.length > 0 && baselineChecks.every((c) => c.status !== "pass")) {
+      throw new RunAborted(
+        "escalated",
+        `install ${installFailure.timedOut ? "timed out" : `failed (exit ${installFailure.exitCode})`} and the repository's checks cannot run (${baselineChecks.map((c) => `${c.name}: ${c.status}`).join(", ")}); nothing the agent did could be verified`,
+        [`Read ${installFailure.logPath}; fix the environment (missing tool, blocked write, network) and run again.`],
+      );
+    }
 
     const runner = (options.runnerFactory ?? defaultRunnerFactory(options, reporter))({ workspace: workspace.path, task, env, extraWrite: toolchain.writeDirs });
     const builderPrompt = builderSystemPrompt(task, workspace.path, guidance);
@@ -332,7 +364,9 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const plan = planned.output;
     journal.artifact("plan", plan);
     decide("plan", afterPlan(plan, task, limits));
-    if (options.approvePlan && !(await options.approvePlan(plan))) throw new RunAborted("stopped", "plan rejected by the operator");
+    if (options.approvePlan && !(await options.approvePlan(plan, { ...(installFailure ? { install: installFailure } : {}), baseline: baseline.checks }))) {
+      throw new RunAborted("stopped", "plan rejected by the operator");
+    }
     session = planned.sessionId ?? session;
 
     // Implement, verify, review: a bounded loop.

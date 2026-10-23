@@ -16,6 +16,8 @@ export interface PhaseSpec<T> {
   resume?: string;
   maxTurns: number;
   maxBudgetUsd: number;
+  /** Wall-clock limit for this phase; the session is aborted when it passes. */
+  timeoutMs?: number;
   model?: string;
   effort?: Effort;
 }
@@ -102,7 +104,16 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
       onDeny: (tool, reason) => denials.push({ tool, reason }),
     };
     const tools = toolsFor(spec.profile);
+    const abortController = new AbortController();
+    let timedOut = false;
+    const deadline = spec.timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          abortController.abort();
+        }, spec.timeoutMs)
+      : undefined;
     const options: Options = {
+      abortController,
       cwd: opts.workspace,
       systemPrompt: spec.systemPrompt,
       settingSources: [],
@@ -161,6 +172,13 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
       // The SDK throws after yielding an error result; keep what we learned.
       const msg = err instanceof Error ? err.message : String(err);
       if (!errors.includes(msg)) errors.push(msg);
+    } finally {
+      if (deadline) clearTimeout(deadline);
+    }
+    if (timedOut) {
+      errors.push(`${spec.name} timed out after ${Math.round((spec.timeoutMs ?? 0) / 1000)}s of wall-clock time`);
+      // A deadline is the run's limit, not a transient failure: never resume it.
+      interrupted = false;
     }
 
     const parsed = structured === undefined ? undefined : spec.schema.safeParse(structured);

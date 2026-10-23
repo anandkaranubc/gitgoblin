@@ -1,6 +1,6 @@
 {
   "name": "gitgoblin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Find open-source projects worth your time and the work they actually need: discovery, repository profiles and evidence-backed contribution opportunities, with the etiquette to act on them.",
   "author": { "name": "Karan Anand", "url": "https://github.com/anandkaranubc" },
   "homepage": "https://anandkaranubc.github.io/gitgoblin/",

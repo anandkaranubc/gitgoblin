@@ -155,6 +155,12 @@ describe("describeEnvironment", () => {
     expect(text).toContain("cannot be verified");
   });
 
+  it("says the install did not finish when the engine has no exit code for it", () => {
+    const text = describeEnvironment({ install: { exitCode: null, logPath: "/r/install-output.txt" }, baseline: [{ name: "test", status: "timeout" }] });
+    expect(text).toContain("the repository's install did not finish (killed or timed out); log: /r/install-output.txt");
+    expect(text).toContain("cannot be verified");
+  });
+
   it("warns about pre-existing failures when the install worked", () => {
     const text = describeEnvironment({ baseline: [{ name: "test", status: "fail" }, { name: "lint", status: "timeout" }] });
     expect(text).toContain("Failing before any change: test, lint.");
