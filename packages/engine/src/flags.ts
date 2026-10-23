@@ -25,3 +25,19 @@ export function parseCheckIsolation(value: string | undefined): CheckIsolation |
   if ((CHECK_ISOLATIONS as readonly string[]).includes(value)) return value as CheckIsolation;
   throw new Error(`--check-isolation must be one of ${CHECK_ISOLATIONS.join(", ")}, got ${JSON.stringify(value)}`);
 }
+
+/** `--clone-depth`: a positive whole number of commits, for very large repositories. */
+export function parseCloneDepth(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!/^\d+$/.test(value.trim()) || Number(value) < 1) throw new Error(`--clone-depth must be a whole number of commits, at least 1, got ${JSON.stringify(value)}`);
+  return Number(value);
+}
+
+/**
+ * `--no-sandbox` runs the agent's commands on this machine with only text-matching hooks in the way.
+ * The flag alone is not enough: the environment must also say so, so the choice is deliberate and
+ * visible in the shell history of whoever made it.
+ */
+export function unsandboxedAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env["GITGOBLIN_UNSAFE_NO_SANDBOX"] === "1";
+}

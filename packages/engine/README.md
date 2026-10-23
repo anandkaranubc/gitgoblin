@@ -27,7 +27,7 @@ at a local checkout) stays there until you remove it.
 
 Requirements: Node 24, git, a Claude Code login or `ANTHROPIC_API_KEY` (the Agent SDK uses either),
 and `gh auth login` for publishing. The agent's bash runs in the Agent SDK sandbox with no network;
-pass `--no-sandbox` only on platforms without one. The repository's own install and check commands
+pass `--no-sandbox` (together with `GITGOBLIN_UNSAFE_NO_SANDBOX=1`) only on platforms without one. The repository's own install and check commands
 run on your machine with a credential-free environment and, by default, inside an OS sandbox
 (`sandbox-exec` on macOS, `bwrap` on Linux when installed): writes limited to the checkout and tool
 caches, credential files hidden, network only during install. Python projects get a virtualenv
