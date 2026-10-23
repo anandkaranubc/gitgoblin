@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, selectOpportunity } from "../src/contribute.ts";
+import { describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "../src/contribute.ts";
 import { sampleOpportunity, sampleReport } from "./fixtures.ts";
 
 const plain = { color: false };
@@ -166,5 +166,27 @@ describe("describeEnvironment", () => {
     expect(text).toContain("Failing before any change: test, lint.");
     expect(text).toContain("only catch new failures");
     expect(text).not.toContain("install failed");
+  });
+});
+
+describe("when intel doubts a finding", () => {
+  const doubtful = () =>
+    sampleOpportunity({
+      id: "opp-dddd4444",
+      title: "Fix #511: Unreachable code in before_log reached",
+      factors: [{ name: "confidence", score: 0.36, reason: "inferred from the issue text alone; code the issue quotes has changed since it was filed" }],
+      risks: ["Code quoted in the issue was in tenacity/before.py when it was filed and is gone at HEAD; it may already be fixed.", "No maintainer has confirmed the issue."],
+    });
+  const confident = (id: string) => sampleOpportunity({ id, factors: [{ name: "confidence", score: 0.6, reason: "inferred from the issue text alone" }], risks: ["No maintainer has confirmed the issue; ask before investing heavily."] });
+
+  it("shows its main risk in the list, and only for findings intel is unsure of", () => {
+    const text = formatOpportunities(sampleReport([confident("opp-aaaa0001"), doubtful()]), plain);
+    expect(text).toContain("    ? Code quoted in the issue was in tenacity/before.py when it was filed and is gone at HEAD; it may already be fixed.");
+    expect(text).not.toContain("No maintainer has confirmed");
+  });
+
+  it("is not the default choice when a finding intel trusts is available", () => {
+    expect(recommendedRank(sampleReport([doubtful(), confident("opp-aaaa0001")]))).toBe(2);
+    expect(recommendedRank(sampleReport([doubtful()]))).toBe(1);
   });
 });

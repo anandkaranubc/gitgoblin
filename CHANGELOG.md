@@ -17,14 +17,29 @@ The first release of the `gitgoblin` command.
   contributors, its install and test commands, its conventions) and lists contribution
   opportunities, each with evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo
   repositories (Codeberg among them), and gives any other git host a clone-only analysis.
+- `analyze` checks its own findings: an issue whose quoted code is gone from the default branch, or
+  that a later commit cites, is marked as possibly fixed; a dependency update an open pull request
+  already makes is skipped; code that only quotes a pattern (rule tables, test fixtures) and
+  generated files are not reported. A missing repository gets a plain "not found" message.
+- `analyze --llm` asks Claude for a second opinion on issue triage. It is off by default, costs
+  money, and needs an Anthropic API key; the model can demote or rescue an issue but never
+  overrides facts such as a merged pull request.
+- Analysis treats repository content as untrusted: reads never follow symlinks out of the clone,
+  and link checks only contact public addresses on standard ports.
 - `contribute` (experimental) has an AI agent investigate, plan, implement and verify one
   opportunity in a local clone, gets an independent review, and prepares a pull request. It asks
   before running the agent, before implementing the plan, and before publishing; nothing is pushed
   or posted without that last yes. `runs`, `show` and `publish` come back to prepared changes later.
+- When choosing what to work on, `contribute` marks opportunities the engine would refuse (`!`) and
+  those intel doubts (`?`, for example an issue whose quoted code is gone, so it may already be
+  fixed), and pressing Enter skips both.
 - The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
   `bwrap` on Linux when installed).
 - Works without configuration. A GitHub token, or a `gh` login, raises rate limits and adds
   starter-issue data.
+- Errors say what to do next: an unreachable network names the host and the cause, a TLS
+  certificate failure points at `NODE_EXTRA_CA_CERTS`, and a repository that does not exist is
+  reported as not found rather than as an HTTP status.
 
 Needs Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the
 CLI (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude

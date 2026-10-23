@@ -44,3 +44,43 @@ describe("greetings", () => {
     expect(problemStatement("Highlighting breaks on long lines.")).toBe("Highlighting breaks on long lines.");
   });
 });
+
+describe("hostile and tricky issue bodies", () => {
+  const timed = (fn: () => unknown) => { const t = performance.now(); fn(); return performance.now() - t; };
+
+  it("handles 64 KB adversarial bodies in linear time", () => {
+    const bodies = [
+      `# x${" ".repeat(65_000)}y`,
+      "<!--".repeat(16_000),
+      "<".repeat(65_000),
+      "```\n".repeat(16_000),
+      "![".repeat(32_000),
+      `${"\n".repeat(30_000)}# a`,
+    ];
+    for (const body of bodies) {
+      const ms = timed(() => { issueBody(body); problemStatement(body); plainText(body); });
+      expect(ms, `${body.slice(0, 12)}...`).toBeLessThan(500);
+    }
+  });
+
+  it("does not read comment lines inside code blocks as headings or boilerplate", () => {
+    const body = "### Describe the bug\n\nCalling run() after init fails.\n\n```python\n# This is the problem line\n# I have to call init first\nimport foo\nfoo.run()\n```\n";
+    expect(problemStatement(body).startsWith("Calling run() after init fails.")).toBe(true);
+    expect(issueBody(body)).toContain("# I have to call init first\nimport foo\nfoo.run()\n```");
+  });
+
+  it("keeps real sections that share a word with template boilerplate", () => {
+    const body = "## Validation errors are not shown\n\nWhen a form field is invalid, no message appears under it, so users cannot tell what to fix. This regressed in 4.2.\n";
+    expect(issueBody(body)).toContain("no message appears under it");
+    expect(problemStatement(body).startsWith("When a form field is invalid")).toBe(true);
+  });
+
+  it("drops template comments that span headings, keeps headings like 'Using F#', and caps cleanly", () => {
+    const body = "<!--\n### Instructions\nPlease describe\n-->\n### Using F#\n\nThe F# compiler crashes.\n";
+    expect(issueBody(body)).toBe("### Using F#\n\nThe F# compiler crashes.");
+    const fenced = issueBody(`### Describe the bug\n\n\`\`\`\n${"a".repeat(30_000)}\n\`\`\`\n`);
+    expect(fenced.endsWith("```\n\n[issue text truncated]")).toBe(true);
+    const emoji = issueBody(`### Describe the bug\n\n${"😀".repeat(15_000)}`);
+    expect(emoji).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  });
+});
