@@ -36,6 +36,12 @@ The first release of the `gitgoblin` command.
   fixed), and pressing Enter skips both.
 - The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
   `bwrap` on Linux when installed).
+- `--check-isolation strict` is the setting for repositories you do not trust: your home directory
+  is hidden from the repository's commands except toolchains and caches, and on macOS the install
+  can reach package registries only; hosts it tried and was refused are listed in the run report.
+- Prepared pull requests are written for the maintainers who will read them: the title describes
+  the fix, the summary says what changed and why, checks that already failed before the change are
+  marked as such, and notes about gitgoblin's own environment stay in your run report.
 - Works without configuration. A GitHub token, or a `gh` login, raises rate limits and adds
   starter-issue data.
 - Errors say what to do next: an unreachable network names the host and the cause, a TLS
@@ -48,7 +54,22 @@ Code login. Each run costs money, capped by `--max-cost`. Known limits: `discove
 `publish` work with GitHub only; opportunity scores are still being calibrated; `contribute` has been
 tested on a small number of real repositories.
 
+## @gitgoblin/mcp 0.1.5 - 2026-10-23
+
+Replaces the withdrawn 0.1.4.
+
+- Analysis parses issue text in linear time; 0.1.4 could stall for hours on a crafted issue body.
+- Each analysis runs in its own worker thread and is stopped after five minutes or as soon as the
+  client cancels the request, so a repository that makes analysis slow can no longer freeze the
+  other tools.
+- Everything 0.1.4 added stays: `analyze_repository` and `get_opportunity` read GitLab and Codeberg
+  repositories, and the bundle tool is pinned in the lockfile.
+- The bundle is back to about 2 MB: analysis now loads the Anthropic SDK only for its optional model
+  review, which the server never turns on, so the SDK is no longer included.
+
 ## @gitgoblin/mcp 0.1.4 - 2026-10-23
+
+**Do not install 0.1.4.** Its analysis includes a regular expression that can take minutes or hours on a crafted issue body, freezing `analyze_repository` for any repository with such an issue. Use 0.1.5.
 
 - `analyze_repository` and `get_opportunity` read GitLab and Codeberg repositories again, now that
   analysis reads those forges through their own public APIs. Discovery and `explain_repository` still

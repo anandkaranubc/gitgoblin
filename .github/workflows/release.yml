@@ -108,6 +108,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run docs:check
+      - name: No high-severity advisories in runtime dependencies
+        # Runtime dependencies of the workspace packages end up inside the published bundles. Build-only
+        # tools are left out on purpose; docs/releasing.md lists their known advisories.
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Pack
         id: pack
