@@ -63,4 +63,12 @@ describe.skipIf(!enabled)("gitgoblin-mcp over stdio (live)", () => {
       expect(textOf(briefing)).toContain("How to work on the project:");
     }
   }, 300_000);
+
+  it("analyzes a Codeberg repository through Forgejo's public API", async () => {
+    const analyzed = await client.callTool({ name: "analyze_repository", arguments: { repository: "https://codeberg.org/dnkl/foot", max_opportunities: 3 } }, { timeout: 300_000 });
+    expect(analyzed.isError, textOf(analyzed)).toBeFalsy();
+    const report = analyzed.structuredContent as { repository: string; url: string };
+    expect(report.repository).toBe("dnkl/foot");
+    expect(report.url).toBe("https://codeberg.org/dnkl/foot");
+  }, 360_000);
 });
