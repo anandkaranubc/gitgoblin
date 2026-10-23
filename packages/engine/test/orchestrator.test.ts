@@ -370,6 +370,47 @@ describe("runContribution", () => {
     expect(readFileSync(path.join(result.runDir, "events.jsonl"), "utf8")).toMatch(/"phase":"install","type":"end","exitCode":1/);
   });
 
+  it("escalates before spending on the model when the install failed and the checks cannot run", async () => {
+    const repo = await createFixtureRepo();
+    const task = { ...fixtureTask(repo), commands: { install: "echo cannot create env dir 1>&2; exit 1", test: "node -e \"process.exit(2)\"" } };
+    const calls: PhaseSpec<unknown>[] = [];
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath, calls) });
+    expect(result.status).toBe("escalated");
+    expect(result.reason).toMatch(/install failed \(exit 1\)/);
+    expect(result.reason).toMatch(/cannot run/);
+    expect(result.questions.join(" ")).toContain("install-output.txt");
+    expect(calls).toHaveLength(0);
+    expect(result.costUsd).toBe(0);
+  });
+
+  it("continues after a failed install when the baseline checks pass anyway", async () => {
+    const repo = await createFixtureRepo();
+    const task = { ...fixtureTask(repo), commands: { install: "exit 1", test: "npm test" } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(result.status).toBe("awaiting_approval");
+  });
+
+  it("tells the plan approver how the install and baseline went", async () => {
+    const repo = await createFixtureRepo();
+    let seen: unknown;
+    const result = await run(happyPath, [], {
+      approvePlan: async (_plan: unknown, context: unknown) => {
+        seen = context;
+        return true;
+      },
+    })(repo, workdir());
+    expect(result.status).toBe("awaiting_approval");
+    expect(seen).toMatchObject({ baseline: [expect.objectContaining({ name: "test", status: "pass" })] });
+    expect((seen as { install?: unknown }).install).toBeUndefined();
+  });
+
+  it("still accepts a one-argument plan approver", async () => {
+    const repo = await createFixtureRepo();
+    const approvePlan = async (plan: { goal: string }) => plan.goal.length > 0;
+    const result = await run(happyPath, [], { approvePlan })(repo, workdir());
+    expect(result.status).toBe("awaiting_approval");
+  });
+
   it("reports a failed phase instead of throwing", async () => {
     const repo = await createFixtureRepo();
     const result = await run({ orient: () => ({ not: "an investigation" }) })(repo, workdir());
