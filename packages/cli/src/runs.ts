@@ -29,6 +29,8 @@ export interface InstallRecord {
   timedOut: boolean;
   logPath: string;
   output: string | undefined;
+  /** Hosts the registry-only install proxy refused. */
+  refused: string[];
 }
 
 export interface RunFiles {
@@ -87,7 +89,7 @@ export function readRun(workdir: string, runId: string): RunFiles | undefined {
 
 /** Reads the install step from a run directory; undefined when the run never got to an install command. */
 export function readInstall(dir: string): InstallRecord | undefined {
-  let end: { exitCode?: unknown; timedOut?: unknown } | undefined;
+  let end: { exitCode?: unknown; timedOut?: unknown; refused?: unknown } | undefined;
   for (const line of (readText(join(dir, "events.jsonl")) ?? "").split("\n")) {
     if (!line.trim()) continue;
     try {
@@ -99,7 +101,8 @@ export function readInstall(dir: string): InstallRecord | undefined {
   }
   if (!end) return undefined;
   const logPath = join(dir, "install-output.txt");
-  return { exitCode: typeof end.exitCode === "number" ? end.exitCode : null, timedOut: end.timedOut === true, logPath, output: readText(logPath) };
+  const refused = Array.isArray(end.refused) ? end.refused.filter((h): h is string => typeof h === "string") : [];
+  return { exitCode: typeof end.exitCode === "number" ? end.exitCode : null, timedOut: end.timedOut === true, logPath, output: readText(logPath), refused };
 }
 
 /** For a failed install: what happened, then the last lines of its log, which usually name the cause. */
@@ -111,7 +114,13 @@ export function installSummary(install: InstallRecord, lines = 12): string[] | u
     .filter((line) => line.trim() !== "")
     .slice(-lines)
     .map((line) => `  ${line}`);
-  return [`The repository's install ${what}. End of ${install.logPath}:`, ...tail];
+  const summary = [`The repository's install ${what}. End of ${install.logPath}:`, ...tail];
+  if (install.refused.length > 0) {
+    const hosts = install.refused.map(plain);
+    const named = hosts.length === 1 ? hosts[0] : `${hosts.slice(0, -1).join(", ")} and ${hosts.at(-1)}`;
+    summary.push(`The install tried ${named}, which are not package registries. If you trust them, run again with --install-network open.`);
+  }
+  return summary;
 }
 
 /** Every run with a result, newest first. Run ids start with a timestamp, so they sort by time. */
