@@ -43,6 +43,9 @@ The first release of the `gitgoblin` command.
 - Prepared pull requests are written for the maintainers who will read them: the title describes
   the fix, the summary says what changed and why, checks that already failed before the change are
   marked as such, and notes about gitgoblin's own environment stay in your run report.
+- `publish` can be run again after a partial failure: if a pull request for the branch is already
+  open (the push worked but the answer to creating it was lost), it is found and returned instead of
+  failing.
 - Works without configuration. A GitHub token, or a `gh` login, raises rate limits and adds
   starter-issue data.
 - Errors say what to do next: an unreachable network names the host and the cause, a TLS
