@@ -105,6 +105,20 @@ ${PR_LITE_FIELDS}
 ${ACTOR}
 ${COMMENT_META}`;
 
+/** Recently closed issues with full fields and the maintainers' close reason, for backtesting the classifier. */
+export const CLOSED_ISSUES_FULL_QUERY = /* GraphQL */ `
+query ClosedIssuesFull($owner: String!, $name: String!, $first: Int!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    issues(first: $first, after: $after, states: CLOSED, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      pageInfo { endCursor hasNextPage }
+      nodes { ...IssueFields stateReason }
+    }
+  }
+}
+${ISSUE_FIELDS}
+${ACTOR}
+${COMMENT_META}`;
+
 export interface SampleSizes {
   openIssues: number;
   closedIssues: number;

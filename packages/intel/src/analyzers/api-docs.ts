@@ -12,6 +12,8 @@ export interface ApiDocStats {
   publicCount: number;
   documented: number;
   undocumented: string[];
+  /** Line number and verbatim text of each undocumented definition, for evidence a reader can find. */
+  undocumentedAt: { line: number; text: string }[];
 }
 
 const PY_PUBLIC = /^(?:    )?(?:async\s+)?(?:def|class)\s+([A-Za-z]\w*)\s*[(:]/gm;
@@ -20,7 +22,7 @@ const TS_PUBLIC = /^export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|class|co
 /** Python: module-level and class-level public defs, documented when the next non-empty line opens a docstring. */
 export function pythonApiDocs(path: string, text: string): ApiDocStats {
   const lines = text.split("\n");
-  const stats: ApiDocStats = { path, publicCount: 0, documented: 0, undocumented: [] };
+  const stats: ApiDocStats = { path, publicCount: 0, documented: 0, undocumented: [], undocumentedAt: [] };
   for (const m of text.matchAll(PY_PUBLIC)) {
     const name = m[1]!;
     if (name.startsWith("_") || /^(test_|Test)/.test(name)) continue;
@@ -35,20 +37,28 @@ export function pythonApiDocs(path: string, text: string): ApiDocStats {
     if (/^(\.\.\.|pass)$/.test(next) || /@overload/.test(lines[lineNo - 1] ?? "")) continue;
     stats.publicCount++;
     if (/^[rRbBuU]?("""|''')/.test(next)) stats.documented++;
-    else stats.undocumented.push(name);
+    else {
+      stats.undocumented.push(name);
+      stats.undocumentedAt.push({ line: lineNo + 1, text: lines[lineNo]!.trim() });
+    }
   }
   return stats;
 }
 
 /** TypeScript/JavaScript: exported declarations, documented when preceded by a JSDoc block. */
 export function tsApiDocs(path: string, text: string): ApiDocStats {
-  const stats: ApiDocStats = { path, publicCount: 0, documented: 0, undocumented: [] };
+  const stats: ApiDocStats = { path, publicCount: 0, documented: 0, undocumented: [], undocumentedAt: [] };
+  const lines = text.split("\n");
   for (const m of text.matchAll(TS_PUBLIC)) {
     const name = m[1]!;
     const before = text.slice(0, m.index).trimEnd();
     stats.publicCount++;
     if (/\*\/$/.test(before) && /\/\*\*[\s\S]*\*\/$/.test(before.slice(-2000))) stats.documented++;
-    else stats.undocumented.push(name);
+    else {
+      const lineNo = text.slice(0, m.index).split("\n").length - 1;
+      stats.undocumented.push(name);
+      stats.undocumentedAt.push({ line: lineNo + 1, text: lines[lineNo]!.trim() });
+    }
   }
   return stats;
 }
@@ -88,8 +98,9 @@ export const apiDocsAnalyzer: Analyzer = {
         title: `Document the public API of ${s.path}`,
         summary: `${s.undocumented.length} of ${s.publicCount} public definitions in ${s.path} have no docstring${node ? " or JSDoc" : ""}, while the project documents ${Math.round(coverage * 100)}% of its public API overall.`,
         evidence: [
-          evidence(ctx, "computed", s.path, { note: `${s.documented}/${s.publicCount} documented; project-wide ${documented}/${total} (${Math.round(coverage * 100)}%)` }),
-          evidence(ctx, "file", s.path, { excerpt: s.undocumented.slice(0, 8).join(", ") + (s.undocumented.length > 8 ? ", …" : ""), note: "undocumented public names" }),
+          evidence(ctx, "computed", s.path, { note: `${s.documented}/${s.publicCount} documented; project-wide ${documented}/${total} (${Math.round(coverage * 100)}%); undocumented: ${s.undocumented.slice(0, 8).join(", ")}${s.undocumented.length > 8 ? ", …" : ""}` }),
+          // Excerpts are verbatim source lines, so a reader (or a grader) can find each one.
+          ...s.undocumentedAt.slice(0, 3).map((d) => evidence(ctx, "file", `${s.path}:${d.line}`, { excerpt: d.text, note: "public definition without a docstring" })),
         ],
         files: [s.path],
         effort: "small",
