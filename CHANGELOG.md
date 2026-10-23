@@ -53,7 +53,22 @@ Code login. Each run costs money, capped by `--max-cost`. Known limits: `discove
 `publish` work with GitHub only; opportunity scores are still being calibrated; `contribute` has been
 tested on a small number of real repositories.
 
+## @gitgoblin/mcp 0.1.5 - 2026-10-23
+
+Replaces the withdrawn 0.1.4.
+
+- Analysis parses issue text in linear time; 0.1.4 could stall for hours on a crafted issue body.
+- Each analysis runs in its own worker thread and is stopped after five minutes or as soon as the
+  client cancels the request, so a repository that makes analysis slow can no longer freeze the
+  other tools.
+- Everything 0.1.4 added stays: `analyze_repository` and `get_opportunity` read GitLab and Codeberg
+  repositories, and the bundle tool is pinned in the lockfile.
+- The bundle is back to about 2 MB: analysis now loads the Anthropic SDK only for its optional model
+  review, which the server never turns on, so the SDK is no longer included.
+
 ## @gitgoblin/mcp 0.1.4 - 2026-10-23
+
+**Do not install 0.1.4.** Its analysis includes a regular expression that can take minutes or hours on a crafted issue body, freezing `analyze_repository` for any repository with such an issue. Use 0.1.5.
 
 - `analyze_repository` and `get_opportunity` read GitLab and Codeberg repositories again, now that
   analysis reads those forges through their own public APIs. Discovery and `explain_repository` still
