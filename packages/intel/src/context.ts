@@ -3,6 +3,7 @@ import type { FileInventory } from "./fs/scan.ts";
 import type { Commit, GitRepo } from "./git/repo.ts";
 import type { GitHubApi } from "./github/client.ts";
 import type { FailedJob, GitHubSamples, Release, RepoMeta, WorkflowRun } from "./github/types.ts";
+import type { LlmClient } from "./llm/client.ts";
 import type { Manifests } from "./manifests/index.ts";
 
 export interface AnalysisOptions {
@@ -23,6 +24,11 @@ export interface AnalysisOptions {
   log?: ((message: string) => void) | undefined;
   /** Override the fetch used for link checks and OSV. */
   fetchImpl?: typeof fetch | undefined;
+  /**
+   * Second opinion from a language model on issue triage. Off by default (it costs money).
+   * `true` uses Claude via the Anthropic SDK; pass a model name, or an LlmClient for tests.
+   */
+  llm?: boolean | { model?: string | undefined } | LlmClient | undefined;
 }
 
 export interface ResolvedOptions {
@@ -36,6 +42,7 @@ export interface ResolvedOptions {
   github: GitHubApi | undefined;
   hints: AnalysisHints | undefined;
   fetchImpl: typeof fetch | undefined;
+  llm: AnalysisOptions["llm"];
 }
 
 export function resolveOptions(options: AnalysisOptions, cacheDir: string): ResolvedOptions {
@@ -50,6 +57,7 @@ export function resolveOptions(options: AnalysisOptions, cacheDir: string): Reso
     github: options.github,
     hints: options.hints,
     fetchImpl: options.fetchImpl,
+    llm: options.llm,
   };
 }
 
@@ -111,6 +119,8 @@ export interface AnalysisContext {
   budget: BudgetTracker;
   options: ResolvedOptions;
   github: GitHubApi | undefined;
+  /** Present only when the caller opted in. */
+  llm: LlmClient | undefined;
   read(path: string, maxBytes?: number): Promise<string | undefined>;
   log(message: string): void;
 }
