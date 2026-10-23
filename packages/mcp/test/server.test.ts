@@ -232,6 +232,7 @@ describe("server", () => {
     expect(text).toContain("How to work on the project:");
     expect(text).toContain("git clone https://github.com/jd/tenacity.git");
     expect(text).toContain("Before acting:");
+    expect(text).toContain(`gitgoblin contribute jd/tenacity --opportunity ${first.id}`);
     const withIssue = fixtureReport.opportunities.find((o) => o.issue);
     if (withIssue) {
       const byIssue = await client.callTool({ name: "get_opportunity", arguments: { repository: "jd/tenacity", issue_number: withIssue.issue!.number } });
@@ -265,6 +266,6 @@ describe("package", () => {
     expect(pkg.bin["gitgoblin-mcp"]).toBe("./bin/gitgoblin-mcp.mjs");
     // The published package is one bundle: runtime dependencies would make `npx` slower for nothing.
     expect(pkg.dependencies).toBeUndefined();
-    expect(pkg.files).toContain("dist");
+    expect(pkg.files).toContain("dist/gitgoblin-mcp.mjs");
   });
 });
