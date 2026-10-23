@@ -22,6 +22,9 @@ The first release of the `gitgoblin` command.
   that a later commit cites, is marked as possibly fixed; a dependency update an open pull request
   already makes is skipped; code that only quotes a pattern (rule tables, test fixtures) and
   generated files are not reported. A missing repository gets a plain "not found" message.
+- The install command `analyze` reports installs what the project declares for development (its PEP 735
+  dependency groups or real extras, not an assumed `.[dev]`) and installs from a committed lockfile
+  without rewriting it (`npm ci`, `pnpm install --frozen-lockfile`, and the yarn and bun equivalents).
 - `analyze --llm` asks Claude for a second opinion on issue triage. It is off by default, costs
   money, and needs an Anthropic API key; the model can demote or rescue an issue but never
   overrides facts such as a merged pull request.
