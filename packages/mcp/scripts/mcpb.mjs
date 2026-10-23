@@ -9,7 +9,9 @@ const MCPB_VERSION = "2.1.2";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
 
-if (!existsSync(`${root}dist/gitgoblin-mcp.mjs`)) throw new Error("dist/gitgoblin-mcp.mjs is missing; run `npm run bundle` first");
+for (const file of ["dist/gitgoblin-mcp.mjs", "dist/THIRD_PARTY_NOTICES.md"]) {
+  if (!existsSync(`${root}${file}`)) throw new Error(`${file} is missing; run \`npm run bundle\` first`);
+}
 
 // The bundle has the same layout as the npm package, so the launcher behaves identically in both.
 const stage = `${root}dist/mcpb`;
@@ -20,6 +22,7 @@ cpSync(`${root}bin/gitgoblin-mcp.mjs`, `${stage}/bin/gitgoblin-mcp.mjs`);
 cpSync(`${root}dist/gitgoblin-mcp.mjs`, `${stage}/dist/gitgoblin-mcp.mjs`);
 cpSync(`${root}README.md`, `${stage}/README.md`);
 cpSync(`${root}../../LICENSE`, `${stage}/LICENSE`);
+cpSync(`${root}dist/THIRD_PARTY_NOTICES.md`, `${stage}/THIRD_PARTY_NOTICES.md`);
 cpSync(`${root}../../brand/favicon/icon-512.png`, `${stage}/icon.png`);
 writeFileSync(`${stage}/package.json`, `${JSON.stringify({ name: pkg.name, version: pkg.version, private: true, type: "module" }, null, 2)}\n`);
 

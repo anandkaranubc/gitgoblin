@@ -1,6 +1,6 @@
 {
   "name": "@gitgoblin/mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "gitgoblin as an MCP server: discover open-source repositories worth your time, understand them, and find evidence-backed contribution opportunities from Claude Code, Codex, Cursor, Gemini CLI, VS Code and any other MCP client",
   "mcpName": "io.github.anandkaranubc/gitgoblin",
   "keywords": [
@@ -35,7 +35,9 @@
   "files": [
     "bin",
     "dist/gitgoblin-mcp.mjs",
-    "README.md"
+    "dist/THIRD_PARTY_NOTICES.md",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
