@@ -48,7 +48,7 @@ const REJECT = /\b(not a bug|not planned|won'?t fix|wontfix|out of scope|by desi
 const CLAIM = /\b(?:i('|’)?ll|i will|i'?d like to|i would like to|can i|could i|may i|let me|i am going to|i'?m going to|i can|happy to|i want to|allow me to|i'?m|i am)\s+(?:also\s+|gladly\s+|try to\s+|start(?:ing)? to\s+)?(?:take|work|working|look|looking|pick|tackle|handle|fix|fixing|implement|implementing|submit|open|send|give|try)\b[^.!?\n]{0,40}?\b(?:this|it|that|one|a pr|a pull request|a fix|a patch|the issue|the bug|on it|on this|a shot|a go)\b|\bassign (?:this |it )?to me\b|\bplease assign\b|\bi'?m on it\b|\bworking on (?:a |the )?(?:fix|pr|patch|this)\b/i;
 const MAINTAINER_HANDLING = /\b(i('|’)?ll|i will|i'?m|i am|we'?ll|we are|we're|i have a|i've got a|working on (a |the )?(fix|patch|pr)|fix (is )?(incoming|coming|in progress)|pr (incoming|coming)|fixed in|should be fixed (by|in) #|on my list)\b/i;
 const REPRO = /steps to reproduce|reproduc|expected (behaviou?r|result|output)|actual (behaviou?r|result|output)|minimal (example|repro|reproduction)|how to reproduce|to reproduce/i;
-const TRACE = /traceback \(most recent|^\s+at .+\(.+:\d+:\d+\)|panic:|goroutine \d+|exception in thread|segmentation fault|^\w*(Error|Exception)(:| )/im;
+const TRACE = /traceback \(most recent|^[ \t]+at [^\n()]{1,300}\([^\n()]{1,300}:\d+:\d+\)|panic:|goroutine \d+|exception in thread|segmentation fault|^\w{0,80}(Error|Exception)(:| )/im;
 const PATH_TOKEN = /(?<![\w/])((?:[\w.-]+\/)+[\w.-]+\.(?:py|js|jsx|ts|tsx|go|rs|rb|java|kt|php|cs|c|h|cpp|md|rst|yml|yaml|toml|json|html|css|scss|vue|svelte)|[\w-]+\.(?:py|go|rs|rb|java|md))\b/g;
 
 /** GitHub `/pull/`, GitLab `/-/merge_requests/` and Gitea `/pulls/` URLs under this repository. */
