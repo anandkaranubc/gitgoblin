@@ -31,7 +31,12 @@ That installs the server from the [latest release](https://github.com/anandkaran
 
 ## Run the tests
 
+To work on gitgoblin itself, run it from a clone:
+
 ```sh
+git clone https://github.com/anandkaranubc/gitgoblin.git
+cd gitgoblin
+npm install
 npm test
 npm run typecheck
 ```
