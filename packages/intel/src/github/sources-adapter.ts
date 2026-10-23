@@ -26,7 +26,11 @@ export function adaptSources(sources: SourcesLike): SharedGitHubApi {
   const translate = (error: unknown, path: string): never => {
     const e = error as { name?: string; status?: number; message?: string };
     // The shared client's RateLimitError (REST 403/429, and GraphQL RATE_LIMIT payloads) becomes intel's, so callers wait or stop.
-    if (e?.name === "RateLimitError") throw new RateLimitError(path, stats.remaining ?? 0);
+    if (e?.name === "RateLimitError") {
+      // The quota numbers come from the last response's headers; GitHub refusing anyway means a burst (secondary) limit.
+      const resetAt = (error as { resetAt?: unknown }).resetAt;
+      throw new RateLimitError(path, stats.remaining ?? 0, { refused: true, resetAt: resetAt instanceof Date ? resetAt : undefined });
+    }
     if (typeof e?.status === "number" && (e.name === "HttpError" || /Error$/.test(e.name ?? ""))) throw new GitHubError(e.message ?? `HTTP ${e.status}`, e.status, path);
     if (e?.name === "GraphQLError" || e?.name === "MissingTokenError") throw new GitHubError(e.message ?? "GraphQL failed", 200, path);
     throw error;
