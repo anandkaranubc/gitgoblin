@@ -61,6 +61,9 @@ continue, retry, escalate (needs a human) or stop:
   `maxImplementRounds`; a blocker that survives a revise round -> escalate. review `reject` ->
   escalate. The commit must equal the reviewed diff, or the run escalates.
 - budget (USD, wall clock) exceeded at any gate -> stop.
+- a phase interrupted by a transient failure (`error_during_execution`: connection or server
+  error mid-run) is resumed once in the same session; a second failure fails the run. Out of turns
+  or budget gets one tool-free wrap-up turn so the report says where things stand.
 
 Escalations and stops still write a full report so a human can pick up where the engine left off.
 

@@ -111,6 +111,18 @@ describe("prepareWorkspace", () => {
     await expect(prepareWorkspace(local, mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env)).rejects.toThrow(/no commits/);
   });
 
+  it("clones shallowly when asked, keeping the base commit intact", async () => {
+    const repo = await sampleRepo();
+    writeFileSync(path.join(repo, "a.txt"), "two\n");
+    await git(["commit", "-q", "-am", "second"], repo, env);
+    const task = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", cloneUrl: `file://${repo}` }, title: "Tweak" });
+    const ws = await prepareWorkspace(task, mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env, { cloneDepth: 1 });
+    expect(ws.baseSha).toBe(await git(["rev-parse", "HEAD"], repo, env));
+    expect(await git(["rev-list", "--count", "HEAD"], ws.path, env)).toBe("1");
+    writeFileSync(path.join(ws.path, "a.txt"), "three\n");
+    expect(await diffPatch(ws.path, ws.baseSha, env)).toContain("+three");
+  });
+
   it("clones when only a URL is known", async () => {
     const repo = await sampleRepo();
     const runDir = mkdtempSync(path.join(os.tmpdir(), "gg-run-"));

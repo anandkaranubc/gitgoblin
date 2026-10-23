@@ -88,6 +88,8 @@ export interface RunOptions {
   approvePlan?: (plan: ChangePlan) => Promise<boolean>;
   /** Largest patch the engine will review and commit; bigger ones escalate. Default 32 MiB. */
   maxPatchBytes?: number;
+  /** Shallow clone depth for very large repositories; omitted means full history. */
+  cloneDepth?: number;
   /** Replaces the Claude Agent SDK runner; tests use a scripted one. */
   runnerFactory?: (ctx: RunnerContext) => AgentRunner;
 }
@@ -262,7 +264,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     // Workspace, dependencies, guidance, baseline. Install and checks run on the host (setup phase),
     // with a credential-free environment; the agent's own commands run in the sandbox.
     reporter.phase("workspace", task.repo.localPath ? `worktree from ${task.repo.localPath}` : `clone ${task.repo.cloneUrl}`);
-    workspace = await prepareWorkspace(task, journal.dir, env);
+    workspace = await prepareWorkspace(task, journal.dir, env, options.cloneDepth ? { cloneDepth: options.cloneDepth } : {});
     journal.artifact("workspace", workspace);
     if (workspace.startNote) reporter.warn(workspace.startNote);
     if (options.isolation === "none" && workspace.source === "worktree") {

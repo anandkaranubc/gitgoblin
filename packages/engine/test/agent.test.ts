@@ -18,3 +18,81 @@ describe("SessionCostTracker", () => {
     expect(costs.delta("s1", "s1", 1)).toBe(0);
   });
 });
+
+import { z } from "zod";
+import { createSdkRunner, type PhaseSpec } from "../src/agent.ts";
+
+type Msg = Record<string, unknown>;
+
+/** A scripted stand-in for the SDK's query(): each call yields the next scripted message list and records its options. */
+function scriptedQuery(scripts: Msg[][]) {
+  const calls: { prompt: unknown; options: Record<string, unknown> }[] = [];
+  const query = (args: { prompt: unknown; options: Record<string, unknown> }) => {
+    calls.push(args);
+    const script = scripts[calls.length - 1] ?? [];
+    return (async function* () {
+      for (const m of script) yield m;
+    })();
+  };
+  return { query: query as never, calls };
+}
+
+const Output = z.object({ done: z.boolean() });
+const spec: PhaseSpec<{ done: boolean }> = { name: "orient", systemPrompt: "s", prompt: "p", schema: Output, profile: "build", maxTurns: 5, maxBudgetUsd: 1 };
+const init = (id: string): Msg => ({ type: "system", subtype: "init", session_id: id });
+const success = (id: string, total: number, turns: number): Msg => ({ type: "result", subtype: "success", session_id: id, total_cost_usd: total, num_turns: turns, structured_output: { done: true }, result: "ok", errors: [] });
+const failure = (id: string, subtype: string, errors: string[], total = 0.1): Msg => ({ type: "result", subtype, session_id: id, total_cost_usd: total, num_turns: 2, errors });
+
+describe("createSdkRunner transient failures", () => {
+  it("resumes the session once after an error during execution", async () => {
+    const { query, calls } = scriptedQuery([
+      [init("s1"), failure("s1", "error_during_execution", ["fetch failed: ECONNRESET"])],
+      [init("s1"), success("s1", 0.3, 4)],
+    ]);
+    const runner = createSdkRunner({ workspace: "/ws", task: { kind: "issue" }, isolation: "none", env: {}, query });
+    const result = await runner.run(spec);
+    expect(result.ok).toBe(true);
+    expect(result.output).toEqual({ done: true });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.options["resume"]).toBe("s1");
+    expect(String(calls[1]?.prompt)).toMatch(/interrupted/i);
+    expect(result.costUsd).toBeCloseTo(0.3, 5);
+    expect(result.turns).toBe(6);
+    expect(result.errors).toContain("error_during_execution");
+  });
+
+  it("gives up after the second failure instead of looping", async () => {
+    const { query, calls } = scriptedQuery([
+      [init("s1"), failure("s1", "error_during_execution", ["boom"])],
+      [init("s1"), failure("s1", "error_during_execution", ["boom again"])],
+    ]);
+    const runner = createSdkRunner({ workspace: "/ws", task: { kind: "issue" }, isolation: "none", env: {}, query });
+    const result = await runner.run(spec);
+    expect(result.ok).toBe(false);
+    expect(calls).toHaveLength(2);
+    expect(result.errors).toEqual(expect.arrayContaining(["boom", "boom again"]));
+  });
+
+  it("does not retry when the session never started or the failure is not transient", async () => {
+    const noSession = scriptedQuery([[failure("", "error_during_execution", ["invalid api key"])]]);
+    const r1 = await createSdkRunner({ workspace: "/ws", task: { kind: "issue" }, isolation: "none", env: {}, query: noSession.query }).run({ ...spec });
+    expect(r1.ok).toBe(false);
+    expect(noSession.calls).toHaveLength(1);
+
+    const refused = scriptedQuery([[init("s2"), failure("s2", "error_max_structured_output_retries", ["could not produce output"])]]);
+    const r2 = await createSdkRunner({ workspace: "/ws", task: { kind: "issue" }, isolation: "none", env: {}, query: refused.query }).run({ ...spec });
+    expect(r2.ok).toBe(false);
+    expect(refused.calls).toHaveLength(1);
+  });
+
+  it("still asks an exhausted session to wrap up, with no tools", async () => {
+    const { query, calls } = scriptedQuery([
+      [init("s3"), failure("s3", "error_max_turns", [], 0.5)],
+      [init("s3"), success("s3", 0.6, 1)],
+    ]);
+    const result = await createSdkRunner({ workspace: "/ws", task: { kind: "issue" }, isolation: "none", env: {}, query }).run(spec);
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.options["allowedTools"]).toEqual([]);
+    expect(result.costUsd).toBeCloseTo(0.6, 5);
+  });
+});
