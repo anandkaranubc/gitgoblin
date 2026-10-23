@@ -6,7 +6,7 @@ gitgoblin as a [Model Context Protocol](https://modelcontextprotocol.io) server.
 claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
 ```
 
-[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The server is listed in the official MCP Registry as `io.github.anandkaranubc/gitgoblin`. The package is not on npm yet; until it is, use the tarball from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.0) in place of `@gitgoblin/mcp` (`npx -y <tarball url>`), or run it from a clone with `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`. Claude Desktop users install the release's `gitgoblin.mcpb` directly.
+[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The server is listed in the official MCP Registry as `io.github.anandkaranubc/gitgoblin`. The package is not on npm yet; until it is, use the tarball from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.1) in place of `@gitgoblin/mcp` (`npx -y <tarball url>`), or run it from a clone with `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`. Claude Desktop users install the release's `gitgoblin.mcpb` directly.
 
 ## Tools
 
