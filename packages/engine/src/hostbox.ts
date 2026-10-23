@@ -101,7 +101,7 @@ export const CREDENTIAL_PATHS = [
 
 /** Tool caches under the home directory that package managers and compilers write to. */
 const CACHE_DIRS = [
-  ".npm", ".cache", ".pnpm-store", ".local/share/pnpm", ".yarn/berry/cache", ".yarn/cache", ".bun/install/cache", ".deno",
+  ".npm", ".cache", ".pnpm-store", ".pnpm-state", ".local/share/pnpm", "Library/pnpm", "Library/Caches/Yarn", ".yarn/berry/cache", ".yarn/cache", ".yarn", ".bun/install/cache", ".deno",
   ".cargo/registry", ".cargo/git", ".cargo/.package-cache", ".rustup/tmp", ".rustup/downloads", "go/pkg", ".m2/repository", ".gradle",
   ".local/share/uv", ".local/share/virtualenvs", ".gem", ".bundle/cache", ".nuget/packages", ".dotnet", ".composer/cache", ".mix", ".hex",
   ".julia", ".swiftpm", ".ivy2", ".sbt", "Library/Caches",
