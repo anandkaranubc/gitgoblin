@@ -17,7 +17,8 @@ end by saying what to type next.
 `contribute` is experimental: an AI agent drafts one change in a local clone, and it asks before
 running the agent, before implementing the plan, and before publishing anything. It needs the Claude
 Agent SDK next to the CLI (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`) and costs money
-per run. `runs`, `show` and `publish` come back to a prepared change later.
+per run. `runs`, `show` and `publish` come back to a prepared change later, and `clean` frees the
+disk a finished run's clone takes.
 
 More: [getting started](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/getting-started.md),
 [how gitgoblin behaves in other people's projects](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md),
