@@ -53,3 +53,21 @@ def test_d(): ...
     expect(findSkippedTests("a_test.go", go).map((f) => [f.line, f.reason])).toEqual([[5, "TODO: flaky on CI, see #12"]]);
   });
 });
+
+describe("perModuleShare", () => {
+  it("counts modules that have a test named after them, ignoring generic names, Go, Rust and headers", async () => {
+    const { buildTestIndex, perModuleShare } = await import("../src/analyzers/test-gaps.ts");
+    const index = buildTestIndex([{ path: "tests/test_sessions.py", text: "" }, { path: "tests/jq.test", text: "" }]);
+    const sources = ["src/pkg/sessions.py", "src/pkg/adapters.py", "src/pkg/utils.py", "src/pkg/cookies.py", "cmd/main.go", "src/lib.rs", "src/jv.h"].map((path) => ({ path }));
+    expect(perModuleShare(sources, index)).toEqual({ named: 1, eligible: 3 });
+  });
+});
+
+describe("untested-file judgement", () => {
+  it("does not claim a module is untested when its name has nothing distinctive to match", async () => {
+    const { buildTestIndex, looksUntested } = await import("../src/analyzers/test-gaps.ts");
+    const index = buildTestIndex([{ path: "tests/unit/type/set.tcl", text: "" }]);
+    expect(looksUntested("src/t_set.c", "int x;", index)).toBe(false);
+    expect(looksUntested("src/conncache.c", "int x;", index)).toBe(true);
+  });
+});

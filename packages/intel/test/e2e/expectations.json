@@ -1,0 +1,19 @@
+{
+  "_comment": "Facts checked by the live harness (GITGOBLIN_E2E=1). Levels are bands observed on 2026-10-22 and may drift as projects change; update deliberately, with a note.",
+  "repos": [
+    { "repo": "jd/tenacity", "nature": "library", "ecosystem": "python", "levels": ["open", "eager"], "testCommand": "pytest|tox" },
+    { "repo": "request/request", "levels": ["closed"], "opportunities": 0 },
+    { "repo": "sindresorhus/awesome", "nature": "awesome_list", "levels": ["selective", "open"], "excludeKinds": ["test_gap", "deprecation", "tech_debt"] },
+    { "repo": "BurntSushi/ripgrep", "nature": "cli", "ecosystem": "rust", "levels": ["selective"] },
+    { "repo": "junegunn/fzf", "nature": "cli", "ecosystem": "go", "levels": ["selective", "open"] },
+    { "repo": "psf/requests", "nature": "library", "ecosystem": "python", "levels": ["selective", "open"] },
+    { "repo": "expressjs/express", "nature": "framework", "ecosystem": "node", "levels": ["open", "eager"] },
+    { "repo": "google/gson", "nature": "library", "ecosystem": "java", "levels": ["open", "eager"] },
+    { "repo": "sinatra/sinatra", "nature": "library", "ecosystem": "ruby", "levels": ["open", "eager"] },
+    { "repo": "jqlang/jq", "nature": "cli", "ecosystem": "c_cpp", "levels": ["open", "eager"] },
+    { "repo": "vitejs/vite", "nature": "library", "ecosystem": "node", "levels": ["open", "eager"] },
+    { "repo": "django/django", "nature": "framework", "ecosystem": "python", "levels": ["open", "eager"] },
+    { "repo": "https://codeberg.org/dnkl/foot", "nature": "cli", "ecosystem": "c_cpp", "levels": ["open", "eager"] },
+    { "repo": "https://gitlab.com/libeigen/eigen", "nature": "library", "ecosystem": "c_cpp", "levels": ["selective", "open"] }
+  ]
+}
