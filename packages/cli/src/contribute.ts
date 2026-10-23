@@ -114,3 +114,26 @@ export function describeRun(result: RunResult): string[] {
   for (const question of result.questions) lines.push(`Question for you: ${plain(question)}`);
   return lines;
 }
+
+/**
+ * What the engine knows about the environment when it asks for plan approval: the install step and
+ * the baseline checks. Declared loosely here, the way the engine projects intel's types, so the CLI
+ * reads only the fields it shows and older engines that pass nothing still work.
+ */
+export interface PlanContextLike {
+  install?: { exitCode: number; logPath: string } | undefined;
+  baseline?: { name: string; status: string }[] | undefined;
+}
+
+/** A warning for the plan question when a change implemented now could not be verified properly. */
+export function describeEnvironment(context: PlanContextLike | undefined): string | undefined {
+  if (!context) return undefined;
+  const installFailed = context.install !== undefined && context.install.exitCode !== 0;
+  const failing = (context.baseline ?? []).filter((check) => check.status !== "pass").map((check) => plain(check.name));
+  if (!installFailed && failing.length === 0) return undefined;
+  const lines: string[] = [];
+  if (installFailed) lines.push(`Warning: the repository's install failed (exit ${context.install!.exitCode}); log: ${plain(context.install!.logPath)}.`);
+  if (failing.length > 0) lines.push(`Failing before any change: ${failing.join(", ")}.`);
+  lines.push(installFailed ? "A change implemented now cannot be verified against the project's own checks." : "Verification can only catch new failures, not these.");
+  return lines.join(" ");
+}

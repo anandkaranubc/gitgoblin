@@ -10,7 +10,7 @@ import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/i
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
 import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
-import { describeRun, engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "./contribute.ts";
+import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
 import { formatRuns, listRuns, readRun } from "./runs.ts";
@@ -436,7 +436,11 @@ export function buildProgram(runtime: Runtime): Command {
           limits: { maxCostUsd },
           ...(options.model ? { model: options.model } : {}),
           ...(options.effort ? { effort: options.effort } : {}),
-          approvePlan: async (plan) => confirm(runtime, `\n${formatPlan(plan)}\n\nImplement this plan?`),
+          // Newer engines pass what they know about the install and the baseline as a second argument.
+          approvePlan: async (plan, context?: PlanContextLike) => {
+            const warning = describeEnvironment(context);
+            return confirm(runtime, `\n${formatPlan(plan)}${warning ? `\n\n${warning}` : ""}\n\nImplement this plan?`);
+          },
           reporter: reporterFor(runtime),
         },
       );

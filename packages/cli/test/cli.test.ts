@@ -347,6 +347,23 @@ describe("contribute", () => {
     expect((siblings.calls[1]?.args[1] as RunOptions).limits).toEqual({ maxCostUsd: 3.5 });
   });
 
+  it("shows the install failure and red baseline checks at the plan question when the engine reports them", async () => {
+    const siblings = fakeSiblings();
+    const engine = siblings.modules["@gitgoblin/engine"] as { runContribution: (input: unknown, options: RunOptions) => Promise<RunResult> };
+    const original = engine.runContribution;
+    engine.runContribution = async (input, options) => {
+      const approve = options.approvePlan!;
+      options.approvePlan = (plan) => (approve as (p: ChangePlan, c?: unknown) => Promise<boolean>)(plan, { install: { exitCode: 1, logPath: join(siblings.workdir, "install-output.txt") }, baseline: [{ name: "test", status: "fail" }] });
+      return original(input, options);
+    };
+    const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(asked[1]).toContain("Plan: Thread --color through to the renderer");
+    expect(asked[1]).toContain("the repository's install failed (exit 1)");
+    expect(asked[1]).toContain("Failing before any change: test.");
+    expect(asked[1]).toMatch(/Implement this plan\? \[y\/N\] $/);
+  });
+
   it("shows the plan in plain words before asking to implement it", async () => {
     const siblings = fakeSiblings();
     const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
