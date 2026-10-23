@@ -40,6 +40,7 @@ export type HttpEvent =
   | { type: "retry"; url: string; attempt: number; delayMs: number; reason: string }
   | { type: "rate-limit-wait"; url: string; delayMs: number }
   | { type: "cache-discarded"; url: string; reason: string }
+  | { type: "cache-error"; url: string; operation: "get" | "set" | "delete"; error: string }
   | { type: "cache-fallback"; path: string; error: string };
 
 export interface HttpClientOptions {
@@ -132,7 +133,37 @@ export class HttpClient {
 
   /** Drops one cached response, for callers that learn after the fact that a 200 body was not an answer. */
   forget(method: string, url: string, body?: string): void {
-    this.cache.delete(cacheKey(method, url, body));
+    this.#cacheDelete(cacheKey(method, url, body), url);
+  }
+
+  /**
+   * The cache is an optimisation shared with other processes (the CLI and the MCP server use one
+   * SQLite file). A lock that outlasts the busy timeout, a full disk or a damaged file costs the cache
+   * entry and is reported; it never costs the request.
+   */
+  #cacheGet(key: string, url: string): CacheEntry | undefined {
+    try {
+      return this.cache.get(key);
+    } catch (error) {
+      this.#onEvent({ type: "cache-error", url, operation: "get", error: error instanceof Error ? error.message : String(error) });
+      return undefined;
+    }
+  }
+
+  #cacheSet(key: string, entry: CacheEntry, url: string): void {
+    try {
+      this.cache.set(key, entry);
+    } catch (error) {
+      this.#onEvent({ type: "cache-error", url, operation: "set", error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  #cacheDelete(key: string, url: string): void {
+    try {
+      this.cache.delete(key);
+    } catch (error) {
+      this.#onEvent({ type: "cache-error", url, operation: "delete", error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   /**
@@ -146,7 +177,7 @@ export class HttpClient {
     } catch (error) {
       if (!first.fromCache) throw error;
       this.#onEvent({ type: "cache-discarded", url, reason: error instanceof Error ? error.message : String(error) });
-      this.cache.delete(first.key);
+      this.#cacheDelete(first.key, url);
       const second = await this.#request(url, options, true);
       return JSON.parse(second.body) as T;
     }
@@ -160,7 +191,7 @@ export class HttpClient {
     const method = options.method ?? "GET";
     const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
     const key = cacheKey(method, url, options.body);
-    const cached = bypassCache ? undefined : this.cache.get(key);
+    const cached = bypassCache ? undefined : this.#cacheGet(key, url);
     const now = this.#now();
 
     if (cached && isFresh(cached, now)) {
@@ -262,25 +293,25 @@ export class HttpClient {
 
       if (response.status === 304 && cached) {
         this.#onEvent({ type: "revalidated", url });
-        this.cache.set(key, { ...cached, fetchedAt: now });
+        this.#cacheSet(key, { ...cached, fetchedAt: now }, url);
         return { body: this.#unwrap(cached, url), fromCache: true };
       }
 
       const body = await this.#readBody(response, url);
 
       if (response.ok) {
-        this.cache.set(key, {
+        this.#cacheSet(key, {
           status: response.status,
           body,
           etag: response.headers.get("etag"),
           fetchedAt: now,
           ttlMs: ttl.ttlMs,
-        });
+        }, url);
         return { body, fromCache: false };
       }
 
       if (response.status === 404) {
-        this.cache.set(key, { status: 404, body, etag: null, fetchedAt: now, ttlMs: ttl.notFoundTtlMs });
+        this.#cacheSet(key, { status: 404, body, etag: null, fetchedAt: now, ttlMs: ttl.notFoundTtlMs }, url);
         throw new HttpError(404, url, body);
       }
 

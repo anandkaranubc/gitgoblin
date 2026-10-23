@@ -41,6 +41,9 @@ describe("engineWillRefuse", () => {
     expect(engineWillRefuse(sampleReport().opportunities[2]!)).toMatch(/reply on the issue/);
     expect(engineWillRefuse(sampleOpportunity({ kind: "stale_pr", issue: undefined }))).toMatch(/original author/);
     expect(engineWillRefuse(sampleOpportunity({ kind: "hygiene", files: [] }))).toMatch(/names no files/);
+    expect(engineWillRefuse(sampleOpportunity({ kind: "dependency", issue: undefined, files: ["package-lock.json"] }))).toBe(
+      "updating a locked dependency needs the lockfile regenerated with network access, which the agent does not have; the repository's dependency bot or a maintainer can run the update",
+    );
   });
 });
 

@@ -7,59 +7,61 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.1.0 - Unreleased
 
-The first release of the `gitgoblin` command.
+The first release of `gitgoblin`: find open-source work worth doing, check the evidence, and prepare
+a pull request a maintainer would want to merge.
+
+**Find and understand**
 
 - `discover` ranks public GitHub repositories for a goal (`contribute`, `learn`, `adopt`, `revive`,
-  `explore`) with filters for language, topic, stars, license and recency, or similarity to a
-  repository you name. Every result says why it ranked where it did. `explain` shows every signal for
-  one repository, with its evidence; `goals` lists what each goal weighs.
-- `analyze` profiles one repository (what it is, how active it is, how it treats outside
-  contributors, its install and test commands, its conventions) and lists contribution
-  opportunities, each with evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo
-  repositories (Codeberg among them), and gives any other git host a clone-only analysis. Comments a forge
-  hides without a token count as unknown, not as silence.
-- `analyze` checks its own findings: an issue whose quoted code is gone from the default branch, or
-  that a later commit cites, is marked as possibly fixed; a dependency update an open pull request
-  already makes is skipped; code that only quotes a pattern (rule tables, test fixtures) and
-  generated files are not reported. A missing repository gets a plain "not found" message.
-- `analyze --llm` asks Claude for a second opinion on issue triage. It is off by default, costs
-  money, and needs an Anthropic API key; the model can demote or rescue an issue but never
-  overrides facts such as a merged pull request.
-- Analysis treats repository content as untrusted: reads never follow symlinks out of the clone,
-  link checks only contact public addresses on standard ports, and every parser of issue, README
-  and source text runs in linear time, so a crafted file or issue cannot stall it.
-- `contribute` (experimental) has an AI agent investigate, plan, implement and verify one
-  opportunity in a local clone, gets an independent review, and prepares a pull request. It asks
-  before running the agent, before implementing the plan, and before publishing; nothing is pushed
-  or posted without that last yes. `runs`, `show` and `publish` come back to prepared changes later.
-- When choosing what to work on, `contribute` marks opportunities the engine would refuse (`!`) and
-  those intel doubts (`?`, for example an issue whose quoted code is gone, so it may already be
-  fixed), and pressing Enter skips both.
-- The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
-  `bwrap` on Linux when installed).
-- `--check-isolation strict`, on `contribute` and on `gitgoblin-engine run`, is the setting for
-  repositories you do not trust: your home directory is hidden from the repository's commands
-  except toolchains and caches, and the install can reach package registries only; hosts it tried
-  and was refused are listed in the run report. `contribute` states any mode other than the
-  default in its first question, before anything runs.
-- Prepared pull requests are written for the maintainers who will read them: the title describes
-  the fix, the summary says what changed and why, checks that already failed before the change are
-  marked as such, and notes about gitgoblin's own environment stay in your run report.
-- `publish` can be run again after a partial failure: if a pull request for the branch is already
-  open (the push worked but the answer to creating it was lost), it is found and returned instead of
-  failing.
-- Works without configuration. A GitHub token, or a `gh` login, raises rate limits and adds
-  starter-issue data.
-- Errors say what to do next: an unreachable network names the host and the cause, a TLS
-  certificate failure points at `NODE_EXTRA_CA_CERTS`, and a repository that does not exist is
-  reported as not found rather than as an HTTP status. When GitHub refuses the issue sample, `analyze`
-  and `contribute` say that issues were not analyzed and why, instead of showing a shorter list.
+  `explore`), filtered by language, topic, stars, license, recency or similarity to a repository you
+  name, and says why each one ranked where it did. `explain` shows every signal behind one score;
+  `goals` lists what each goal weighs.
+- `analyze` profiles a repository (what it is, how active it is, how it treats outside
+  contributors, how to build and test it, its conventions) and lists opportunities, each with
+  evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo, Codeberg among them; other
+  git hosts get a clone-only analysis, and comments a forge hides without a token count as unknown.
+- `analyze` double-checks itself: an issue whose quoted code is gone, or that a later commit cites,
+  is marked as possibly fixed; a dependency update an open pull request already makes is skipped;
+  generated files and code that only quotes a pattern are not reported. `--llm` adds a second
+  opinion from Claude on issue triage; it is off by default, needs an API key and costs money.
 
-Needs Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the
-CLI (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude
-Code login. Each run costs money, capped by `--max-cost`. Known limits: `discover`, `contribute` and
-`publish` work with GitHub only; opportunity scores are still being calibrated; `contribute` has been
-tested on a small number of real repositories.
+**Contribute (experimental)**
+
+- `contribute` has an AI agent investigate, plan, implement and verify one opportunity in a local
+  clone, gets an independent review, and prepares a pull request written for the maintainers who
+  will read it. It asks before running the agent, before implementing the plan and before
+  publishing; nothing is pushed or posted without that last yes.
+- The opportunity picker marks the ones the engine would refuse (`!`) and the ones intel doubts
+  (`?`), and Enter skips both. `runs`, `show` and `publish` come back to prepared changes later;
+  `publish` can be run again after a partial failure, and `clean` frees the disk a finished run's
+  clone takes while keeping its report and diff.
+
+**Safety**
+
+- Repository content is treated as untrusted: reads stay inside the clone, link checks reach only
+  public addresses, and every parser of issue, README and source text runs in linear time, so a
+  crafted file cannot stall it.
+- The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
+  `bwrap` on Linux when installed). `--check-isolation strict`, for repositories you do not trust,
+  also hides your home directory from them and limits the install to package registries.
+
+**Everyday use**
+
+- Works without configuration; a GitHub token or a `gh` login raises rate limits and adds
+  starter-issue data.
+- The response cache, shared with the MCP server, never fails a command: when it is locked by
+  another process, full or damaged, the answer comes from the network.
+- Errors say what to do next: an unreachable network names the host and the cause, a certificate
+  failure points at `NODE_EXTRA_CA_CERTS`, a missing repository is reported as not found, and an
+  issue sample GitHub refused is reported instead of silently shortened.
+
+**Requirements and known limits**
+
+Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the CLI
+(`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude Code
+login; each run costs money, capped by `--max-cost`. `discover`, `contribute` and `publish` work with
+GitHub only. Opportunity scores are still being calibrated. `contribute` has so far prepared pull
+requests on one real repository, on macOS, so treat what it prepares as a draft to review.
 
 ## @gitgoblin/mcp 0.1.6 - 2026-10-23
 
