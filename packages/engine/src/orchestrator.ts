@@ -1,4 +1,5 @@
-import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readSync, realpathSync, statSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
 import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
@@ -48,7 +49,7 @@ import {
   type Verification,
 } from "./types.ts";
 import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
-import { DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, showAtBase, type Workspace } from "./workspace.ts";
+import { DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, type Workspace } from "./workspace.ts";
 
 export interface RunInput {
   /** A Task written by hand or exported from an earlier run. */
@@ -607,4 +608,55 @@ export async function publishRun(runId: string, options: PublishRunOptions): Pro
     journal.event("publish", "end", { url: published.url });
   }
   return published;
+}
+
+export interface CleanRunOptions {
+  workdir?: string;
+  /** Also discard a prepared change that is still awaiting approval. */
+  force?: boolean;
+  env?: Record<string, string>;
+}
+
+/**
+ * Frees what a finished run holds on disk and in the operator's repository: the workspace (a clone,
+ * or a worktree of a local checkout with its `gitgoblin/...` branch) and the run's toolchain and
+ * egress folders. The report, the prepared pull request text, the diff and every artifact stay, so
+ * the run can still be read. A run awaiting approval is kept unless `force` is set, since cleaning
+ * it discards the prepared commit. The workspace record is checked before anything is deleted: the
+ * path must lie inside the run's own directory and the branch must be one the engine names.
+ */
+export async function cleanRun(runId: string, options: CleanRunOptions = {}): Promise<{ removed: string[] }> {
+  const journal = RunJournal.open(options.workdir ?? path.resolve(".gitgoblin"), runId);
+  const env = options.env ?? (process.env as Record<string, string>);
+  const result = journal.readArtifact<RunResult>("result");
+  if (result?.status === "awaiting_approval" && !options.force) {
+    throw new Error(`run ${runId} is awaiting approval; publish it, or clean with force to discard the prepared change`);
+  }
+  const removed: string[] = [];
+  const workspace = journal.readArtifact<Workspace>("workspace");
+  if (workspace) {
+    const runDir = realpathSync(journal.dir);
+    const wsPath = path.resolve(String(workspace.path));
+    // Resolve through the nearest existing folder, so a workspace already removed still compares
+    // against the run directory's real path (/var vs /private/var on macOS).
+    let existing = wsPath;
+    while (!existsSync(existing) && path.dirname(existing) !== existing) existing = path.dirname(existing);
+    const real = path.join(realpathSync(existing), path.relative(existing, wsPath));
+    if (!real.startsWith(runDir + path.sep)) throw new Error(`run ${runId}: the workspace record points outside the run (${wsPath}); nothing was removed`);
+    if (typeof workspace.branch !== "string" || !workspace.branch.startsWith("gitgoblin/")) {
+      throw new Error(`run ${runId}: ${JSON.stringify(workspace.branch)} is not a gitgoblin branch; nothing was removed`);
+    }
+    const existed = existsSync(wsPath);
+    await removeWorkspace({ ...workspace, path: wsPath }, env);
+    if (existed) removed.push(wsPath);
+  }
+  for (const dir of ["toolchain", "egress"]) {
+    const full = journal.pathFor(dir);
+    if (existsSync(full)) {
+      await rm(full, { recursive: true, force: true });
+      removed.push(full);
+    }
+  }
+  journal.event("run", "cleaned", { removed });
+  return { removed };
 }
