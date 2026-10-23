@@ -16,7 +16,8 @@ The first release of the `gitgoblin` command.
 - `analyze` profiles one repository (what it is, how active it is, how it treats outside
   contributors, its install and test commands, its conventions) and lists contribution
   opportunities, each with evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo
-  repositories (Codeberg among them), and gives any other git host a clone-only analysis.
+  repositories (Codeberg among them), and gives any other git host a clone-only analysis. Comments a forge
+  hides without a token count as unknown, not as silence.
 - `analyze` checks its own findings: an issue whose quoted code is gone from the default branch, or
   that a later commit cites, is marked as possibly fixed; a dependency update an open pull request
   already makes is skipped; code that only quotes a pattern (rule tables, test fixtures) and

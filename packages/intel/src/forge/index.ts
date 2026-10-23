@@ -1,5 +1,5 @@
 import type { DiskCache } from "../util/cache.ts";
-import { type ForgeFetchOptions, type ForgeKind, forgeJson, knownForge } from "./common.ts";
+import { type ForgeFetchOptions, type ForgeKind, forgeJson, knownForge, statusOf } from "./common.ts";
 import { fetchGitea } from "./gitea.ts";
 import { type ForgeResult, fetchGitLab } from "./gitlab.ts";
 
@@ -26,8 +26,9 @@ export async function detectForge(host: string, options: ForgeOptions): Promise<
   try {
     await forgeJson(`https://${host}/api/v4/version`, probe);
     return "gitlab";
-  } catch {
-    return undefined;
+  } catch (error) {
+    // Self-hosted GitLab (salsa.debian.org, invent.kde.org) requires a token for /version but still answers it.
+    return statusOf(error) === 401 ? "gitlab" : undefined;
   }
 }
 
