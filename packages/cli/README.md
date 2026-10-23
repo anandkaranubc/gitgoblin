@@ -111,7 +111,7 @@ There is no flag to skip any of them.
 | `--report <file>` | Reuse a report from `analyze --json --out` instead of analyzing again. Refused if it is for another repository. |
 | `--opportunity <id>` | Work on this opportunity: its id from the report, or its rank in the list. |
 | `--issue <n>` | Work on the opportunity for this issue number. |
-| `--max-cost <usd>` | Spending cap for the agent run (default 2). |
+| `--max-cost <usd>` | Spending cap for the agent run in dollars (default: the engine's own limit, 10). A run that stops at the cap leaves nothing to publish, so a cap below what a run needs only wastes money; orientation alone has cost $1 to $2 on real repositories. |
 | `--workdir <dir>` | Where runs and clones live (default `$GITGOBLIN_WORKDIR` or `~/.gitgoblin`). |
 | `--model <id>`, `--effort <level>` | Model and effort for the engine; effort is `low`, `medium`, `high`, `xhigh` or `max`. |
 | `-g, --goal <goal>` | Discovery goal used for the hints. |

@@ -117,6 +117,7 @@ function fakeSiblings(options: { status?: RunStatus; report?: AnalysisReport } =
       },
     },
     "@gitgoblin/engine": {
+      DEFAULT_LIMITS: { maxCostUsd: 10 },
       runContribution: async (input: unknown, runOptions: RunOptions): Promise<RunResult> => {
         calls.push({ fn: "runContribution", args: [input, runOptions] });
         const reporter = runOptions.reporter!;
@@ -326,14 +327,24 @@ describe("contribute", () => {
 
   it("hands the engine a real Reporter and relays its progress", async () => {
     const siblings = fakeSiblings();
-    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "n"] });
+    const { runtime, err, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "n"] });
     expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
     const [input, options] = siblings.calls[1]?.args as [{ profile: unknown; opportunity: { id: string } }, RunOptions];
     expect(input.opportunity.id).toBe("opp-aaaa1111");
-    expect(options.limits).toEqual({ maxCostUsd: 2 });
+    // No --max-cost given: the cap is the engine's own default, not a number the CLI invents.
+    expect(options.limits).toEqual({ maxCostUsd: 10 });
+    expect(asked[0]).toContain("spending up to $10.00");
     expect(err.join("\n")).toContain("==> run: 20261022-abcd for Fix #42");
     expect(err.join("\n")).toContain("    orient Read src/main.rs");
     expect(err.join("\n")).toContain(" !! baseline lint: fail");
+  });
+
+  it("honours an explicit --max-cost and shows it in the question", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--max-cost", "3.5", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(asked[0]).toContain("spending up to $3.50");
+    expect((siblings.calls[1]?.args[1] as RunOptions).limits).toEqual({ maxCostUsd: 3.5 });
   });
 
   it("shows the plan in plain words before asking to implement it", async () => {
