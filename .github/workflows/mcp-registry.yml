@@ -9,6 +9,11 @@ name: MCP Registry
 
 on:
   workflow_dispatch:
+    inputs:
+      deprecate:
+        description: "Also mark this older version deprecated, for example 0.1.0 (leave empty to skip)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -48,6 +53,20 @@ jobs:
 
       - name: Publish
         run: ./mcp-publisher publish server.json
+
+      - name: Deprecate an older version
+        if: inputs.deprecate != ''
+        env:
+          OLD: ${{ inputs.deprecate }}
+        run: |
+          # The input reaches the shell only through the environment, and only as a version number.
+          if ! printf '%s' "$OLD" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'; then
+            echo "deprecate must be a version like 0.1.0, got: $OLD" >&2
+            exit 1
+          fi
+          NAME=$(jq -r .name server.json)
+          CURRENT=$(jq -r .version server.json)
+          ./mcp-publisher status --status deprecated --message "Superseded by ${CURRENT}; upgrade." "$NAME" "$OLD"
 
       - name: Confirm the entry is listed
         run: |
