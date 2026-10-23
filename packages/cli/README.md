@@ -104,7 +104,7 @@ One opportunity, end to end: analyze (or reuse a saved report), choose, let
 a local clone, read what it did, and open a draft pull request only after you
 say so. It needs an interactive terminal, and asks three times: before running
 the agent (it costs money), before implementing the plan, and before publishing.
-There is no flag to skip any of them.
+There is no flag to skip any of them. When the engine reports that the repository's install failed or that checks were already failing before any change, the plan question says so, because a change implemented then cannot be verified against the project's own checks.
 
 | Option | Meaning |
 | --- | --- |

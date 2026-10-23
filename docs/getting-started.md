@@ -171,7 +171,7 @@ Which opportunity? [1-2, or an id; Enter for 1]
 Then it asks three questions, and there is no flag to skip any of them:
 
 1. **Run the agent?** It names the repository and the spending cap (`--max-cost`, default $10, the engine's own limit). Saying no costs nothing. A run that hits the cap stops with nothing to publish, so set it to what you are willing to spend on a finished change rather than lower.
-2. **Implement this plan?** After investigating, the agent proposes a plan: goal, steps, files, tests. You see it in plain words before any code changes.
+2. **Implement this plan?** After investigating, the agent proposes a plan: goal, steps, files, tests. You see it in plain words before any code changes, along with a warning if the repository's install failed or its checks were already failing, since a change made then cannot be verified.
 3. **Open a draft pull request?** Only after the change passed the project's own checks against a baseline and an independent review. You see the run's report, the proposed pull request title and description, and the path of the diff. Read the diff. If you say no, nothing is pushed or posted anywhere; the change stays in the run directory. (The repository's code and the issue text have already been sent to the model provider you configured, from your machine, during the run.)
 
 Every run lives under `~/.gitgoblin/runs/<id>/` (or `$GITGOBLIN_WORKDIR`). To come back later:

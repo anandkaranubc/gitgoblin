@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeRun, engineWillRefuse, formatOpportunities, formatPlan, selectOpportunity } from "../src/contribute.ts";
+import { describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, selectOpportunity } from "../src/contribute.ts";
 import { sampleOpportunity, sampleReport } from "./fixtures.ts";
 
 const plain = { color: false };
@@ -138,5 +138,27 @@ describe("text from issues and the model is shown without control characters", (
     expect(lines.at(-1)).toBe("Question for you: ok?");
     const planText = formatPlan({ goal: "g\u001b[0m", steps: ["s\u0007"], filesToModify: ["a\u200b.ts"], filesToCreate: [], testsToAdd: [], outOfScope: [], risks: [], needsNewDependency: false });
     expect(planText).toContain("Plan: g\n  1. s\nFiles: a.ts");
+  });
+});
+
+describe("describeEnvironment", () => {
+  it("says nothing when the engine gave no context or everything passed at baseline", () => {
+    expect(describeEnvironment(undefined)).toBeUndefined();
+    expect(describeEnvironment({ baseline: [{ name: "test", status: "pass" }, { name: "lint", status: "pass" }] })).toBeUndefined();
+    expect(describeEnvironment({ install: { exitCode: 0, logPath: "/r/install-output.txt" }, baseline: [] })).toBeUndefined();
+  });
+
+  it("warns that a change cannot be verified when the install failed and the checks are red", () => {
+    const text = describeEnvironment({ install: { exitCode: 1, logPath: "/r/install-output.txt" }, baseline: [{ name: "typecheck", status: "fail" }, { name: "lint", status: "pass" }, { name: "test", status: "fail" }] });
+    expect(text).toContain("the repository's install failed (exit 1); log: /r/install-output.txt");
+    expect(text).toContain("Failing before any change: typecheck, test.");
+    expect(text).toContain("cannot be verified");
+  });
+
+  it("warns about pre-existing failures when the install worked", () => {
+    const text = describeEnvironment({ baseline: [{ name: "test", status: "fail" }, { name: "lint", status: "timeout" }] });
+    expect(text).toContain("Failing before any change: test, lint.");
+    expect(text).toContain("only catch new failures");
+    expect(text).not.toContain("install failed");
   });
 });
