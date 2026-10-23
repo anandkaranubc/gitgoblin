@@ -15,7 +15,8 @@ The first release of the `gitgoblin` command.
   one repository, with its evidence; `goals` lists what each goal weighs.
 - `analyze` profiles one repository (what it is, how active it is, how it treats outside
   contributors, its install and test commands, its conventions) and lists contribution
-  opportunities, each with evidence you can check.
+  opportunities, each with evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo
+  repositories (Codeberg among them), and gives any other git host a clone-only analysis.
 - `contribute` (experimental) has an AI agent investigate, plan, implement and verify one
   opportunity in a local clone, gets an independent review, and prepares a pull request. It asks
   before running the agent, before implementing the plan, and before publishing; nothing is pushed
@@ -27,9 +28,9 @@ The first release of the `gitgoblin` command.
 
 Needs Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the
 CLI (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude
-Code login. Each run costs money, capped by `--max-cost`. Known limits: GitHub only; opportunity
-scores are still being calibrated; `contribute` has been tested on a small number of real
-repositories.
+Code login. Each run costs money, capped by `--max-cost`. Known limits: `discover`, `contribute` and
+`publish` work with GitHub only; opportunity scores are still being calibrated; `contribute` has been
+tested on a small number of real repositories.
 
 ## @gitgoblin/mcp 0.1.3 - 2026-10-23
 
