@@ -111,7 +111,7 @@ export function planPrompt(maxFiles: number): string {
     "- Describe each step so another engineer could follow it.",
     "- List tests to add or update, and what must stay out of scope.",
     "- Set `needsNewDependency` honestly; a dependency change stops the run for a human decision.",
-    "- Propose `commitSubject`: one imperative line of at most 72 characters, in the style of the repository's recent commit subjects (including a type and scope if they use them), without an issue number.",
+    "- Propose `commitSubject`: one imperative line of at most 72 characters counting any type and scope, in the style of the repository's recent commit subjects (including a type and scope if they use them), without an issue number. Describe the fix, not the bug.",
   ].join("\n");
 }
 

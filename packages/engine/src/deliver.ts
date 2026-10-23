@@ -51,6 +51,21 @@ export function forMaintainers(lines: string[]): string[] {
   return lines.filter((line) => !ENVIRONMENT_NOTE.test(line));
 }
 
+function words(text: string): Set<string> {
+  return new Set((text.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length >= 4));
+}
+
+/** True when `text` says much the same as one of `seen` (word overlap of at least half). */
+function restates(text: string, seen: Set<string>[]): boolean {
+  const mine = words(text);
+  if (mine.size === 0) return false;
+  return seen.some((other) => {
+    let shared = 0;
+    for (const w of mine) if (other.has(w)) shared += 1;
+    return shared / (mine.size + other.size - shared) >= 0.5;
+  });
+}
+
 export function commitMessage(input: DeliveryInput): string {
   const own = input.task.issue?.number;
   const subject = neutralizeForGitHub(subjectFor(input.task, input.plan.goal, input.plan.commitSubject), own);
@@ -88,13 +103,17 @@ export function pullRequestBody(input: DeliveryInput): string {
   // Deviations from the plan are the engine's bookkeeping, not something a maintainer needs; findings
   // about files outside the change (a stray directory in the workspace) are not about the change.
   const changed = new Set(verification.diff.changedFiles);
+  // The reviewer often restates what the implementer already listed as a known gap; say it once.
+  const gaps = forMaintainers(notes.knownGaps);
+  const said = gaps.map(words);
+  const nits = review.findings
+    .filter((f) => (f.severity === "minor" || f.severity === "nit") && changed.has(f.file))
+    .filter((f) => forMaintainers([f.summary]).length === 1 && !restates(f.summary, said));
+  const prNotes = review.prNotes && forMaintainers([review.prNotes]).length === 1 && !restates(review.prNotes, [...said, ...nits.map((f) => words(f.summary))]) ? review.prNotes : "";
   const reviewerNotes = [
-    ...forMaintainers(notes.knownGaps).map((g) => `- ${n(g)}`),
-    ...review.findings
-      .filter((f) => (f.severity === "minor" || f.severity === "nit") && changed.has(f.file))
-      .filter((f) => forMaintainers([f.summary]).length === 1)
-      .map((f) => `- Reviewer note (${f.severity}): ${n(f.summary)}`),
-    review.prNotes && forMaintainers([review.prNotes]).length === 1 ? `- ${n(review.prNotes)}` : "",
+    ...gaps.map((g) => `- ${n(g)}`),
+    ...nits.map((f) => `- Reviewer note (${f.severity}): ${n(f.summary)}`),
+    prNotes ? `- ${n(prNotes)}` : "",
   ].filter(Boolean);
   const checklist = checklistFrom(input.template);
 
