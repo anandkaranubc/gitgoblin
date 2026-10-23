@@ -4,7 +4,7 @@ import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type 
 import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
 import { execShell, tail } from "./exec.ts";
 import { commandEnv, isInside, isSafeCommand, scrubEnv } from "./guard.ts";
-import { hostSandboxFor, specFor, type CheckIsolation, type HostIsolation } from "./hostbox.ts";
+import { hostSandboxFor, OFFLINE_ENV, specFor, type CheckIsolation, type HostIsolation } from "./hostbox.ts";
 import { prepareToolchain } from "./toolchain.ts";
 import { parseTask, sanitizeText, taskFromIntel } from "./intake.ts";
 import { consoleReporter, RunJournal, type Reporter } from "./journal.ts";
@@ -307,7 +307,9 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     for (const note of toolchain.notes) reporter.info(note);
     const wrapFor = (network: boolean) => (hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network, { extraWrite: toolchain.writeDirs, strict })) });
     const timeout = options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {};
-    const checkOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(false) };
+    // Checks run with the network cut when sandboxed; say so to the package managers so they fail fast.
+    const checkEnv = hostBox.kind === "none" ? hostEnv : { ...hostEnv, ...OFFLINE_ENV };
+    const checkOptions = { cwd: workspace.path, env: checkEnv, ...timeout, ...wrapFor(false) };
     const installOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(true) };
     let installFailure: PlanContext["install"];
     if (task.commands.install && !options.skipInstall) {

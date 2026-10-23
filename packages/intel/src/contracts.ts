@@ -12,13 +12,18 @@
  */
 import { z } from "zod";
 
+/** Owner and repository names as forges allow them; they also become a cache directory name. */
+const RepoName = z.string().min(1).max(200).regex(/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_])?$/, "letters, digits, dots, dashes and underscores only");
+/** A git ref name: nothing git could read as an option or a path escape. */
+const GitRefName = z.string().min(1).max(250).regex(/^[^\s~^:?*[\\-][^\s~^:?*[\\\x00-\x1f]*$/, "not a valid git ref name").refine((r) => !r.includes("..") && !r.endsWith(".lock") && !r.endsWith("/"), "not a valid git ref name");
+
 export const RepoRef = z.object({
   /** Hostname of the forge, e.g. "github.com". Mirrors RepoRef in @gitgoblin/core. */
-  host: z.string().min(1).default("github.com"),
-  owner: z.string().min(1),
-  name: z.string().min(1),
+  host: z.string().min(1).max(253).regex(/^[A-Za-z0-9.-]+$/).default("github.com"),
+  owner: RepoName,
+  name: RepoName,
   /** Branch, tag, or commit to analyze. Defaults to the default branch. */
-  ref: z.string().optional(),
+  ref: GitRefName.optional(),
   /** Analyze an existing checkout instead of cloning. */
   localPath: z.string().optional(),
 });
@@ -202,7 +207,10 @@ export const Ecosystem = z.object({
   packageManager: z.string().optional(),
   /** Tools detected from manifests and config files: pytest, ruff, eslint, cargo, ... */
   tooling: z.array(z.string()),
-  /** Best-guess commands a contributor would run, derived from manifests and CI. */
+  /**
+   * Best-guess commands a contributor would run, derived from manifests and CI. The strings are
+   * repository-authored (a workflow `run:` line, a package script): show or sandbox them, never trust them.
+   */
   commands: Commands,
   /** Declared runtime constraint, e.g. "python >=3.9" or "node >=18". */
   runtime: z.string().optional(),

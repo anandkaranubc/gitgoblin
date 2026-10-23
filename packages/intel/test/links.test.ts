@@ -55,6 +55,7 @@ describe("anchors and relative links", () => {
 });
 
 describe("probeUrl", () => {
+  const publicHost = { lookup: async () => ["93.184.216.34"] };
   const fake = (statuses: Record<string, number>, hostile?: string): typeof fetch =>
     (async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
@@ -65,10 +66,10 @@ describe("probeUrl", () => {
     }) as typeof fetch;
 
   it("confirms 404 with GET after HEAD, treats 403 as unknown, and skips bot-hostile hosts", async () => {
-    expect(await probeUrl("https://a.test/x", fake({ "HEAD https://a.test/x": 404, "GET https://a.test/x": 404 }))).toMatchObject({ status: "broken", detail: "HTTP 404" });
-    expect(await probeUrl("https://a.test/y", fake({ "HEAD https://a.test/y": 405, "GET https://a.test/y": 200 }))).toMatchObject({ status: "ok" });
-    expect(await probeUrl("https://a.test/z", fake({ "HEAD https://a.test/z": 403, "GET https://a.test/z": 403 }))).toMatchObject({ status: "unknown" });
-    expect(await probeUrl("https://www.linkedin.com/in/x", fake({}))).toMatchObject({ status: "unknown" });
-    expect(await probeUrl("https://gone.test/", fake({}, "gone.test"))).toMatchObject({ status: "broken", detail: "host does not resolve" });
+    expect(await probeUrl("https://a.test/x", fake({ "HEAD https://a.test/x": 404, "GET https://a.test/x": 404 }), publicHost)).toMatchObject({ status: "broken", detail: "HTTP 404" });
+    expect(await probeUrl("https://a.test/y", fake({ "HEAD https://a.test/y": 405, "GET https://a.test/y": 200 }), publicHost)).toMatchObject({ status: "ok" });
+    expect(await probeUrl("https://a.test/z", fake({ "HEAD https://a.test/z": 403, "GET https://a.test/z": 403 }), publicHost)).toMatchObject({ status: "unknown" });
+    expect(await probeUrl("https://www.linkedin.com/in/x", fake({}), publicHost)).toMatchObject({ status: "unknown" });
+    expect(await probeUrl("https://gone.test/", fake({}, "gone.test"), publicHost)).toMatchObject({ status: "broken", detail: "host does not resolve" });
   });
 });

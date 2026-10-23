@@ -340,6 +340,23 @@ describe("runContribution", () => {
     }
   });
 
+  it("runs sandboxed checks with package managers told the network is off, but not the install", async () => {
+    const repo = await createFixtureRepo();
+    const probe = "node -e \"console.log('offline=' + process.env.npm_config_offline)\"";
+    const task = { ...fixtureTask(repo), commands: { install: probe, lint: probe, test: "npm test" } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, checkIsolation: "auto", runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(result.status).toBe("awaiting_approval");
+    const baseline = JSON.parse(readFileSync(path.join(result.runDir, "baseline.json"), "utf8"));
+    const lint = baseline.checks.find((c: { name: string }) => c.name === "lint");
+    const install = readFileSync(path.join(result.runDir, "install-output.txt"), "utf8");
+    if (detectHostSandbox()) {
+      expect(lint.outputTail).toContain("offline=true");
+      expect(install).toContain("offline=undefined");
+    } else {
+      expect(lint.outputTail).toContain("offline=undefined");
+    }
+  });
+
   it("records when repository commands ran without an OS sandbox", async () => {
     const repo = await createFixtureRepo();
     const result = await run(happyPath, [], { checkIsolation: "none" })(repo, workdir());

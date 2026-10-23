@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { ANALYZERS } from "./analyzers/index.ts";
 import type { Finding } from "./analyzers/types.ts";
 import { type AnalysisContext, type AnalysisOptions, BudgetTracker, resolveOptions } from "./context.ts";
-import { type AnalysisReport, type ContributionOpportunity, RepoRef, type RepoRefInput, type RepositoryProfile } from "./contracts.ts";
+import { AnalysisReport, type ContributionOpportunity, RepoRef, type RepoRefInput, type RepositoryProfile } from "./contracts.ts";
 import { evaluate } from "./evaluate/index.ts";
 import { scanRepo } from "./fs/scan.ts";
 import { ensureClone, openRepo } from "./git/repo.ts";
@@ -66,6 +66,7 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
     budget.cloneMs = clone.cloneMs;
     if (meta.sizeKb > 300_000) budget.note("history limited to 2000 commits because the repository is large");
   }
+  if (!(await repo.headSha().catch(() => undefined))) throw new EmptyRepositoryError(`${ref.owner}/${ref.name} has no commits; nothing to analyze`);
 
   log("inventorying files and history");
   const [inventory, commits, languages, releases] = await Promise.all([
@@ -124,7 +125,15 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
 
   const { opportunities, skipped } = evaluate(findings, profile, opts.maxOpportunities);
   const report: AnalysisReport = { version: "1", profile, opportunities, skipped, budget: budget.toBudget() };
-  return report;
+  return AnalysisReport.parse(report);
+}
+
+/** The clone succeeded but HEAD has no commits. */
+export class EmptyRepositoryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EmptyRepositoryError";
+  }
 }
 
 export type { ContributionOpportunity };

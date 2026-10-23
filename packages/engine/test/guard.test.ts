@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -238,6 +238,9 @@ describe("sandboxSettings", () => {
     expect(build.credentials?.envVars?.map((v) => (v as { name: string }).name)).toEqual(["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]);
     const review = sandboxSettings("/ws", "review");
     expect(review.filesystem?.allowWrite).not.toContain("/ws");
+    // The agent can use the shared /tmp (pnpm locks its store there) like the repository's commands can.
+    if (existsSync("/tmp")) expect(build.filesystem?.allowWrite).toContain(realpathSync("/tmp"));
+    expect(build.filesystem?.allowWrite).toContain(realpathSync(os.tmpdir()));
   });
 });
 
