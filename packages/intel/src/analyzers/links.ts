@@ -28,7 +28,7 @@ export function extractLinks(path: string, text: string): DocLink[] {
   const rst = /\.(rst|txt)$/i.test(path);
   // reStructuredText named targets: `.. _Name: url`, referenced as `text <Name_>`_ or Name_.
   const rstTargets = new Map<string, string>();
-  if (rst) for (const m of text.matchAll(/^\.\. _([^:\n]+):\s*(\S+)\s*$/gm)) rstTargets.set(m[1]!.trim().toLowerCase(), m[2]!);
+  if (rst) for (const m of text.matchAll(/^\.\. _([^:\n]{1,300}):[ \t]*(\S{1,2000})[ \t]*$/gm)) rstTargets.set(m[1]!.trim().toLowerCase(), m[2]!);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     if (/^\s*(```|~~~)/.test(line)) {
@@ -48,14 +48,14 @@ export function extractLinks(path: string, text: string): DocLink[] {
       links.push({ path, line: i + 1, target: t, text: label.trim() });
     };
     if (rst) {
-      for (const m of line.matchAll(/`([^`<]*)<([^>]+)>`_/g)) {
+      for (const m of line.matchAll(/`([^`<\n]{0,500})<([^>\n]{1,2000})>`_/g)) {
         const target = m[2]!.trim();
         if (target.endsWith("_")) {
           const resolved = rstTargets.get(target.slice(0, -1).toLowerCase());
           if (resolved) push(resolved, m[1]!);
         } else push(target, m[1]!);
       }
-      for (const m of line.matchAll(/^\.\. _[^:]+:\s*(\S+)/g)) push(m[1]!, "");
+      for (const m of line.matchAll(/^\.\. _[^:\n]{1,300}:[ \t]*(\S{1,2000})/g)) push(m[1]!, "");
       continue;
     }
     // Images are badges and screenshots; their rot is low value and often blocked for bots. Inline code is not a link.
@@ -63,10 +63,10 @@ export function extractLinks(path: string, text: string): DocLink[] {
     const withoutImages = line.replace(/`[^`]{0,500}`/g, "").replace(/!\[[^\]]{0,500}\]\([^)]{0,2000}\)/g, "").replace(/<img[^>]{0,2000}>/gi, "");
     for (const m of withoutImages.matchAll(/\[([^\]]{0,500})\]\([ \t]{0,20}<?([^)\s>]{1,2000})>?(?:[ \t]{1,20}"[^"]{0,500}")?[ \t]{0,20}\)/g)) if (!m[1]!.startsWith("^")) push(m[2]!, m[1]!); // [^1] is a footnote
     for (const m of withoutImages.matchAll(/^[ \t]{0,20}\[([^\]^][^\]]{0,500})\]:[ \t]*(\S+)/g)) push(m[2]!, m[1]!); // [^1]: is a footnote definition
-    for (const m of withoutImages.matchAll(/<a\s[^>]*href=["']([^"']+)["']/gi)) push(m[1]!, "");
-    for (const m of withoutImages.matchAll(/<(https?:\/\/[^>\s]+)>/g)) push(m[1]!, "");
+    for (const m of withoutImages.matchAll(/<a\s[^>\n]{0,500}?href=["']([^"'\n]{1,2000})["']/gi)) push(m[1]!, "");
+    for (const m of withoutImages.matchAll(/<(https?:\/\/[^>\s]{1,2000})>/g)) push(m[1]!, "");
     // Bare URLs not already inside a markdown link.
-    const stripped = withoutImages.replace(/\]\([^)]*\)/g, "]()").replace(/\]:\s*\S+/g, "]:").replace(/href=["'][^"']*["']/gi, "");
+    const stripped = withoutImages.replace(/\]\([^)\n]{0,2000}\)/g, "]()").replace(/\]:[ \t]{0,20}\S{1,2000}/g, "]:").replace(/href=["'][^"'\n]{0,2000}["']/gi, "");
     for (const m of stripped.matchAll(/(?<![("'<\w`])https?:\/\/[\w.-]+[^\s<>"')\]`]*/g)) push(m[0], "");
   }
   return links;
@@ -118,7 +118,7 @@ export function anchorsIn(markdown: string): Set<string> {
       if (explicit) anchors.add(explicit);
     }
     // Any tag may carry an id or name anchor, e.g. ripgrep's <h3 name="complete">.
-    for (const m of line.matchAll(/<\w+\s[^>]*?\b(?:name|id)=["']([^"']+)["']/gi)) anchors.add(m[1]!);
+    for (const m of line.matchAll(/<\w{1,20}\s[^>\n]{0,500}?\b(?:name|id)=["']([^"'\n]{1,300})["']/gi)) anchors.add(m[1]!);
   }
   return anchors;
 }

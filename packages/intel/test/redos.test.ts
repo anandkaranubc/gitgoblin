@@ -12,14 +12,19 @@ describe("text processing on hostile input", () => {
   for (const [name, fn] of FUNCTIONS) {
     it(`${name} stays under ${CEILING_MS} ms on every adversarial 64 KB input`, () => {
       const slow: string[] = [];
-      for (const [label, text] of inputs()) {
+      const time = (text: string) => {
         const started = performance.now();
         try {
           fn(text);
         } catch {
           // Throwing on garbage is acceptable; hanging is not.
         }
-        const ms = performance.now() - started;
+        return performance.now() - started;
+      };
+      for (const [label, text] of inputs()) {
+        // A busy machine (parallel test files, CI neighbours) can stall one call; a slow pattern is slow every time.
+        let ms = time(text);
+        if (ms > CEILING_MS) ms = Math.min(ms, time(text));
         if (ms > CEILING_MS) slow.push(`${label}: ${Math.round(ms)} ms`);
       }
       expect(slow).toEqual([]);

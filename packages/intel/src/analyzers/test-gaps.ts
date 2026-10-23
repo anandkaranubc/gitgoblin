@@ -121,7 +121,8 @@ export function findSkippedTests(path: string, text: string): SkippedTest[] {
     const line = lines[i]!;
     if (!SKIP_PATTERNS.some((p) => p.test(masked[i] ?? ""))) continue;
     const window = [line, lines[i + 1] ?? "", lines[i - 1] ?? ""].join(" ");
-    const reason = /reason\s*=\s*["'`]([^"'`]+)["'`]/.exec(window)?.[1] ?? /skip(?:If|Unless|f)?\([^"'`]*["'`]([^"'`]+)["'`]/.exec(window)?.[1] ?? /\.skip\(\s*["'`]([^"'`]+)["'`]/.exec(window)?.[1] ?? /\bt\.Skip(?:f|Now)?\(\s*"([^"]+)"/.exec(line)?.[1];
+    // Bounded spans: a minified or generated line full of `skip(` must not make each match rescan the rest of it.
+    const reason = /reason[ \t]{0,5}=[ \t]{0,5}["'`]([^"'`\n]{1,300})["'`]/.exec(window)?.[1] ?? /skip(?:If|Unless|f)?\([^"'`\n]{0,200}["'`]([^"'`\n]{1,300})["'`]/.exec(window)?.[1] ?? /\.skip\([ \t]{0,5}["'`]([^"'`\n]{1,300})["'`]/.exec(window)?.[1] ?? /\bt\.Skip(?:f|Now)?\([ \t]{0,5}"([^"\n]{1,300})"/.exec(line)?.[1];
     // Conditional skips (if ...: skip / if testing.Short() { t.Skip }) are deliberate, not forgotten.
     const previous = lines[i - 1] ?? "";
     const conditional = /skipif|skipIf|skipUnless|\.skipIf\(|skip_if|xfail\(.*condition|\bif\b/.test(line) || (/^\s*if\b.*[{:]\s*$/.test(previous));
