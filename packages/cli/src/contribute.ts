@@ -19,6 +19,8 @@ export function engineWillRefuse(o: ContributionOpportunity): string | undefined
   if (o.kind === "triage") return "needs a reply on the issue, not a patch";
   if (o.kind === "stale_pr") return "continuing someone's pull request needs the original author's consent first; ask on the pull request before running the engine";
   if (o.kind === "hygiene" && o.files.length === 0) return "names no files; it may be a request to the maintainers rather than a change";
+  // The agent works offline, so it cannot regenerate a lockfile; checks would run against the old one.
+  if (o.kind === "dependency") return "updating a locked dependency needs the lockfile regenerated with network access, which the agent does not have; the repository's dependency bot or a maintainer can run the update";
   return undefined;
 }
 
