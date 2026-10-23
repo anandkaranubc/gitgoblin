@@ -165,3 +165,22 @@ export function problemStatement(markdown: string): string {
   // "Hello," or "Hi team!" opens many reports and says nothing about the problem.
   return prose.map((s) => clean(s.lines)).join("\n\n").trim().replace(GREETING, "");
 }
+
+/** A question that hands the decision to maintainers: which approach, would you accept, should we. Bounded spans. */
+const ASKS_TO_CHOOSE = /\b(?:which (?:direction|approach|option|one|way|design|solution|variant)s?\b[^.?\n]{0,60}\b(?:prefer|like|want|choose|recommend|go with)|do you prefer\b|would you (?:prefer|accept|be open|rather)\b|should (?:we|i)\b[^.?\n]{0,80}\?|what(?:'s| is| would be) (?:the )?(?:preferred|best|right|recommended) (?:way|approach|direction|option)|(?:any|your) preferences?\b|(?:are you|is the project) open to\b|how would you like (?:this|me|us|it)\b)/i;
+/** "Possible directions:" followed by a numbered or bulleted list. */
+const OPTION_LIST = /\b(?:directions|options|approaches|alternatives|solutions|choices)\b[^\n]{0,40}\n[ \t]{0,6}(?:1[.)]|[-*])[ \t]/i;
+
+/**
+ * Does the issue end by asking maintainers to pick an approach? Such an issue needs a decision before code:
+ * an outsider (or an agent) who implements one option risks having the work rejected. Looks at the last part of
+ * the template-free body, where reporters put the question.
+ */
+export function asksMaintainersToChoose(markdown: string): string | undefined {
+  const body = issueBody(markdown);
+  const tail = body.slice(-1500);
+  const question = ASKS_TO_CHOOSE.exec(tail);
+  if (question) return `the issue asks the maintainers to decide ("${question[0].trim().slice(0, 60)}")`;
+  if (OPTION_LIST.test(body) && tail.includes("?")) return "the issue lists options and asks which to take";
+  return undefined;
+}

@@ -156,6 +156,12 @@ describe("atIntake", () => {
     expect(atIntake({ ...task, kind: "hygiene", files: [] }).action).toBe("escalate");
     expect(atIntake({ ...task, kind: "hygiene", files: [".editorconfig"] })).toEqual({ action: "continue" });
   });
+  it("escalates a dependency bump before any model spend, since the lockfile cannot be regenerated offline", () => {
+    const d = atIntake({ ...task, kind: "dependency", files: ["package-lock.json"] });
+    expect(d.action).toBe("escalate");
+    expect(d.action === "escalate" && d.reason).toMatch(/lockfile/);
+    expect(d.action === "escalate" && d.questions.length).toBeGreaterThan(0);
+  });
 });
 
 describe("controlsChecks", () => {

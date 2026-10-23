@@ -41,6 +41,17 @@ describe("untrusted text in prompts keeps its delimiters", () => {
   });
 });
 
+describe("issue body size", () => {
+  it("quotes at most 20,000 characters of the issue body, and says when it cut", () => {
+    const long = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n" }, title: "Bug", issue: { number: 1, body: `start ${"x".repeat(50_000)} end` } });
+    const body = between(orientPrompt(long, undefined), "<issue_body>", "</issue_body>");
+    expect(body.length).toBeLessThan(20_200);
+    expect(body).toContain("start");
+    expect(body).not.toContain(" end");
+    expect(body).toMatch(/issue text truncated/);
+  });
+});
+
 describe("what the prompts ask for in maintainer-facing text", () => {
   it("tells the reviewer not to restate the implementer's known gaps", () => {
     const prompt = reviewerSystemPrompt(task, "/ws", { files: [] });
