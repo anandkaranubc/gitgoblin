@@ -10,6 +10,7 @@
  *
  * Usage: node scripts/backtest-issues.ts owner/name [owner/name...] [--issues 200] [--show fp|fn]
  */
+import { issueAsOf } from "../src/backtest.ts";
 import { parseArgs } from "node:util";
 
 import { assessIssue } from "../src/analyzers/issues.ts";
@@ -63,15 +64,8 @@ for (const repo of positionals) {
     if (!issue.closedAt || issue.author?.isBot) continue;
     const closedAt = new Date(issue.closedAt);
     const cutoff = closedAt.getTime() - 48 * 3_600_000;
-    const asOpen: IssueSample = {
-      ...issue,
-      closedAt: undefined,
-      locked: false, // bots lock issues when closing; the lock did not exist while it was open
-      lastComments: issue.lastComments.filter((c) => Date.parse(c.createdAt) < cutoff),
-      firstComments: issue.firstComments.filter((c) => Date.parse(c.createdAt) < cutoff),
-      // A PR that closed the issue is hindsight; drop merged links.
-      linkedPrs: issue.linkedPrs.filter((p) => p.state !== "MERGED" && Date.parse(p.updatedAt) < cutoff),
-    };
+    // As it looked two days before closing: no lock, no closing comments, no merged links (hindsight).
+    const asOpen = issueAsOf(issue, new Date(cutoff));
     const a = assessIssue(asOpen, closedAt, true, `https://github.com/${owner}/${name}`);
     row.n++;
     if (worth) row.completed++; else row.notPlanned++;
