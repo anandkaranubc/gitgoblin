@@ -1,5 +1,5 @@
 export { runContribution, publishRun, readGuidance } from "./orchestrator.ts";
-export type { RunInput, RunOptions, RunnerContext, PublishRunOptions } from "./orchestrator.ts";
+export type { RunInput, RunOptions, RunnerContext, PlanContext, PublishRunOptions } from "./orchestrator.ts";
 export { taskFromIntel, parseTask, sanitizeText } from "./intake.ts";
 export { createSdkRunner } from "./agent.ts";
 export type { AgentRunner, PhaseSpec, PhaseResult, SdkRunnerOptions, Effort } from "./agent.ts";
