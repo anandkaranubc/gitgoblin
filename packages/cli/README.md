@@ -140,7 +140,7 @@ opens it later. The exit code is 1 when the run failed; a run the engine stopped
 or escalated exits 0 and says why. When the repository's install failed, the end
 of its log is printed under the status, since it usually names the cause.
 
-### `gitgoblin runs`, `gitgoblin show <runId>`, `gitgoblin publish <runId>`
+### `gitgoblin runs`, `show`, `publish`, `clean`
 
 The lifecycle of prepared changes, in the same workdir `contribute` uses
 (`--workdir` or `$GITGOBLIN_WORKDIR` on each).
@@ -154,6 +154,13 @@ The lifecycle of prepared changes, in the same workdir `contribute` uses
   report, asks, then pushes with your `gh` login (to a fork when you cannot push
   to the repository) and opens a draft pull request. `--ready` opens it ready for
   review instead. Only a run whose status is `awaiting_approval` can be published.
+
+- `clean <runId...>` frees what a finished run holds on disk: its workspace (a clone with
+  the project's installed dependencies, often several hundred megabytes) and, for a
+  worktree, its `gitgoblin/...` branch. The report, diff, pull request text and every
+  artifact stay, so `show` still works. `clean --finished` does this for every run that
+  is not awaiting approval; `--force` also discards a prepared change. `runs` says when
+  finished runs still keep their workspaces.
 
 Read [docs/etiquette.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md) before publishing to someone else's project.
 

@@ -5,7 +5,7 @@ import type { AnalysisReport, ContributionOpportunity } from "@gitgoblin/intel";
 const AT = "2026-10-22T00:00:00Z";
 
 /** Writes the files the engine leaves in runs/<id>/ (see packages/engine/README.md). */
-export function writeRun(workdir: string, runId: string, overrides: { status?: string; reason?: string; title?: string; costUsd?: number; prepared?: boolean; install?: { exitCode: number | null; output: string; timedOut?: boolean } } = {}): string {
+export function writeRun(workdir: string, runId: string, overrides: { status?: string; reason?: string; title?: string; costUsd?: number; prepared?: boolean; install?: { exitCode: number | null; output: string; timedOut?: boolean }; workspaceBytes?: number } = {}): string {
   const dir = join(workdir, "runs", runId);
   mkdirSync(dir, { recursive: true });
   const status = overrides.status ?? "awaiting_approval";
@@ -13,6 +13,12 @@ export function writeRun(workdir: string, runId: string, overrides: { status?: s
   writeFileSync(join(dir, "task.json"), JSON.stringify({ id: "opp-aaaa1111", repo: { host: "github.com", owner: "acme", name: "widget" }, title: overrides.title ?? "Fix #42: --color flag is ignored on Windows", kind: "issue" }));
   writeFileSync(join(dir, "report.md"), `# gitgoblin run ${runId}\n\n- Status: **${status}**\n`);
   if (overrides.install) writeInstall(dir, overrides.install);
+  if (overrides.workspaceBytes !== undefined) {
+    // What the engine leaves: a workspace folder inside the run, recorded in workspace.json.
+    mkdirSync(join(dir, "workspace", "node_modules"), { recursive: true });
+    writeFileSync(join(dir, "workspace", "node_modules", "blob.bin"), Buffer.alloc(overrides.workspaceBytes));
+    writeFileSync(join(dir, "workspace.json"), JSON.stringify({ path: join(dir, "workspace"), branch: "gitgoblin/fix-42", baseSha: "0123456", source: "clone" }));
+  }
   if (overrides.prepared ?? status === "awaiting_approval") {
     writeFileSync(join(dir, "pr-title.txt"), "fix: honour --color on Windows\n");
     writeFileSync(join(dir, "pr.md"), "## Summary\n\nFixes #42\n");
