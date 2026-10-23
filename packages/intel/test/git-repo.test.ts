@@ -80,3 +80,15 @@ describe("LocalGitRepo", () => {
     expect(parseLog("")).toEqual([]);
   });
 });
+
+describe("line endings", () => {
+  it("reads CRLF files with LF line endings and the same line count", async () => {
+    const crlf = await FixtureRepo.create();
+    try {
+      await crlf.commit({ files: { "win.md": "# Title\r\n\r\nSee [docs](docs/a.md).\r\n" }, message: "crlf" });
+      expect(await openRepo(crlf.dir).readText("win.md")).toBe("# Title\n\nSee [docs](docs/a.md).\n");
+    } finally {
+      await crlf.cleanup();
+    }
+  });
+});
