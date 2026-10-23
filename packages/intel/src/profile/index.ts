@@ -3,6 +3,8 @@ import type { AnalysisContext } from "../context.ts";
 import { computeActivity, hotFiles } from "./activity.ts";
 import { inferConventions } from "./conventions.ts";
 import { describeEcosystems } from "./ecosystems.ts";
+import { centralFiles } from "./imports.ts";
+import { LICENSE_FILE, licenseFromText } from "./license.ts";
 import { classifyNature } from "./nature.ts";
 import { assessWelcomeness } from "./welcomeness.ts";
 
@@ -49,16 +51,21 @@ export async function buildProfile(ctx: AnalysisContext): Promise<RepositoryProf
 
   const ci: CiInfo = {
     provider: workflows.length ? "github_actions" : inventory.files.some((f) => f.category === "ci") ? "other" : "none",
-    workflows,
+    workflows: workflows.length ? workflows : inventory.files.filter((f) => f.category === "ci").map((f) => f.path).slice(0, 10),
   };
   const lastRun = ctx.runs.find((r) => r.event === "push") ?? ctx.runs[0];
   if (lastRun?.conclusion) ci.lastRunConclusion = lastRun.conclusion;
   if (lastRun) ci.lastRunAt = lastRun.updatedAt;
 
+  const central = await centralFiles(inventory, (p, max) => ctx.read(p, max), manifests.go?.module);
+  if (central.truncated) ctx.budget.cut("import graph built from the first 3000 source files");
+
   const notes: string[] = [];
   if (!ctx.samples && !ctx.budget.notes.some((n) => n.startsWith("issue and PR sampling skipped"))) notes.push("Issue and pull request samples unavailable (no GitHub token or GraphQL failed); welcomeness uses git and metadata only.");
   if (inventory.truncated) notes.push(`Only ${inventory.files.length} of ${inventory.totalCount} files were inventoried.`);
   if (meta.isFork) notes.push("This is a fork; contributions usually belong upstream.");
+  if (!meta.hasIssues && ctx.ref.host === "github.com") notes.push("GitHub issues are disabled; the project tracks work elsewhere (see its contributing guide), so issue-based opportunities are not available here.");
+  if (ctx.ref.host !== "github.com") notes.push(ctx.samples ? `Hosted on ${ctx.ref.host}: issues and merge requests come from its public API without authentication, so maintainer status is inferred from who merges and closes${ctx.runs.length ? "" : "; CI runs were not read"}.` : `Hosted on ${ctx.ref.host}: issues, pull requests and CI runs were not read, so welcomeness reflects git activity and documentation only.`);
 
   const profile: RepositoryProfile = {
     repo: ctx.ref,
@@ -75,7 +82,7 @@ export async function buildProfile(ctx: AnalysisContext): Promise<RepositoryProf
     languages,
     ecosystems,
     ci,
-    structure: describeStructure(inventory, manifests),
+    structure: { ...describeStructure(inventory, manifests), centralFiles: central.files },
     activity,
     welcomeness,
     conventions,
@@ -85,11 +92,30 @@ export async function buildProfile(ctx: AnalysisContext): Promise<RepositoryProf
   };
   if (meta.description) profile.description = meta.description;
   if (meta.homepage) profile.homepage = meta.homepage;
-  if (meta.license) profile.license = meta.license;
+  const license = meta.license ?? (await licenseFromFiles(ctx));
+  if (license) profile.license = license;
   return profile;
 }
 
-function describeStructure(inventory: AnalysisContext["inventory"], manifests: AnalysisContext["manifests"]): Structure {
+/** Read the license file when no API said what the license is (other forges, or GitHub's detector giving up). */
+async function licenseFromFiles(ctx: AnalysisContext): Promise<string | undefined> {
+  const files = ctx.inventory.files.filter((f) => LICENSE_FILE.test(f.path)).map((f) => f.path);
+  const canonical = files.filter((p) => /^(LICENSE|LICENCE|COPYING|UNLICENSE)(\.(md|txt|rst))?$/i.test(p));
+  const found: string[] = [];
+  for (const path of [...canonical, ...files.filter((p) => !canonical.includes(p))].slice(0, 6)) {
+    const text = await ctx.read(path, 64 * 1024);
+    const id = text ? licenseFromText(text) : undefined;
+    if (id && canonical.includes(path)) return id;
+    if (id) found.push(id);
+  }
+  if (found.length <= 1) return found[0];
+  // Several COPYING.* variants (Eigen: MPL2, APACHE, BSD...): the README says which one is primary.
+  const readmePath = ctx.inventory.files.find((f) => /^readme(\.\w+)?$/i.test(f.path))?.path;
+  const readme = readmePath ? (await ctx.read(readmePath, 20 * 1024)) ?? "" : "";
+  return found.find((id) => new RegExp(id.split("-")[0]!.replace("MPL", "(MPL|Mozilla)").replace("GPL", "GPL"), "i").test(readme.slice(0, 5000))) ?? found[0];
+}
+
+function describeStructure(inventory: AnalysisContext["inventory"], manifests: AnalysisContext["manifests"]): Omit<Structure, "centralFiles"> {
   const live = inventory.files.filter((f) => !f.vendored);
   const topDirs = (predicate: (p: string) => boolean) => {
     const counts = new Map<string, number>();

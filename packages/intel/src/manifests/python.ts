@@ -5,10 +5,13 @@ import type { Dependency, PythonManifest } from "./types.ts";
 
 type Reader = (path: string) => Promise<string | undefined>;
 
-const PYTHON_FILES = new Set(["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", "tox.ini"]);
+const PYTHON_FILES = new Set(["pyproject.toml", "setup.py", "requirements.txt", "Pipfile"]);
 
+/** setup.cfg and tox.ini alone are often just lint or test config in a non-Python project. */
 export function hasPythonManifest(inventory: FileInventory): boolean {
-  return inventory.files.some((f) => !f.vendored && PYTHON_FILES.has(f.path));
+  if (inventory.files.some((f) => !f.vendored && PYTHON_FILES.has(f.path))) return true;
+  const realCode = (f: { path: string; ext: string; category: string; vendored: boolean }) => !f.vendored && f.ext === ".py" && f.category === "source" && !/(^|\/)(scripts?|tools?|docs?|examples?|debug|ci|misc|utils?)(\/|$)/.test(f.path);
+  return inventory.files.some(realCode) && inventory.files.some((f) => f.path === "setup.cfg" || f.path === "tox.ini");
 }
 
 export async function readPythonManifest(inventory: FileInventory, read: Reader): Promise<PythonManifest | undefined> {
@@ -34,9 +37,16 @@ export async function readPythonManifest(inventory: FileInventory, read: Reader)
     if (text) applyPyproject(manifest, text);
   }
   if (root("setup.cfg")) {
-    manifest.paths.push("setup.cfg");
     const text = await read("setup.cfg");
-    if (text) applySetupCfg(manifest, text);
+    // Only a setup.cfg with package metadata is a manifest; one holding just [flake8] is tooling.
+    if (text && /^\[(metadata|options)\]/m.test(text)) {
+      manifest.paths.push("setup.cfg");
+      applySetupCfg(manifest, text);
+    } else if (text) {
+      if (/^\[flake8\]/m.test(text)) addTool(manifest, "flake8");
+      if (/^\[tool:pytest\]/m.test(text)) addTool(manifest, "pytest");
+      if (/^\[mypy\]/m.test(text)) addTool(manifest, "mypy");
+    }
   }
   if (root("setup.py")) {
     manifest.paths.push("setup.py");
@@ -206,7 +216,8 @@ function findPackageDirs(inventory: FileInventory): string[] {
     if (parts.length === 2) dirs.add(parts[0]!);
     else if (parts.length === 3 && parts[0] === "src") dirs.add(`src/${parts[1]}`);
   }
-  return [...dirs].filter((d) => !/^(tests?|docs?|examples?|scripts?|benchmarks?)$/.test(d.replace(/^src\//, "")));
+  // `t` is a common short name for a test tree (celery); it is not a package to document or test.
+  return [...dirs].filter((d) => !/^(t|tests?|testing|docs?|examples?|scripts?|benchmarks?|tools?)$/.test(d.replace(/^src\//, "")));
 }
 
 function dedupe(deps: Dependency[]): Dependency[] {

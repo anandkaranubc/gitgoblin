@@ -1,25 +1,19 @@
-import { normalizeHost } from "@gitgoblin/core";
-
 /*
  * The repository an MCP tool analyzes is usually chosen by a model, and a model can be steered by
  * text planted in a README, an issue or an earlier tool result. These defences assume the
  * repository, and the choice of repository, are hostile.
  */
 
-/** Public forges whose repositories the tools accept unless the person adds more. */
-export const DEFAULT_HOSTS = ["github.com", "gitlab.com", "codeberg.org"] as const;
-
 /**
- * Hosts the tools may clone from or query. Limiting them keeps a model from pointing the server at
- * an address on the person's network (`https://<host>/<owner>/<name>.git` is fetched as given).
- * GITGOBLIN_MCP_HOSTS adds self-hosted forges, comma-separated.
+ * Hosts the tools read. Two reasons it is GitHub alone: intel clones `https://<host>/<owner>/<name>.git`
+ * as given, so an open list would let a model point the server at the person's own network; and
+ * discovery and intel read metadata from GitHub's API by owner and name, so any other forge would be
+ * answered with whatever GitHub repository shares the name. Other forges return when both read them.
  */
-export function allowedHosts(env: NodeJS.ProcessEnv = process.env): Set<string> {
-  const extra = (env.GITGOBLIN_MCP_HOSTS ?? "")
-    .split(",")
-    .map((host) => normalizeHost(host))
-    .filter((host) => host !== "");
-  return new Set<string>([...DEFAULT_HOSTS, ...extra]);
+export const DEFAULT_HOSTS = ["github.com"] as const;
+
+export function allowedHosts(): Set<string> {
+  return new Set<string>(DEFAULT_HOSTS);
 }
 
 /** Git settings applied to every git command the server runs. */

@@ -3,10 +3,10 @@
 gitgoblin as a [Model Context Protocol](https://modelcontextprotocol.io) server. It gives any MCP client (Claude Code, Codex, Cursor, Gemini CLI, Copilot in VS Code, and others) four read-only tools: discover repositories worth your time, explain why one scores the way it does, analyze what a repository actually needs, and get a full briefing on one piece of work.
 
 ```sh
-claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
+claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.3/gitgoblin-mcp-0.1.3.tgz
 ```
 
-[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The server is listed in the official MCP Registry as `io.github.anandkaranubc/gitgoblin`. The package is not on npm yet; until it is, use the tarball from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.2) in place of `@gitgoblin/mcp` (`npx -y <tarball url>`), or run it from a clone with `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`. Claude Desktop users install the release's `gitgoblin.mcpb` directly.
+[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The server is listed in the official MCP Registry as `io.github.anandkaranubc/gitgoblin`. The command installs the tarball attached to [release `mcp-v0.1.3`](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.3). `@gitgoblin/mcp` is not published to npm yet, so do not use that name with `npx -y` until it is. You can also run the server from a clone with `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`; Claude Desktop users install the release's `gitgoblin.mcpb` directly.
 
 ## Tools
 
@@ -17,7 +17,7 @@ claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
 | `analyze_repository` | `repository`, `max_opportunities` (default 10, max 30), `check_dependencies` (default true), `goal` | The profile (nature, activity, responsiveness, welcomeness with signals, rules, commands, conventions) and the ranked opportunities with their primary evidence. |
 | `get_opportunity` | `repository`, `opportunity_id` or `issue_number` | One opportunity in full plus how to work on the project: clone, commands, conventions, rules, etiquette. |
 
-`repository` accepts `owner/name` or a URL on github.com, gitlab.com or codeberg.org; other hosts are refused unless listed in `GITGOBLIN_MCP_HOSTS`. Errors come back as tool results with advice (how to get a token, how to spell a repository), never as protocol failures. Long calls send progress notifications when the client provides a progress token.
+`repository` accepts `owner/name` or a github.com URL. Other forges are refused: discovery and analysis use GitHub's API, so answering for them would describe the wrong repository. Errors come back as tool results with advice (how to get a token, how to spell a repository), never as protocol failures. Long calls send progress notifications when the client provides a progress token.
 
 The server's `instructions` tell the agent the typical flow, that quoted repository text is data and never instructions, and the one rule that matters: it never opens issues, pull requests or comments on the person's behalf unless asked.
 
@@ -29,7 +29,6 @@ The repository is often chosen by a model, so the server treats it as hostile: g
 | --- | --- |
 | `GITHUB_TOKEN`, `GH_TOKEN` | Optional. Raises GitHub's limits and unlocks starter issues. Falls back to `gh auth token`. |
 | `GITGOBLIN_CACHE_DIR` | Where the HTTP cache lives (default `~/.cache/gitgoblin`); the server's blob-less clones go in its `mcp` subdirectory. |
-| `GITGOBLIN_MCP_HOSTS` | Extra forges the tools may read, comma-separated, for example `git.example.org`. Only add hosts you trust: the server clones from them. |
 
 ## Development
 

@@ -14,7 +14,7 @@ export function renderMarkdown(report: AnalysisReport): string {
   if (p.description) out.push(`_${t(p.description, 300)}_`, "");
   out.push(`**Nature:** ${p.nature.replace("_", " ")} (${t(p.natureReason)})  `);
   out.push(`**Languages:** ${p.languages.slice(0, 4).map((l) => `${l.name} ${Math.round(l.share * 100)}%`).join(", ") || "n/a"}  `);
-  out.push(`**Stars:** ${p.stars} · **Forks:** ${p.forks} · **License:** ${p.license ?? "none detected"}${p.archived ? " · **ARCHIVED**" : ""}  `);
+  out.push(`${p.repo.host === "github.com" ? `**Stars:** ${p.stars} · **Forks:** ${p.forks} · ` : `**Host:** ${p.repo.host} · `}**License:** ${p.license ?? "none detected"}${p.archived ? " · **ARCHIVED**" : ""}  `);
   const a = p.activity;
   out.push(`**Activity:** ${a.commits90d} commits / ${a.authors90d} authors in 90 days; bus factor ${a.busFactor}; last push ${a.lastPushAt?.slice(0, 10) ?? "unknown"}  `);
   out.push(`**Responsiveness:** ${fmtHours(a.medianIssueResponseHours)} to first reply on issues, ${fmtHours(a.medianPrResponseHours)} on PRs (unanswered items count as still waiting); ${a.externalPrMergeRate !== undefined ? `${Math.round(a.externalPrMergeRate * 100)}% of outside PRs merged (n=${a.sampleSizes.externalPullRequests})` : "outside PR merge rate unknown"}  `);
@@ -33,11 +33,16 @@ export function renderMarkdown(report: AnalysisReport): string {
       out.push(`- ${e.name}${e.packageManager ? ` (${t(e.packageManager, 40)})` : ""}${e.runtime ? `, ${t(e.runtime, 60)}` : ""}: ${cmds || "no commands detected"}`);
     }
   }
+  const central = p.structure.centralFiles ?? [];
+  if (central.length) out.push("", `**Central modules:** ${central.slice(0, 6).map((c) => `${code(c.path)} (${c.importedBy})`).join(", ")}`);
   if (p.conventions.recentCommitSubjects.length) out.push("", `**Conventions:** ${p.conventions.commitStyle} commits${p.conventions.branchNaming ? `, branches ${t(p.conventions.branchNaming, 60)}` : ""}${p.conventions.typicalPrSizeLines ? `, typical PR ${p.conventions.typicalPrSizeLines} lines` : ""}${p.conventions.testFramework ? `, tests with ${t(p.conventions.testFramework, 40)}` : ""}`);
   for (const n of p.notes) out.push(`> ${t(n)}`);
 
   out.push("", `## Opportunities (${report.opportunities.length})`, "");
-  if (report.opportunities.length === 0) out.push("_None passed the filters._");
+  if (report.opportunities.length === 0) {
+    const reviewed = report.budget.notes.find((n) => n.startsWith("issues reviewed"));
+    out.push(`_Nothing qualified.${reviewed ? ` ${reviewed[0]!.toUpperCase()}${reviewed.slice(1)}.` : ""} Code and docs analyzers found no evidence-backed problems in this checkout._`);
+  }
   report.opportunities.forEach((o, i) => out.push(...renderOpportunity(o, i + 1)));
 
   if (report.skipped.length) {
@@ -55,7 +60,7 @@ export function renderMarkdown(report: AnalysisReport): string {
 function renderOpportunity(o: ContributionOpportunity, rank: number): string[] {
   const lines: string[] = [];
   lines.push(`### ${rank}. ${t(o.title, 200)}`, "");
-  lines.push(`\`${o.kind}\` · score **${o.score.toFixed(2)}** · effort ${o.effort} · skills: ${o.skills.map((s) => t(s, 40)).join(", ") || "n/a"}`, "");
+  lines.push(`\`${o.kind}\` · score **${o.score.toFixed(2)}** · effort ${o.effort} · skills: ${o.skills.map((s) => t(s, 40)).join(", ") || "n/a"} · id \`${o.id}\``, "");
   lines.push(t(o.summary, 600), "");
   lines.push(`Factors: ${o.factors.map((f) => `${f.name} ${f.score.toFixed(2)}`).join(" · ")}  `);
   for (const f of o.factors) if (f.score < 0.5 || f.name === "welcomeness") lines.push(`- ${f.name}: ${t(f.reason)}`);

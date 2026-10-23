@@ -321,7 +321,7 @@ export function formatOpportunity(report: AnalysisReport, o: ContributionOpportu
   for (const r of rules.rejectedChanges.slice(0, 3)) lines.push(`  maintainers do not want: "${truncate(r, 140)}"`);
   lines.push(
     "",
-    "Before acting: check the issue for new comments or linked PRs, follow the project's contributing guide, and let the person decide whether anything gets published.",
+    "Before acting: check the issue for new comments or linked PRs, follow the project's contributing guide, disclose AI assistance in the pull request description, and let the person decide whether anything gets published.",
     `With the gitgoblin command line installed, \`gitgoblin contribute ${p.repo.owner}/${p.repo.name} --opportunity ${o.id}\` drafts this change with a person approving each step.`,
   );
   return lines.join("\n");

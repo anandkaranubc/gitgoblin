@@ -8,8 +8,10 @@ export type Ecosystem = "python" | "node" | "go" | "rust";
 export interface DeprecationRule {
   id: string;
   ecosystem: Ecosystem;
-  /** Tested per line of source. */
+  /** Tested per line of source, with strings and comments blanked unless `quoted` is set. */
   pattern: RegExp;
+  /** The pattern names a quoted import path, so string literals stay visible to it. */
+  quoted?: boolean;
   severity: "removed" | "deprecated";
   /** Python minor version where the API was removed; the rule only fires when the project can run there. */
   removedIn?: string;
@@ -113,6 +115,7 @@ export const DEPRECATION_RULES: DeprecationRule[] = [
   {
     id: "go-ioutil", ecosystem: "go", severity: "deprecated",
     pattern: /^\s*(?:\w+\s+)?"io\/ioutil"/,
+    quoted: true,
     title: "Replace io/ioutil with io and os",
     detail: "io/ioutil has been deprecated since Go 1.16; its functions moved to io and os.",
     fix: "ioutil.ReadFile -> os.ReadFile, ioutil.ReadAll -> io.ReadAll, ioutil.TempDir -> os.MkdirTemp, and so on.",
@@ -121,6 +124,7 @@ export const DEPRECATION_RULES: DeprecationRule[] = [
   {
     id: "go-x-net-context", ecosystem: "go", severity: "deprecated",
     pattern: /"golang\.org\/x\/net\/context"/,
+    quoted: true,
     title: "Use the standard library context package",
     detail: "golang.org/x/net/context is a thin alias kept for compatibility; the standard `context` has been the right import since Go 1.7.",
     fix: "Import \"context\" instead.",
@@ -129,6 +133,7 @@ export const DEPRECATION_RULES: DeprecationRule[] = [
   {
     id: "go-golang-protobuf", ecosystem: "go", severity: "deprecated",
     pattern: /"github\.com\/golang\/protobuf\/proto"/,
+    quoted: true,
     title: "Migrate from github.com/golang/protobuf to google.golang.org/protobuf",
     detail: "The old protobuf module is deprecated in favour of the APIv2 module.",
     fix: "Import google.golang.org/protobuf/proto and regenerate with protoc-gen-go v1.20+.",

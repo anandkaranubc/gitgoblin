@@ -29,6 +29,8 @@ strict = true
     expect(py.classifierVersions).toEqual(["3.9", "3.12"]);
     expect(py.packageManager).toBe("uv");
     expect(py.packageDirs).toEqual(["src/foo"]);
+    const celery = await detectManifests(inventoryOf(["pyproject.toml", "celery/__init__.py", "t/__init__.py", "docs/__init__.py"]), reader({ "pyproject.toml": '[project]\nname = "celery"\n' }));
+    expect(celery.python?.packageDirs).toEqual(["celery"]);
     expect(py.hasPyTyped).toBe(true);
     expect(py.scripts).toEqual(["foo"]);
     expect(py.tooling).toEqual(expect.arrayContaining(["ruff", "mypy", "pytest"]));

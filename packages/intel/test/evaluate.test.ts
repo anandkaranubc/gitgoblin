@@ -7,7 +7,7 @@ export function profileWith(over: Partial<RepositoryProfile> = {}): RepositoryPr
   return {
     repo: { host: "github.com", owner: "o", name: "r" }, analyzedAt: "2026-10-22T00:00:00Z", headSha: "abc", defaultBranch: "main",
     topics: [], stars: 100, forks: 10, archived: false, isFork: false, nature: "library", natureReason: "test", languages: [], ecosystems: [],
-    ci: { provider: "none", workflows: [] }, structure: { fileCount: 1, analyzedFileCount: 1, sourceDirs: [], testDirs: [], docsDirs: [], entryPoints: [] },
+    ci: { provider: "none", workflows: [] }, structure: { fileCount: 1, analyzedFileCount: 1, sourceDirs: [], testDirs: [], docsDirs: [], entryPoints: [], centralFiles: [] },
     activity: { commits90d: 1, commits365d: 1, authors90d: 1, authors365d: 1, busFactor: 1, openIssues: 0, openPullRequests: 0, sampleSizes: { issues: 0, pullRequests: 0, externalPullRequests: 0 } },
     welcomeness: { score: 0.6, level: "open", signals: [], rules: { requiresIssueFirst: false, cla: false, dco: false, issueTemplates: false, pullRequestTemplate: false, helpLabels: [], rejectedChanges: [], dependencyBot: false, requiresTests: false, requiresChangelog: false } },
     conventions: { commitStyle: "unknown", recentCommitSubjects: [] }, hotFiles: [], instructionFiles: [], notes: [], ...over,

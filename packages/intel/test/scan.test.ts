@@ -16,6 +16,7 @@ describe("scan classification", () => {
       "tests/test_api.py", "src/api_test.go", "src/api.test.ts", "lib/api.spec.js",
       "spec/api_spec.rb", "src/test/java/ApiTest.java", "conftest.py",
     ]) expect(isTestPath(p), p).toBe(true);
+    expect(isTestPath("Tests/test_file_palm.py")).toBe(true);
     expect(isTestPath("src/testing_utils.py")).toBe(false);
     expect(isTestPath("src/contest.py")).toBe(false);
   });

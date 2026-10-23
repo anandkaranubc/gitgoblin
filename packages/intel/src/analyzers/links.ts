@@ -3,8 +3,8 @@ import { dirname, normalize, posix } from "node:path";
 import type { RepositoryProfile } from "../contracts.ts";
 import type { AnalysisContext } from "../context.ts";
 import { mapLimit } from "../util/limit.ts";
-import { type Analyzer, type Finding, evidence, textFiles } from "./types.ts";
 import { type Lookup, defaultLookup, resolvesToPublicAddress } from "../util/net.ts";
+import { type Analyzer, type Finding, evidence, textFiles } from "./types.ts";
 
 export interface DocLink {
   path: string;
@@ -23,7 +23,10 @@ export function extractLinks(path: string, text: string): DocLink[] {
   const links: DocLink[] = [];
   const lines = text.split("\n");
   let inFence = false;
-  const rst = path.toLowerCase().endsWith(".rst");
+  const rst = /\.(rst|txt)$/i.test(path);
+  // reStructuredText named targets: `.. _Name: url`, referenced as `text <Name_>`_ or Name_.
+  const rstTargets = new Map<string, string>();
+  if (rst) for (const m of text.matchAll(/^\.\. _([^:\n]+):\s*(\S+)\s*$/gm)) rstTargets.set(m[1]!.trim().toLowerCase(), m[2]!);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     if (/^\s*(```|~~~)/.test(line)) {
@@ -34,22 +37,34 @@ export function extractLinks(path: string, text: string): DocLink[] {
     const push = (target: string, label: string) => {
       const t = target.trim().replace(/[.,;:!?)]+$/, "");
       if (!t || SKIP_URL.test(t) || BADGE_HOST.test(t)) return;
+      // Only http(s) and repository-relative links are checkable; irc:, ftp:, slack: and friends are not.
+      if (/^[a-z][a-z0-9+.-]*:/i.test(t) && !/^https?:/i.test(t)) return;
+      // "mochajs/docs-legacy": a GitHub owner/repo shorthand, not a path in this repository.
+      if (/^[\w.-]+\/[\w.-]+$/.test(t) && !/\.\w{1,5}$/.test(t) && !t.startsWith(".") && !/^(src|lib|docs?|test|tests|packages?|examples?|internal|cmd|pkg|app|bin|scripts?|crates?)\//i.test(t)) return;
+      // "docs.example.org/path" without a scheme is a URL someone forgot to prefix, not a repository path.
+      if (/^[\w-]+(\.[\w-]+)+\.(com|org|net|io|dev|edu|gov|co|uk|de|fr|rs|sh|app|ai|me|info|xyz)(\/|$)/i.test(t)) return;
       links.push({ path, line: i + 1, target: t, text: label.trim() });
     };
     if (rst) {
-      for (const m of line.matchAll(/`([^`<]*)<([^>]+)>`_/g)) push(m[2]!, m[1]!);
+      for (const m of line.matchAll(/`([^`<]*)<([^>]+)>`_/g)) {
+        const target = m[2]!.trim();
+        if (target.endsWith("_")) {
+          const resolved = rstTargets.get(target.slice(0, -1).toLowerCase());
+          if (resolved) push(resolved, m[1]!);
+        } else push(target, m[1]!);
+      }
       for (const m of line.matchAll(/^\.\. _[^:]+:\s*(\S+)/g)) push(m[1]!, "");
       continue;
     }
-    // Images are badges and screenshots; their rot is low value and often blocked for bots.
-    const withoutImages = line.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/<img[^>]*>/gi, "");
-    for (const m of withoutImages.matchAll(/\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) push(m[2]!, m[1]!);
-    for (const m of withoutImages.matchAll(/^\s*\[([^\]]+)\]:\s*(\S+)/g)) push(m[2]!, m[1]!);
+    // Images are badges and screenshots; their rot is low value and often blocked for bots. Inline code is not a link.
+    const withoutImages = line.replace(/`[^`]*`/g, "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/<img[^>]*>/gi, "");
+    for (const m of withoutImages.matchAll(/\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) if (!m[1]!.startsWith("^")) push(m[2]!, m[1]!); // [^1] is a footnote
+    for (const m of withoutImages.matchAll(/^\s*\[([^\]^][^\]]*)\]:\s*(\S+)/g)) push(m[2]!, m[1]!); // [^1]: is a footnote definition
     for (const m of withoutImages.matchAll(/<a\s[^>]*href=["']([^"']+)["']/gi)) push(m[1]!, "");
     for (const m of withoutImages.matchAll(/<(https?:\/\/[^>\s]+)>/g)) push(m[1]!, "");
     // Bare URLs not already inside a markdown link.
     const stripped = withoutImages.replace(/\]\([^)]*\)/g, "]()").replace(/\]:\s*\S+/g, "]:").replace(/href=["'][^"']*["']/gi, "");
-    for (const m of stripped.matchAll(/(?<![("'<\w])https?:\/\/[^\s<>"')\]]+/g)) push(m[0], "");
+    for (const m of stripped.matchAll(/(?<![("'<\w`])https?:\/\/[\w.-]+[^\s<>"')\]`]*/g)) push(m[0], "");
   }
   return links;
 }
@@ -64,22 +79,39 @@ export function slugify(heading: string): string {
     .trim()
     .toLowerCase()
     .replace(/<[^>]+>/g, "")
-    .replace(/[`*_~]/g, "")
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/[`*~]/g, "")
+    // Underscores are emphasis only at word boundaries; intraword ones (allow_redirects) stay in the anchor.
+    .replace(/(^|\s)_+|_+(?=\s|$)/g, "$1")
+    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
     .replace(/ /g, "-");
 }
 
+/** Slug the way VitePress, Docusaurus and MkDocs do: every run of non-alphanumerics becomes one hyphen. */
+export function siteSlugify(heading: string): string {
+  return heading
+    .trim()
+    .toLowerCase()
+    .replace(/<[^>]+>/g, "")
+    .replace(/[`*~]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Anchors a Markdown file exposes, in GitHub style and in static-site style. */
 export function anchorsIn(markdown: string): Set<string> {
   const anchors = new Set<string>();
   const counts = new Map<string, number>();
   for (const line of markdown.split("\n")) {
     const heading = /^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/.exec(line)?.[1];
     if (heading) {
-      const base = slugify(heading.replace(/\s*\{#[^}]+\}\s*$/, ""));
+      const text = heading.replace(/\s*\{:?\s*#[^}]+\}\s*$/, "");
+      const base = slugify(text);
       const n = counts.get(base) ?? 0;
       counts.set(base, n + 1);
       anchors.add(n === 0 ? base : `${base}-${n}`);
-      const explicit = /\{#([^}]+)\}/.exec(heading)?.[1];
+      anchors.add(siteSlugify(text));
+      // `{#id}` (Pandoc, VitePress) and `{: #id }` / `{ #id }` (MkDocs attribute lists)
+      const explicit = /\{:?\s*#([^\s}]+)[^}]*\}/.exec(heading)?.[1];
       if (explicit) anchors.add(explicit);
     }
     // Any tag may carry an id or name anchor, e.g. ripgrep's <h3 name="complete">.
@@ -94,12 +126,21 @@ export interface RelativeCheck {
   problem: "missing-file" | "missing-anchor";
 }
 
+/** Static-site generators whose root-relative links are routes, not repository paths. */
+const SITE_CONFIG = /(^|\/)\.vitepress\/|(^|\/)(docusaurus\.config\.\w+|mkdocs[\w.-]*\.ya?ml|conf\.py|_config\.ya?ml|hugo\.(toml|ya?ml)|book\.toml|astro\.config\.\w+|zensical\.toml)$/;
+
+export function hasDocsSite(paths: Iterable<string>): boolean {
+  for (const p of paths) if (SITE_CONFIG.test(p)) return true;
+  return false;
+}
+
 /** Resolve a relative link against its document and report missing files or anchors. */
 export async function checkRelativeLink(
   link: DocLink,
   exists: (path: string) => boolean,
   existsDir: (path: string) => boolean,
   read: (path: string) => Promise<string | undefined>,
+  docsSite = false,
 ): Promise<RelativeCheck | undefined> {
   const [rawPath = "", fragment] = link.target.split("#");
   let decoded: string;
@@ -108,13 +149,27 @@ export async function checkRelativeLink(
   } catch {
     decoded = rawPath;
   }
-  const base = decoded.startsWith("/") ? decoded.slice(1) : posix.join(dirname(link.path), decoded);
+  const rootRelative = decoded.startsWith("/");
+  // Inside a generated docs site, root-relative links are routes we cannot verify statically.
+  if (rootRelative && docsSite) return undefined;
+  const base = rootRelative ? decoded.slice(1) : posix.join(dirname(link.path), decoded);
   const resolved = normalize(base).replace(/^(\.\.\/)+/, "").replace(/\/$/, "");
-  const targetPath = decoded === "" ? link.path : resolved;
-  if (decoded !== "" && !exists(targetPath) && !existsDir(targetPath)) return { link, resolved: targetPath, problem: "missing-file" };
+  let targetPath = decoded === "" ? link.path : resolved;
+  if (decoded !== "" && !exists(targetPath) && !existsDir(targetPath)) {
+    // Sites render .md as .html and directories as index pages.
+    const alternates = [targetPath.replace(/\.html?$/, ".md"), targetPath.replace(/\.html?$/, ".mdx"), `${targetPath}/index.md`, `${targetPath}.md`, `${targetPath}/README.md`];
+    const alt = alternates.find((a) => a !== targetPath && exists(a));
+    if (!alt) return docsSite && /\.html?$|\/$/.test(decoded) ? undefined : { link, resolved: targetPath, problem: "missing-file" };
+    targetPath = alt;
+  }
   if (fragment && /\.(md|markdown|mdx)$/i.test(targetPath) && exists(targetPath)) {
     const text = await read(targetPath);
-    if (text !== undefined && !anchorsIn(text).has(fragment.toLowerCase()) && !anchorsIn(text).has(fragment)) {
+    // Emoji and punctuation render differently across slug implementations; compare the alphanumeric skeleton.
+    const bare = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+    const anchors = text === undefined ? new Set<string>() : anchorsIn(text);
+    const wanted = bare(decodeURIComponent(fragment));
+    const found = anchors.has(fragment.toLowerCase()) || anchors.has(fragment) || [...anchors].some((a) => bare(a) === wanted && wanted.length > 0);
+    if (text !== undefined && !found) {
       return { link, resolved: `${targetPath}#${fragment}`, problem: "missing-anchor" };
     }
   }
@@ -132,9 +187,11 @@ export interface ProbeOptions {
 
 const MAX_REDIRECTS = 5;
 
-/** Hosts whose answers prove nothing: they block automated clients. */
-function notVerifiable(host: string): string | undefined {
-  return BOT_HOSTILE.test(host) ? "host blocks automated checks" : undefined;
+/** Hosts whose answers prove nothing: they block automated clients, or serve the page only to browsers. */
+function notVerifiable(url: string, host: string): string | undefined {
+  if (BOT_HOSTILE.test(host)) return "host blocks automated checks";
+  if (/github\.com$/i.test(host) && /\/(discussions|projects|wiki|security\/advisories)(\/|$)/.test(url)) return "GitHub page not served to automated clients";
+  return undefined;
 }
 
 /** Only http(s) on standard ports to hosts that resolve to public addresses; everything else is left unchecked. */
@@ -152,14 +209,13 @@ async function admissible(url: string, lookupFn: Lookup): Promise<{ host: string
   return { host: parsed.hostname };
 }
 
-/** HEAD then GET; only a confirmed 404/410 or a repeatable DNS failure counts as broken. Never contacts private addresses. */
 export async function probeUrl(url: string, fetchImpl: typeof fetch, options: ProbeOptions | number = {}): Promise<{ status: LinkStatus; detail: string }> {
   const { timeoutMs = 8000, lookup = defaultLookup } = typeof options === "number" ? { timeoutMs: options } : options;
   const admitted = await admissible(url, lookup);
   if ("refused" in admitted) return { status: "unknown", detail: admitted.refused };
-  const unverifiable = notVerifiable(admitted.host);
+  const unverifiable = notVerifiable(url, admitted.host);
   if (unverifiable) return { status: "unknown", detail: unverifiable };
-  // Redirects are followed by hand so every hop passes the same checks as the first URL.
+  // Redirects are followed by hand so every hop passes the same host check as the first URL.
   const attempt = async (method: "HEAD" | "GET"): Promise<number | "network" | "redirect-refused"> => {
     let current = url;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
@@ -188,7 +244,7 @@ export async function probeUrl(url: string, fetchImpl: typeof fetch, options: Pr
         return res.status;
       }
       const hop = await admissible(next, lookup);
-      if ("refused" in hop || notVerifiable(hop.host)) return "redirect-refused";
+      if ("refused" in hop || notVerifiable(next, hop.host)) return "redirect-refused";
       current = next;
     }
     return -1;
@@ -221,7 +277,10 @@ export const linksAnalyzer: Analyzer = {
   name: "links",
   async run(ctx: AnalysisContext, profile: RepositoryProfile): Promise<Finding[]> {
     const links: DocLink[] = [];
-    for await (const { path, text } of textFiles(ctx, DOC_PREDICATE, 60)) links.push(...extractLinks(path, text));
+    // Sphinx projects (Django among them) keep reStructuredText sources as .txt under docs/.
+    const sphinxTxt = ctx.inventory.files.some((f) => /^docs?\/conf\.py$/.test(f.path));
+    const predicate = (p: string) => DOC_PREDICATE(p) || (sphinxTxt && /^docs?\/.*\.txt$/.test(p));
+    for await (const { path, text } of textFiles(ctx, predicate, 60)) links.push(...extractLinks(path, text));
     if (links.length === 0) return [];
 
     const exists = (p: string) => ctx.inventory.byPath.has(p);
@@ -231,12 +290,31 @@ export const linksAnalyzer: Analyzer = {
       for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join("/"));
     }
     const existsDir = (p: string) => dirs.has(p);
+    const docsSite = hasDocsSite(ctx.inventory.files.map((f) => f.path));
 
     const findings: Finding[] = [];
     const relative = links.filter((l) => !isExternal(l.target));
+    const generated = new Map<string, boolean>();
+    const MAX_GENERATED_GREPS = 25;
+    let generatedGreps = 0;
     for (const link of relative) {
-      const check = await checkRelativeLink(link, exists, existsDir, (p) => ctx.read(p));
+      const check = await checkRelativeLink(link, exists, existsDir, (p) => ctx.read(p), docsSite && link.path.includes("/"));
       if (!check) continue;
+      if (check.problem === "missing-file" && docsSite) {
+        // A whole directory absent from the repository (ruff's docs/rules/) is generated at build time.
+        const parent = check.resolved.split("/").slice(0, -1).join("/");
+        if (parent && !existsDir(parent)) continue;
+        // So is a page whose name appears in build scripts or site config (ruff's settings.md).
+        const base = check.resolved.split("/").pop()!;
+        if (!generated.has(base) && generatedGreps >= MAX_GENERATED_GREPS) {
+          if (generatedGreps === MAX_GENERATED_GREPS) ctx.budget.cut(`stopped checking whether missing docs pages are generated after ${MAX_GENERATED_GREPS} lookups`);
+          generatedGreps++;
+          continue;
+        }
+        if (!generated.has(base)) generatedGreps++;
+        if (!generated.has(base)) generated.set(base, (await ctx.repo.grep(base, [":(glob)**/*.py", ":(glob)**/*.ts", ":(glob)**/*.js", ":(glob)**/*.mjs", ":(glob)**/*.rs", ":(glob)**/*.yml", ":(glob)**/*.yaml", ":(glob)**/*.toml", ":(glob)**/*.json", ":(glob)**/Makefile"])).length > 0);
+        if (generated.get(base)) continue;
+      }
       const isReadme = /^readme/i.test(link.path);
       findings.push({
         kind: "broken_link",

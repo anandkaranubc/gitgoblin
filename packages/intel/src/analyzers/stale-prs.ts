@@ -1,11 +1,12 @@
 import type { RepositoryProfile } from "../contracts.ts";
 import type { AnalysisContext } from "../context.ts";
-import { type PrSample, isMaintainer } from "../github/types.ts";
+import { type PrSample, isMaintainer, unquoted } from "../github/types.ts";
 import { daysAgo } from "../util/time.ts";
 import { truncate } from "../util/text.ts";
 import { type Analyzer, type Finding, evidence } from "./types.ts";
 
-const WANTS_UPDATE = /\b(needs? (a )?rebase|rebase|merge conflicts?|conflicts? (with|need)|please (update|address|fix|rebase|resolve)|any updates?|still (interested|working|planning)|ping|waiting (on|for) (you|author|the author|changes)|could you|can you (update|rebase|address)|lgtm|looks good|approved|happy to merge|ready to merge once)\b/i;
+// Requests for work only; approval phrases (LGTM, looks good) mean the ball is with the maintainers.
+const WANTS_UPDATE = /\b(needs? (a )?rebase|rebase|merge conflicts?|conflicts? (with|need)|please (update|address|fix|rebase|resolve|add|change)|any updates?|still (interested|working|planning)|ping|waiting (on|for) (you|author|the author|changes|an update)|could you (update|rebase|address|add|fix|change|also)|can you (update|rebase|address|add|fix|change|also)|would you (mind|be able)|mind (adding|updating|rebasing|fixing)|ready to merge once)\b/i;
 const STALE_LABEL = /needs[- _]rebase|stale|waiting[- _]for[- _]author|needs[- _]work|changes[- _]requested|inactive|abandoned/i;
 
 export interface StaleAssessment {
@@ -21,14 +22,15 @@ export function assessStalePr(pr: PrSample, now: Date): StaleAssessment {
   const idleDays = daysAgo(pr.updatedAt, now);
   const approved = pr.reviews.some((r) => r.state === "APPROVED" && isMaintainer(r.association));
   const maintainerComments = pr.lastComments.filter((c) => c.author && !c.author.isBot && isMaintainer(c.association) && c.author.login !== pr.author?.login);
-  const asked = maintainerComments.find((c) => c.body && WANTS_UPDATE.test(c.body));
+  const asked = maintainerComments.find((c) => c.body && WANTS_UPDATE.test(unquoted(c.body)));
+  const askedText = asked?.body ? unquoted(asked.body).trim() : undefined;
   const changesRequested = pr.reviews.some((r) => r.state === "CHANGES_REQUESTED" && isMaintainer(r.association));
   const authorLast = [...pr.lastComments].reverse().find((c) => c.author?.login === pr.author?.login);
   const authorIdleDays = authorLast ? daysAgo(authorLast.createdAt, now) : undefined;
   // Interest alone is not enough: an approved, mergeable PR is waiting on maintainers, not on a contributor.
   const needsWork = asked !== undefined || changesRequested || pr.labels.some((l) => STALE_LABEL.test(l)) || (pr.mergeable === "CONFLICTING" && (approved || maintainerComments.length > 0));
   const maintainerInterest = needsWork;
-  const base = { approved, maintainerAsked: asked?.body, idleDays, authorIdleDays };
+  const base = { approved, maintainerAsked: askedText, idleDays, authorIdleDays };
   if (pr.isDraft) return { ...base, eligible: false, reason: "draft" };
   if (pr.author?.isBot) return { ...base, eligible: false, reason: "bot PR" };
   if (idleDays < 60) return { ...base, eligible: false, reason: `active ${Math.round(idleDays)} days ago` };
@@ -69,8 +71,8 @@ export const stalePrsAnalyzer: Analyzer = {
         etiquette: ["Never open a competing PR without asking first; credit the original author."],
         risks: [...(superseded ? [`PR #${superseded.number} may already supersede it.`] : []), "Maintainers may have lost interest; confirm before rebasing."],
         signals: {
-          value: Math.min(0.85, 0.5 + (a.approved ? 0.15 : 0) + (pr.closingIssues.length ? 0.1 : 0)),
-          valueReason: `${a.approved ? "approved work" : "wanted work"} that only needs a rebase${pr.closingIssues.length ? `; closes #${pr.closingIssues.join(", #")}` : ""}`,
+          value: Math.min(0.85, 0.5 + (a.approved ? 0.15 : 0) + (pr.closingIssues.length ? 0.1 : 0)) * (a.idleDays > 365 ? 0.7 : 1),
+          valueReason: `${a.approved ? "approved work" : "wanted work"} that only needs a rebase${pr.closingIssues.length ? `; closes #${pr.closingIssues.join(", #")}` : ""}${a.idleDays > 365 ? "; idle over a year, interest may have faded" : ""}`,
           feasibility: size < 300 ? 0.75 : 0.55,
           feasibilityReason: `the code exists (+${pr.additions}/-${pr.deletions}); conflicts and review notes remain`,
           confidence: 0.8,

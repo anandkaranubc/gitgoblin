@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { commitMessage, neutralizeForGitHub, publishPullRequest, pullRequestBody, pullRequestTitle, type DeliveryInput } from "../src/deliver.ts";
 import { git } from "../src/workspace.ts";
-import { subjectFor, usesConventionalCommits } from "../src/naming.ts";
+import { branchNameFor, subjectFor, usesConventionalCommits } from "../src/naming.ts";
 import { TaskSchema, type Task } from "../src/types.ts";
 
 const base: Task = TaskSchema.parse({
@@ -123,7 +123,7 @@ describe("pull request text from untrusted sources", () => {
     return {
       ...i,
       notes: { ...i.notes, summary: "Fixed it. Closes #1, closes #2. cc @maintainer", knownGaps: ["ask @someone"] },
-      review: { ...i.review, prNotes: "fixes #3", findings: [{ severity: "minor", file: "a", line: null, summary: "ping @bob", failureScenario: "", suggestion: "" }] },
+      review: { ...i.review, prNotes: "fixes #3", findings: [{ severity: "minor", file: "src/paginate.ts", line: null, summary: "ping @bob", failureScenario: "", suggestion: "" }] },
     };
   };
   it("keeps the engine's own issue link working and neutralizes everything the model wrote", () => {
@@ -139,5 +139,115 @@ describe("pull request text from untrusted sources", () => {
     expect(message).toContain("Refs #42");
     expect(message).toContain("Closes `#1`");
     expect(message).not.toMatch(/(^|[^`])@maintainer/);
+  });
+});
+
+describe("pull request text from a real run (eslint-plugin-testing-library #1401)", () => {
+  // Shapes taken from the end-to-end replay of live run 4.
+  const real = TaskSchema.parse({
+    id: "opp-6fa0e219",
+    repo: { owner: "testing-library", name: "eslint-plugin-testing-library" },
+    kind: "issue",
+    title: "Fix #1401: `no-wait-for-side-effects`: autofix breaks code when the `waitFor` callback is on one line",
+    summary: "Have you read the Troubleshooting section? Yes Plugin version 7.16.2 ESLint version 10.12.0 Node.js version 22.23.1 Bug description The autofix seems to work line by line.",
+    issue: { number: 1401 },
+    conventions: { commitStyle: "conventional" },
+  });
+  const realInput = (): DeliveryInput => {
+    const i = input(real);
+    return {
+      ...i,
+      plan: { ...i.plan, goal: "Make the no-wait-for-side-effects autofix correct when the waitFor callback shares a line with other code" },
+      notes: {
+        ...i.notes,
+        summary: "The autofix now gives correct code when the callback shares a line (#1401).",
+        knownGaps: [
+          "Several side effects on the same line are fixed over several ESLint passes.",
+          "There is an untracked `.pnpm-store/` directory in the workspace. It is not part of the change.",
+          "No maintainer has confirmed #1401 yet. I have not commented on the issue or opened a PR, because I can't reach the network.",
+        ],
+        deviationsFromPlan: ["I ran vitest from ./node_modules/.bin instead of through `pnpm`, which failed in this sandbox with ERR_PNPM_STORE_DIR_OPEN_OPERATION_LOCK."],
+        environmentNotes: ["pnpm could not take its store lock in the sandbox."],
+      },
+    };
+  };
+
+  it("titles the change without repeating the verb or the issue number", () => {
+    const title = pullRequestTitle(realInput());
+    expect(title).not.toMatch(/fix: fix/i);
+    expect(title).not.toContain("#1401");
+    expect(title).toMatch(/^fix: /);
+    expect(title.length).toBeLessThanOrEqual(72);
+    expect(branchNameFor(real)).toBe("gitgoblin/fix-1401-no-wait-for-side-effects");
+  });
+
+  it("summarises with the plan's goal, not the issue template text", () => {
+    const body = pullRequestBody(realInput());
+    expect(body).not.toContain("Have you read the Troubleshooting section");
+    expect(body).toContain("Make the no-wait-for-side-effects autofix correct");
+    expect(body).toContain("Fixes #1401");
+  });
+
+  it("keeps the task's own issue linkable while still inerting others", () => {
+    const body = pullRequestBody(realInput());
+    expect(body).toContain("(#1401)");
+    expect(body).not.toContain("`#1401`");
+  });
+
+  it("keeps notes about the engine's own environment out of the public body", () => {
+    const body = pullRequestBody(realInput());
+    expect(body).toContain("Several side effects on the same line");
+    expect(body).not.toMatch(/sandbox|ERR_PNPM|\.pnpm-store|can't reach the network|store lock/i);
+  });
+});
+
+describe("pull request text, run 5 findings", () => {
+  const task = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n" }, kind: "issue", title: "Fix #9: crash on empty input", issue: { number: 9 }, conventions: { commitStyle: "conventional" } });
+  const base = (): DeliveryInput => ({
+    ...input(task),
+    plan: { ...input(task).plan, goal: "Handle empty input without crashing", commitSubject: "fix(parser): handle empty input without crashing" },
+    investigation: { summary: "", relevantFiles: [], rootCause: "parse() indexes the first token without checking the list is empty", reproduction: { kind: "none", path: "", command: "", observed: "" }, commands: {}, feasibility: "proceed", reasons: [], questions: [] },
+    verification: {
+      checks: [
+        { name: "build", command: "pnpm build", status: "fail", exitCode: 1, durationMs: 1, outputTail: "" },
+        { name: "test", command: "pnpm test", status: "pass", exitCode: 0, durationMs: 1, outputTail: "" },
+      ],
+      regressions: [],
+      ok: true,
+      diff: { files: 1, insertions: 1, deletions: 0, changedFiles: ["src/parse.ts"] },
+      preexisting: ["build"],
+    },
+    review: {
+      verdict: "approve",
+      checks: [],
+      findings: [
+        { severity: "nit", file: ".pnpm-store", line: null, summary: "An untracked .pnpm-store directory is present", failureScenario: "", suggestion: "" },
+        { severity: "nit", file: "src/parse.ts", line: 3, summary: "Consider an early return", failureScenario: "", suggestion: "" },
+      ],
+      prNotes: "I recommend approving. I could not run the tests myself because the review hook blocked it.",
+    },
+  });
+
+  it("uses the planner's subject when it fits", () => {
+    expect(pullRequestTitle(base())).toBe("fix(parser): handle empty input without crashing");
+    expect(commitMessage(base()).split("\n")[0]).toBe("fix(parser): handle empty input without crashing");
+  });
+
+  it("explains the change with the goal and the root cause", () => {
+    expect(pullRequestBody(base())).toContain("Handle empty input without crashing. parse() indexes the first token without checking the list is empty.");
+  });
+
+  it("marks checks that already failed on the base commit", () => {
+    const body = pullRequestBody(base());
+    expect(body).toContain("| `pnpm build` | fail (also fails on the base commit) |");
+    expect(body).toContain("| `pnpm test` | pass |");
+  });
+
+  it("keeps reviewer notes about the change and drops ones about the workspace or addressed to the operator", () => {
+    const body = pullRequestBody(base());
+    expect(body).toContain("Consider an early return");
+    expect(body).not.toContain(".pnpm-store");
+    expect(body).not.toMatch(/recommend approving|review hook/i);
+    expect(body).not.toContain("Deviation from plan");
   });
 });

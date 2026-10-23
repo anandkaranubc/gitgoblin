@@ -1,5 +1,8 @@
-import type { Investigation, Review, RunResult, Task, Verification } from "./types.ts";
+import type { ImplementationNotes, Investigation, Review, RunResult, Task, Verification } from "./types.ts";
+import { forMaintainers } from "./deliver.ts";
 import { describeChecks } from "./verify.ts";
+
+const forMaintainersLine = (line: string) => forMaintainers([line]).length === 1;
 
 export interface PhaseSummary {
   name: string;
@@ -20,6 +23,8 @@ export interface ReportInput {
   prTitle?: string;
   /** How the repository's own commands were isolated on this machine: sandbox-exec, bwrap or none. */
   checkIsolation?: string;
+  /** The last implementation's notes; their environment notes appear here and never in the pull request. */
+  notes?: ImplementationNotes;
 }
 
 /** Human-readable summary written at the end of every run, whatever its outcome. */
@@ -61,6 +66,10 @@ export function renderReport(input: ReportInput): string {
     for (const c of input.review.checks) lines.push(`- ${c.name}: ${c.verdict} — ${c.evidence}`);
     for (const f of input.review.findings) lines.push(`- [${f.severity}] ${f.file}${f.line ? `:${f.line}` : ""}: ${f.summary}`);
     lines.push("");
+  }
+  const environment = [...(input.notes?.environmentNotes ?? []), ...(input.notes ? [...input.notes.knownGaps, ...input.notes.deviationsFromPlan].filter((line) => !forMaintainersLine(line)) : [])];
+  if (environment.length) {
+    lines.push("## Environment notes (for you, not in the pull request)", ...environment.map((e) => `- ${e}`), "");
   }
   if (result.status === "awaiting_approval") {
     lines.push("## Next step", "Nothing has been pushed. Read pr.md and diff.patch in this directory; if you would open this pull request by hand, publish it from the tool you ran this with.", "");
