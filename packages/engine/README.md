@@ -30,9 +30,10 @@ and `gh auth login` for publishing. The agent's bash runs in the Agent SDK sandb
 pass `--no-sandbox` only on platforms without one. The repository's own install and check commands
 run on your machine with a credential-free environment and, by default, inside an OS sandbox
 (`sandbox-exec` on macOS, `bwrap` on Linux when installed): writes limited to the checkout and tool
-caches, credential files hidden, network only during install. `--check-isolation sandbox` makes the
-run fail when no OS sandbox is available; `none` turns it off, for example when a tool needs to
-write outside those places. The install command still runs the repository's own scripts: for
+caches, credential files hidden, network only during install. Python projects get a virtualenv
+under the run directory (so `pip install -e .` never touches your interpreter) and Ruby projects a
+per-run `BUNDLE_PATH`. `--check-isolation sandbox` makes the run fail when no OS sandbox is
+available; `none` turns it off, for example when a tool needs to write outside those places. The install command still runs the repository's own scripts: for
 repositories you do not trust, run the engine itself inside a container.
 
 ## Library
@@ -63,6 +64,7 @@ without a model.
 | `workspace.ts` | git: worktree or clone, diffs against the base commit, the single squashed commit |
 | `exec.ts` | runs commands with timeouts, process-group kill and capped output |
 | `hostbox.ts` | OS sandbox (sandbox-exec, bwrap) for the repository's own commands |
+| `toolchain.ts` | per-run prefix for what the toolchain installs: a Python virtualenv, bundler's gem path |
 | `journal.ts` | the run directory: events, artifacts, report |
 | `deliver.ts` | commit message, PR text, push and PR creation via `gh` |
 | `intake.ts` | maps `@gitgoblin/intel` contracts to the engine's `Task` |

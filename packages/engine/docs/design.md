@@ -82,8 +82,10 @@ Escalations and stops still write a full report so a human can pick up where the
   `sandbox-exec` on macOS, bubblewrap on Linux when installed). Inside it, writes are limited to the
   workspace (never its `.git`), the temp directory and tool caches under the home directory;
   credential paths are unreadable; the network is cut except on localhost, and open only for the
-  install phase. `checkIsolation: "sandbox"` fails the run when no OS sandbox exists; `"none"` runs
-  bare, and the report says which happened. Commands the model discovers during orientation are
+  install phase. Python projects get a virtualenv and Ruby projects a `BUNDLE_PATH` under the run
+  directory (`toolchain.ts`), on PATH for the repository commands and the agent alike, so installs
+  land there instead of in the operator's interpreter. `checkIsolation: "sandbox"` fails the run
+  when no OS sandbox exists; `"none"` runs bare, and the report says which happened. Commands the model discovers during orientation are
   accepted only as plain invocations of known tool runners: no shell operators, no inline code or
   preload flags, no paths outside the checkout, no installs or download-and-run forms. The install
   phase still runs the repository's own scripts with network access: use a container for

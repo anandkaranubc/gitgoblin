@@ -348,6 +348,17 @@ describe("runContribution", () => {
     expect(existsSync(path.join(result.runDir, "report.md"))).toBe(true);
   });
 
+  it("keeps the install step's output so a person can see why it failed", async () => {
+    const repo = await createFixtureRepo();
+    const task = { ...fixtureTask(repo), commands: { install: "echo installing dependencies; echo missing compiler 1>&2; exit 1", test: "npm test" } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(result.status).toBe("awaiting_approval");
+    const log = readFileSync(path.join(result.runDir, "install-output.txt"), "utf8");
+    expect(log).toContain("installing dependencies");
+    expect(log).toContain("missing compiler");
+    expect(readFileSync(path.join(result.runDir, "events.jsonl"), "utf8")).toMatch(/"phase":"install","type":"end","exitCode":1/);
+  });
+
   it("reports a failed phase instead of throwing", async () => {
     const repo = await createFixtureRepo();
     const result = await run({ orient: () => ({ not: "an investigation" }) })(repo, workdir());
