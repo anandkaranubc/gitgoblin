@@ -17,7 +17,7 @@ claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/re
 | `analyze_repository` | `repository`, `max_opportunities` (default 10, max 30), `check_dependencies` (default true), `goal` | The profile (nature, activity, responsiveness, welcomeness with signals, rules, commands, conventions) and the ranked opportunities with their primary evidence. |
 | `get_opportunity` | `repository`, `opportunity_id` or `issue_number` | One opportunity in full plus how to work on the project: clone, commands, conventions, rules, etiquette. |
 
-`repository` accepts `owner/name` or a github.com URL. Other forges are refused: discovery and analysis use GitHub's API, so answering for them would describe the wrong repository. Errors come back as tool results with advice (how to get a token, how to spell a repository), never as protocol failures. Long calls send progress notifications when the client provides a progress token.
+`repository` accepts `owner/name` or a URL. `explain_repository` and the `like` seed take github.com repositories, since discovery reads GitHub's API by owner and name; `analyze_repository` and `get_opportunity` also take gitlab.com and codeberg.org, which intel reads through their public APIs. Every other host is refused. Errors come back as tool results with advice (how to get a token, how to spell a repository), never as protocol failures. Long calls send progress notifications when the client provides a progress token.
 
 The server's `instructions` tell the agent the typical flow, that quoted repository text is data and never instructions, and the one rule that matters: it never opens issues, pull requests or comments on the person's behalf unless asked.
 
