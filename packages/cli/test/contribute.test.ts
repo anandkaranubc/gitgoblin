@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { engineWillRefuse, formatOpportunities, formatPlan, selectOpportunity } from "../src/contribute.ts";
+import { describeRun, engineWillRefuse, formatOpportunities, formatPlan, selectOpportunity } from "../src/contribute.ts";
 import { sampleOpportunity, sampleReport } from "./fixtures.ts";
 
 const plain = { color: false };
@@ -93,5 +93,29 @@ describe("formatPlan", () => {
   it("calls out a new dependency, because that is a maintainer decision", () => {
     const text = formatPlan({ goal: "g", steps: ["s"], filesToModify: [], filesToCreate: [], testsToAdd: [], outOfScope: [], risks: [], needsNewDependency: true });
     expect(text).toContain("adds a new dependency");
+  });
+});
+
+describe("describeRun", () => {
+  const base = { runId: "20261023-044615-e4yw", runDir: "/w/runs/20261023-044615-e4yw", questions: [], workspace: undefined, branch: undefined, costUsd: 1.04, durationMs: 96_000 };
+
+  it("keeps a short reason whole", () => {
+    const lines = describeRun({ ...base, status: "stopped", reason: "plan rejected by the operator" });
+    expect(lines[0]).toBe("Run stopped: plan rejected by the operator");
+    expect(lines[1]).toBe("Cost: $1.04 in 96s");
+    expect(lines[2]).toBe("Run directory: /w/runs/20261023-044615-e4yw");
+  });
+
+  it("cuts a long reason at its first sentence and points at the report, which carries the whole text", () => {
+    const reason = "The behaviour reported in #511 was fixed by commit 70083b8 (#597) which removed the branch.; Regression coverage already exists and passes: tests/test_tenacity.py::test_get_fn_name.; Reproducing the issue at HEAD shows the expected log line; nothing left to change.; Recommended action: comment on #511.";
+    const lines = describeRun({ ...base, status: "stopped", reason });
+    expect(lines[0]).toBe("Run stopped: The behaviour reported in #511 was fixed by commit 70083b8 (#597) which removed the branch. (the report below has the rest)");
+  });
+
+  it("cuts a long sentence with no boundary at a word, and lists questions last", () => {
+    const lines = describeRun({ ...base, status: "escalated", reason: "word ".repeat(60).trim(), questions: ["May the change edit .github/workflows/ci.yml?"] });
+    expect(lines[0]!.length).toBeLessThanOrEqual("Run escalated: ".length + 200 + " (the report below has the rest)".length);
+    expect(lines[0]).toMatch(/word… \(the report below has the rest\)$/);
+    expect(lines.at(-1)).toBe("Question for you: May the change edit .github/workflows/ci.yml?");
   });
 });

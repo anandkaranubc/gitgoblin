@@ -5,12 +5,12 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { DiscoveryQuery, DiscoveryResult, Goal, RepoRef } from "@gitgoblin/core";
 import { GOAL_DESCRIPTIONS, GOALS, parseRepoRef, sameRepo } from "@gitgoblin/core";
-import type { Effort, Reporter, RunResult } from "@gitgoblin/engine";
+import type { Effort, Reporter } from "@gitgoblin/engine";
 import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/intel";
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
 import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
-import { engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "./contribute.ts";
+import { describeRun, engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
 import { formatRuns, listRuns, readRun } from "./runs.ts";
@@ -519,12 +519,6 @@ export function buildProgram(runtime: Runtime): Command {
     });
 
   return program;
-}
-
-function describeRun(result: RunResult): string[] {
-  const lines = [`Run ${result.status}: ${result.reason}`, `Cost: $${result.costUsd.toFixed(2)} in ${Math.round(result.durationMs / 1000)}s`, `Run directory: ${result.runDir}`];
-  for (const question of result.questions) lines.push(`Question for you: ${question}`);
-  return lines;
 }
 
 /** Runs the CLI and returns the exit code. */
