@@ -24,6 +24,16 @@ can I land my first pull request this week", and a 300-star library that
 answer to "what could I revive". So the engine computes several independent
 signals and weighs them differently per goal.
 
+This is measured, not assumed. `packages/eval` replays discovery on a past
+date and checks where newcomers then got pull requests merged. On about 300
+repositories in four languages, the contribute ranking beat stars,
+starter-issue counts and recency at finding projects where newcomers landed
+work. It said little about a newcomer's odds of being merged, though: the
+share of pull requests a project merges predicted those best, and stars
+predicted the opposite. That share is the `acceptance` signal. It is shown in
+explanations but not yet weighted, because a re-weighting that uses it has
+not yet passed its test on held-out dates (`packages/eval/docs/design.md`).
+
 ## Pipeline
 
 1. **Search.** Several GitHub searches per goal, each a deliberately different slice (for `contribute`: repositories with starter issues, with help-wanted issues, and small active ones). Languages multiply the plans; topics, keywords, star bounds and dates narrow them. `seed` ("more like this") replaces the goal slices with the seed's topics, else its package keywords, else description words.
@@ -44,6 +54,7 @@ All signals are 0..1; unknown stays `undefined` and is never treated as zero.
 | --- | --- | --- |
 | activity | Half-life decay of days since last commit or push (45 days), blended with merged pull requests in the past year | GitHub, GraphQL, issues.ecosyste.ms |
 | responsiveness | Decay of average issue (14 d) and pull request (10 d) close time over the past year, blended with merge ratio; falls back to recency of the last merged pull request | issues.ecosyste.ms, GraphQL |
+| acceptance | Share of pull requests merged in the past year (at least 5), else all time (at least 10). All authors, maintainers included; `analyze` reports outsiders' share from a recent sample, so the two can differ | issues.ecosyste.ms |
 | busFactor | Development distribution score (1 − top committer's share) and log-scaled committer count | repos.ecosyste.ms, GraphQL |
 | newcomerFriendliness | CONTRIBUTING, code of conduct, issue templates, open starter issues, distinct pull request authors; zero when issues are disabled | GraphQL, repos.ecosyste.ms |
 | docs | README, substantive description, homepage, changelog | repos.ecosyste.ms, GitHub |
@@ -82,4 +93,4 @@ was known) + bonuses, clamped to 0..1. Scores compare within a goal only.
 
 - GitHub only for candidate search. ecosyste.ms enrichment already works for any forge, so adding GitLab or Codeberg search is a client, not a redesign.
 - Keyword similarity for seeds without topics is fuzzy.
-- Heuristics are hand-tuned; there is no learning from what users click.
+- Weights are hand-set from backtests, not learned from what users click. Change them only with a backtest on a date the change was not designed on (`packages/eval/docs/design.md` says how).

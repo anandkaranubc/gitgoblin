@@ -55,6 +55,16 @@ export function computeSignals(repo: EnrichedRepo, now: number): ComputedSignals
     signals.responsiveness = 0.7 * decay(sinceMerge, 30);
   }
 
+  // Acceptance: the share of pull requests that get merged. It is the strongest predictor of a
+  // newcomer's pull request being merged that the backtest in packages/eval found, and stars
+  // predict the opposite. Small samples stay unknown rather than reading 1 of 1 as 100%.
+  if (issueStats) {
+    const year = issueStats.pastYear;
+    evidence.mergedPullRequestsLastYear = year.mergedPullRequests;
+    if (year.pullRequests >= 5) signals.acceptance = clamp01(year.mergedPullRequests / year.pullRequests);
+    else if (issueStats.pullRequests >= 10) signals.acceptance = clamp01(issueStats.mergedPullRequests / issueStats.pullRequests);
+  }
+
   // Bus factor: how spread out the work is.
   const stats = ecosystems?.commitStats;
   if (stats && stats.totalCommitters > 0) {
