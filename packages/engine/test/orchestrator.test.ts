@@ -357,7 +357,7 @@ describe("runContribution", () => {
     }
   });
 
-  it.skipIf(detectHostSandbox()?.kind !== "sandbox-exec")("limits a strict install to package registries through the engine's proxy", async () => {
+  it.skipIf(!detectHostSandbox())("limits a strict install to package registries through the engine's proxy", async () => {
     const repo = await createFixtureRepo();
     // The install script probes three things: a direct connection (must fail), the proxy variable
     // (must be set), and a tunnel to a host that is not a registry (must be refused and recorded).
