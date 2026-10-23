@@ -31,6 +31,14 @@ Code login. Each run costs money, capped by `--max-cost`. Known limits: GitHub o
 scores are still being calibrated; `contribute` has been tested on a small number of real
 repositories.
 
+## @gitgoblin/mcp 0.1.3 - 2026-10-23
+
+- Reads github.com repositories only. Earlier versions also accepted gitlab.com and codeberg.org,
+  but discovery and analysis look repositories up on GitHub by owner and name, so those requests
+  were answered about whichever GitHub repository had the same name.
+- The server instructions and the opportunity briefing tell the agent to disclose AI assistance in
+  the pull request and to follow the project's policy on AI contributions.
+
 ## @gitgoblin/mcp 0.1.2 - 2026-10-23
 
 - The package and the `.mcpb` bundle now carry gitgoblin's license and the notices of the
