@@ -370,20 +370,21 @@ export function buildProgram(runtime: Runtime): Command {
     .option("--report <file>", "reuse a report saved by `analyze --json --out` instead of analyzing again")
     .option("--opportunity <id>", "work on this opportunity: its id from the report, or its rank in the list")
     .option("--issue <n>", "work on the opportunity for this issue number")
-    .option("--max-cost <usd>", "spending cap for the agent run", "2")
+    .option("--max-cost <usd>", "spending cap for the agent run in dollars (default: the engine's own limit, 10). A run that stops at the cap leaves nothing to publish")
     .option("--workdir <dir>", "where the engine keeps runs and clones (default: $GITGOBLIN_WORKDIR or ~/.gitgoblin)")
     .option("--model <id>", "model for the engine")
     .option("--effort <level>", `effort for the engine, one of ${EFFORTS.join(", ")}`, effortArgument)
     .option("-g, --goal <goal>", "discovery goal used for hints", goalArgument, "contribute")
-    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost: string; workdir?: string; model?: string; effort?: Effort; goal: Goal }) => {
+    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: string; workdir?: string; model?: string; effort?: Effort; goal: Goal }) => {
       if (!runtime.canPrompt) {
         throw new Error("contribute needs an interactive terminal: it asks before running an agent and again before publishing anything.");
       }
-      const maxCostUsd = Number(options.maxCost);
-      if (!(maxCostUsd > 0)) throw new Error("--max-cost must be a positive number of dollars");
       const [intel, engine] = await Promise.all([loadIntel(runtime.loadModule), loadEngine(runtime.loadModule)]);
       const missing = [intel ? undefined : "@gitgoblin/intel", engine ? undefined : "@gitgoblin/engine"].filter((name): name is string => name !== undefined);
       if (!intel || !engine) throw new Error(`contribute needs ${missing.join(" and ")}, not available in this install.`);
+      // The engine's default is the cap a real run needs; the two live runs so far cost $1 to $2 for orientation alone.
+      const maxCostUsd = options.maxCost === undefined ? (engine.DEFAULT_LIMITS?.maxCostUsd ?? 10) : Number(options.maxCost);
+      if (!(maxCostUsd > 0)) throw new Error("--max-cost must be a positive number of dollars");
       const workdir = resolveWorkdir(runtime, options.workdir);
       if (options.issue !== undefined && options.opportunity !== undefined) throw new Error("Give either --issue or --opportunity, not both.");
 
