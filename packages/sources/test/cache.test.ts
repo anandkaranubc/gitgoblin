@@ -61,8 +61,8 @@ describe("isFresh", () => {
 describe("defaultCacheDir", () => {
   it("prefers GITGOBLIN_CACHE_DIR, then XDG_CACHE_HOME", () => {
     expect(defaultCacheDir({ GITGOBLIN_CACHE_DIR: "/tmp/gg" })).toBe("/tmp/gg");
-    expect(defaultCacheDir({ XDG_CACHE_HOME: "/xdg" })).toBe("/xdg/gitgoblin");
-    expect(defaultCacheDir({})).toMatch(/\.cache\/gitgoblin$/);
+    expect(defaultCacheDir({ XDG_CACHE_HOME: "/xdg" })).toBe(path.join("/xdg", "gitgoblin"));
+    expect(defaultCacheDir({})).toMatch(/\.cache[\\/]gitgoblin$/);
   });
 });
 

@@ -31,8 +31,9 @@ a pull request a maintainer would want to merge.
   clone, gets an independent review, and prepares a pull request written for the maintainers who
   will read it. It asks before running the agent, before implementing the plan and before
   publishing; nothing is pushed or posted without that last yes.
-- The opportunity picker marks the ones the engine would refuse (`!`) and the ones intel doubts
-  (`?`), and Enter skips both. `runs`, `show` and `publish` come back to prepared changes later;
+- The opportunity picker marks the ones the engine would refuse (`!`, dependency bumps among them:
+  the agent works offline and cannot regenerate a lockfile, so it stops before spending anything)
+  and the ones intel doubts (`?`), and Enter skips both. `runs`, `show` and `publish` come back to prepared changes later;
   `publish` can be run again after a partial failure, and `clean` frees the disk a finished run's
   clone takes while keeping its report and diff.
 - Files the repository's own install rewrites (a lockfile npm trims, say) are put back as committed
@@ -61,9 +62,10 @@ a pull request a maintainer would want to merge.
 
 Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the CLI
 (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude Code
-login; each run costs money, capped by `--max-cost`. `discover`, `contribute` and `publish` work with
-GitHub only. Opportunity scores are still being calibrated. `contribute` has so far prepared pull
-requests on one real repository, on macOS, so treat what it prepares as a draft to review.
+login, and runs on macOS or Linux only (on Windows, `discover` and `analyze` work); each run costs
+money, capped by `--max-cost`. `discover`, `contribute` and `publish` work with GitHub only.
+Opportunity scores are still being calibrated. `contribute` has so far prepared pull requests on one
+real repository, on macOS, so treat what it prepares as a draft to review.
 
 ## @gitgoblin/mcp 0.1.6 - 2026-10-23
 
