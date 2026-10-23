@@ -68,12 +68,27 @@ const BASH_DENY_RULES: DenyRule[] = [
 
 const PACKAGE_INSTALL = /\b(?:npm|pnpm|yarn|bun)\s+(?:install|add|i)\s+(.*)$|\b(?:pip3?|uv)\s+(?:pip\s+)?(?:install|add)\s+(.*)$/;
 
+/** Drops `2>&1`, `>log`, `> log`, `</dev/null`: redirections and their targets are not package names. */
+function withoutRedirections(tokens: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i]!;
+    if (/^\d*(>>?|<|&>>?)(&\d+)?$/.test(token)) {
+      i += 1; // bare operator: the next token is its target
+      continue;
+    }
+    if (/^\d*(>>?|<|&>>?)/.test(token)) continue; // operator with the target attached
+    out.push(token);
+  }
+  return out;
+}
+
 /** True when a command would add a package that is not already declared by the repository. */
 export function installsNewPackage(command: string): boolean {
   for (const segment of command.split(/&&|\|\||;|\|/)) {
     const m = PACKAGE_INSTALL.exec(segment.trim());
     if (!m) continue;
-    const args = (m[1] ?? m[2] ?? "").trim().split(/\s+/).filter(Boolean);
+    const args = withoutRedirections((m[1] ?? m[2] ?? "").trim().split(/\s+/).filter(Boolean));
     if (args.some((a) => /^(-r|--requirement|-e|--editable|\.|\.\/)/.test(a))) continue;
     if (args.some((a) => !a.startsWith("-"))) return true;
   }
@@ -88,7 +103,7 @@ export function bashDenyReason(command: string): string | null {
   if (names.includes("gh")) return "GitHub writes happen in the engine after human approval";
   if (names.some((n) => NETWORK_TOOLS.has(n))) return "network tools are disabled";
   if (names.some((n) => SYSTEM_TOOLS.has(n))) return "system and infrastructure tools are disabled";
-  if (installsNewPackage(command)) return "new dependencies need a maintainer decision; put it in the plan";
+  if (installsNewPackage(command)) return "adding packages is a maintainer decision; name the dependency in your output instead. The repository's own dependencies were installed by the engine before this session (see install-output.txt in the run directory)";
   return null;
 }
 
