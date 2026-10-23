@@ -8,6 +8,7 @@ import { MemoryCache, RateLimitError } from "@gitgoblin/sources";
 import { describe, expect, it } from "vitest";
 import { formatExplanation, formatResults, highlightReasons } from "../src/format.ts";
 import { type Engine, type Runtime, run } from "../src/index.ts";
+import { AGENT_SDK_HINT } from "../src/siblings.ts";
 import { toQuery } from "../src/options.ts";
 import { sampleOpportunity, sampleReport, writeInstall, writeRun } from "./fixtures.ts";
 
@@ -651,5 +652,52 @@ describe("a failed install is explained where the person is looking", () => {
     const none = fakeRuntime({}, { modules: siblings.modules });
     expect(await run(["show", "20261023-163019-none", "--install", "--workdir", siblings.workdir], none.runtime)).toBe(0);
     expect(none.out.join("\n")).toMatch(/did not run an install command/);
+  });
+});
+
+describe("an install without the Agent SDK", () => {
+  // The npm package does not carry the SDK, so loading the engine throws the install hint there.
+  function withoutSdk(modules: Record<string, Record<string, unknown>>, answers: string[] = []) {
+    const fake = fakeRuntime({}, { modules, answers });
+    const engineLoads: string[] = [];
+    fake.runtime.loadModule = async (name) => {
+      if (name === "@gitgoblin/engine") {
+        engineLoads.push(name);
+        throw new Error(AGENT_SDK_HINT);
+      }
+      return modules[name];
+    };
+    return { ...fake, engineLoads };
+  }
+
+  it("still discovers, explains, analyzes, lists runs and shows them, without loading the engine", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261022-093000-bbbb");
+    const commands = [
+      ["discover", "contribute"],
+      ["explain", "acme/widget"],
+      ["goals"],
+      ["analyze", "acme/widget"],
+      ["runs", "--workdir", siblings.workdir],
+      ["show", "20261022-093000-bbbb", "--workdir", siblings.workdir],
+    ];
+    for (const args of commands) {
+      const { runtime, err, engineLoads } = withoutSdk(siblings.modules);
+      expect(await run(args, runtime), `${args.join(" ")}: ${err.join("\n")}`).toBe(0);
+      expect(engineLoads, args.join(" ")).toEqual([]);
+    }
+  });
+
+  it("stops contribute and publish with the one-line install hint", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261022-093000-bbbb");
+    const contribute = withoutSdk(siblings.modules, ["y"]);
+    expect(await run(["contribute", "acme/widget", "--workdir", siblings.workdir], contribute.runtime)).toBe(1);
+    expect(contribute.err.join("\n")).toContain(AGENT_SDK_HINT);
+
+    const publish = withoutSdk(siblings.modules, ["y"]);
+    expect(await run(["publish", "20261022-093000-bbbb", "--workdir", siblings.workdir], publish.runtime)).toBe(1);
+    expect(publish.err.join("\n")).toContain(AGENT_SDK_HINT);
+    expect(siblings.calls.filter((c) => c.fn !== "analyzeRepository")).toEqual([]);
   });
 });

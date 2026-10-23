@@ -14,7 +14,7 @@ import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefus
 import { formatExplanation, formatResults } from "./format.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
 import { formatRuns, installSummary, listRuns, readInstall, readRun } from "./runs.ts";
-import { type IntelModule, type ModuleLoader, isNotInstalled, loadEngine, loadIntel } from "./siblings.ts";
+import { type IntelModule, type ModuleLoader, importSibling, loadEngine, loadIntel } from "./siblings.ts";
 import { plain } from "./text.ts";
 
 /** What the CLI needs from the engine; tests inject a fake. */
@@ -41,6 +41,16 @@ export interface Runtime {
   env: NodeJS.ProcessEnv;
 }
 
+/**
+ * The siblings the default runtime can load. The specifiers are literal so the npm bundle can see
+ * them: intel is inlined, and the engine becomes a chunk of its own that loads only for `contribute`
+ * and `publish`, since it is the one that needs the Agent SDK.
+ */
+const SIBLINGS: Record<string, () => Promise<unknown>> = {
+  "@gitgoblin/intel": () => import("@gitgoblin/intel"),
+  "@gitgoblin/engine": () => import("@gitgoblin/engine"),
+};
+
 const defaultRuntime: Runtime = {
   async createEngine({ onProgress }) {
     const { engine, sources } = await createDiscovery({ onProgress });
@@ -56,13 +66,8 @@ const defaultRuntime: Runtime = {
   openCache: () => new SqliteCache(defaultCachePath()),
   cachePath: defaultCachePath,
   async loadModule(name) {
-    try {
-      return (await import(name)) as Record<string, unknown>;
-    } catch (error) {
-      if (isNotInstalled(error, name)) return undefined;
-      const detail = (error instanceof Error ? error.message : String(error)).split("\n")[0];
-      throw new Error(`${name} is installed but failed to load: ${detail}`);
-    }
+    const load = SIBLINGS[name];
+    return load ? importSibling(name, load) : undefined;
   },
   async ask(question) {
     const rl = createInterface({ input: process.stdin, output: process.stderr });

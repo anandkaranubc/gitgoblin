@@ -23,6 +23,31 @@ export function isNotInstalled(error: unknown, name: string): boolean {
   return code === "ERR_MODULE_NOT_FOUND" && typeof message === "string" && message.includes(`'${name}'`);
 }
 
+/**
+ * The engine drives its model through the Claude Agent SDK. The published CLI does not bundle it or
+ * depend on it (its licence does not allow redistribution, and its platform binary is far too large
+ * for `discover`), so a person who wants `contribute` installs it next to the CLI.
+ */
+export const AGENT_SDK = "@anthropic-ai/claude-agent-sdk";
+
+export const AGENT_SDK_HINT = `contribute and publish need the Claude Agent SDK, which is installed separately: npm install -g gitgoblin ${AGENT_SDK}`;
+
+/**
+ * Imports the sibling `name` through `load`. Undefined when the package is not installed; the
+ * one-line install hint when it is the engine and only the Agent SDK is missing; any other failure
+ * with its real first line, since that is a broken install rather than a missing one.
+ */
+export async function importSibling(name: string, load: () => Promise<unknown>): Promise<Record<string, unknown> | undefined> {
+  try {
+    return (await load()) as Record<string, unknown>;
+  } catch (error) {
+    if (isNotInstalled(error, name)) return undefined;
+    if (name === "@gitgoblin/engine" && isNotInstalled(error, AGENT_SDK)) throw new Error(AGENT_SDK_HINT);
+    const detail = (error instanceof Error ? error.message : String(error)).split("\n")[0];
+    throw new Error(`${name} is installed but failed to load: ${detail}`);
+  }
+}
+
 function hasFunctions(module: Record<string, unknown> | undefined, names: string[]): boolean {
   return module !== undefined && names.every((name) => typeof module[name] === "function");
 }
