@@ -14,6 +14,7 @@ def todo_list(): pass
 `;
     const markers = findDebtMarkers("a.py", src);
     expect(markers.map((m) => [m.marker, m.issues])).toEqual([["TODO", [42]], ["FIXME", [7]], ["HACK", [99]]]);
+    expect(findDebtMarkers("rule.rs", "/// ## Example\n/// ```python\n/// # TODO(charlie): fix this (#123)\n/// ```\n// TODO: real debt here\n")).toHaveLength(1);
     expect(markers[0]?.text).toBe("remove once the parser handles this");
   });
 
@@ -58,5 +59,24 @@ x = collections.Mapping
     expect(node.map((m) => m.rule.id)).toEqual(["node-buffer", "node-url-parse"]);
     const go = matchDeprecations("a.go", 'import (\n\t"io/ioutil"\n\t"os"\n)\n', DEPRECATION_RULES.filter((r) => r.ecosystem === "go"));
     expect(go.map((m) => m.rule.id)).toEqual(["go-ioutil"]);
+  });
+});
+
+describe("deprecation matches that a project already handles", () => {
+  it("marks function-local imports of removed modules as guarded", () => {
+    const rules = DEPRECATION_RULES.filter((r) => r.ecosystem === "python");
+    const text = "import sysconfig\n\ndef _scheme():\n    from distutils.command.install import INSTALL_SCHEMES\n    return INSTALL_SCHEMES\n\nfrom distutils.dist import Distribution\n";
+    expect(matchDeprecations("a.py", text, rules).map((m) => `${m.line}:${m.guarded}`)).toEqual(["4:true", "7:false"]);
+  });
+});
+
+describe("compatibility modules", () => {
+  it("treats a module named after what it wraps, or a compat/shim module, as intentional", () => {
+    const rules = DEPRECATION_RULES.filter((r) => r.ecosystem === "python");
+    expect(matchDeprecations("pip/locations/_distutils.py", "from distutils.cmd import Command\n", rules).map((m) => m.guarded)).toEqual([true]);
+    expect(matchDeprecations("pkg/_compat.py", "import imp\n", rules).map((m) => m.guarded)).toEqual([true]);
+    expect(matchDeprecations("pkg/loader.py", "import imp\n", rules).map((m) => m.guarded)).toEqual([false]);
+    for (const path of ["pkg/simple.py", "pkg/impl.py", "pkg/importer.py"]) expect(matchDeprecations(path, "import imp\n", rules).map((m) => m.guarded), path).toEqual([false]);
+    expect(matchDeprecations("pkg/imp_compat.py", "import imp\n", rules).map((m) => m.guarded)).toEqual([true]);
   });
 });

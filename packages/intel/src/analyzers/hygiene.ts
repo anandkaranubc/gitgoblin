@@ -13,7 +13,7 @@ export const hygieneAnalyzer: Analyzer = {
     const tests = ctx.inventory.files.filter((f) => !f.vendored && f.category === "test").length;
     const mentionsLicense = (ctx.samples?.openIssues ?? []).find((i) => /\blicen[cs]e\b/i.test(i.title));
 
-    if (!profile.license && !has(/^(LICENSE|LICENCE|COPYING)(\.|$)/i)) {
+    if (!profile.license && !has(/^(LICENSE|LICENCE|COPYING|UNLICENSE)(\.|$)/i)) {
       findings.push({
         kind: "hygiene",
         clusterKey: "license",
@@ -84,7 +84,7 @@ export const hygieneAnalyzer: Analyzer = {
         });
       }
     }
-    if (py && profile.nature === "library" && !py.requiresPython && py.paths.some((p) => /pyproject\.toml|setup\.(py|cfg)/.test(p))) {
+    if (py && py.name && profile.nature === "library" && !py.requiresPython && py.paths.some((p) => /pyproject\.toml|setup\.(py|cfg)/.test(p))) {
       findings.push({
         kind: "hygiene",
         clusterKey: "requires-python",

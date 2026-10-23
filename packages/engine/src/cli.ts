@@ -13,7 +13,7 @@ Usage:
   gitgoblin-engine run --task task.json [options]
   gitgoblin-engine run --report analysis.json --opportunity <id> [options]
   gitgoblin-engine show <runId> [--workdir DIR]
-  gitgoblin-engine publish <runId> [--workdir DIR] [--dry-run] [--ready] [--yes]
+  gitgoblin-engine publish <runId> [--workdir DIR] [--dry-run] [--ready]
 
 Run options:
   --workdir DIR       where runs/<id>/ live (default: ./.gitgoblin)
@@ -28,8 +28,8 @@ Run options:
                       sandbox when available), sandbox (required), strict (required, and your home
                       directory is hidden except toolchains and caches), none
 
-Publishing never happens during run. It pushes with your gh login and opens a draft PR
-only after you confirm.`;
+Publishing never happens during run. publish pushes with your gh login and opens a draft PR
+only after you type "y" at a terminal; there is no flag that skips that question.`;
 
 function fail(message: string): never {
   process.stderr.write(`error: ${message}\n`);
@@ -120,10 +120,16 @@ async function main(argv: string[]): Promise<void> {
     const { values, positionals } = parseArgs({
       args: rest,
       allowPositionals: true,
-      options: { workdir: { type: "string" }, "dry-run": { type: "boolean" }, ready: { type: "boolean" }, yes: { type: "boolean" } },
+      options: { workdir: { type: "string" }, "dry-run": { type: "boolean" }, ready: { type: "boolean" } },
     });
     const runId = positionals[0];
     if (!runId) fail(`${command} needs a run id`);
+    // Publishing acts in someone else's project, so a person answers the question, not a pipe or a
+    // script: an agent with a shell must not be able to publish by echoing "y". Code that has asked a
+    // person itself can call publishRun({ approved: true }).
+    if (command === "publish" && !values["dry-run"] && !(process.stdin.isTTY && process.stderr.isTTY)) {
+      fail("publishing needs a person at a terminal to confirm it; run this in an interactive shell (--dry-run prints the commands without one)");
+    }
     const workdir = path.resolve(values.workdir ?? ".gitgoblin");
     const journal = RunJournal.open(workdir, runId);
     if (command === "show") {
@@ -132,7 +138,7 @@ async function main(argv: string[]): Promise<void> {
     }
     const title = journal.readText("pr-title.txt")?.trim() ?? fail(`run ${runId} has nothing to publish`);
     process.stderr.write(`About to push and open a ${values.ready ? "ready" : "draft"} pull request: ${title}\nRead ${journal.pathFor("pr.md")} and ${journal.pathFor("diff.patch")} first.\n`);
-    if (!values["dry-run"] && !values.yes && !(await confirm("Publish now?"))) {
+    if (!values["dry-run"] && !(await confirm("Publish now?"))) {
       process.stderr.write("Not published.\n");
       return;
     }

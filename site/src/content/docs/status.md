@@ -20,7 +20,7 @@ Last updated 2026-10-23.
 | The `gitgoblin` command: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish` | `packages/cli` | Working from a clone; not published to npm |
 | Repository profiling and opportunity discovery (`analyze`) | `packages/intel` | Working from a clone; scores still being calibrated |
 | Plan, implement, review, verify, prepare a pull request | `packages/engine` | Runs end to end on a test repository; experimental. See [its README](https://github.com/anandkaranubc/gitgoblin/blob/main/packages/engine/README.md) |
-| MCP server for Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents, plus an agent skill | `packages/mcp` | Released on GitHub (`mcp-v0.1.2`) and listed in the MCP Registry; npm publish pending. See [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) |
+| MCP server for Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents, plus an agent skill | `packages/mcp` | Released on GitHub (`mcp-v0.1.3`) and listed in the MCP Registry; npm publish pending. See [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) |
 | Brand, documentation and this website | `brand/`, `docs/`, `site/` | Live |
 
 ## Being built now

@@ -89,7 +89,8 @@ export async function fetchWorkflowRuns(api: GitHubApi, owner: string, name: str
     branch, status: "completed", per_page: 40, exclude_pull_requests: "true",
   });
   return data.workflow_runs
-    .filter((r) => r.event !== "dynamic" && r.event !== "pull_request" && r.event !== "pull_request_target" && r.conclusion !== "skipped")
+    // Only events that exercise the branch itself; bot workflows on issue_comment, dynamic graph updates and PR runs say nothing about main.
+    .filter((r) => ["push", "schedule", "workflow_dispatch", "release", "merge_group", "create"].includes(r.event) && r.conclusion !== "skipped")
     .map((r) => ({
       id: r.id, name: r.name ?? r.path, path: r.path, workflowId: r.workflow_id, event: r.event,
       conclusion: r.conclusion ?? undefined, headSha: r.head_sha, updatedAt: r.updated_at, attempt: r.run_attempt ?? 1, url: r.html_url,
@@ -207,6 +208,11 @@ function toActor(actor: GqlActor | null): Actor | undefined {
 
 function toComment(c: GqlComment): CommentSample {
   return { createdAt: c.createdAt, author: toActor(c.author), association: c.authorAssociation, body: c.body };
+}
+
+/** Public for the backtest script, which maps closed issues fetched with the full fragment. */
+export function mapIssueNode(node: unknown): IssueSample {
+  return toIssue(node as GqlIssue);
 }
 
 function toIssue(i: GqlIssue): IssueSample {
