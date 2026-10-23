@@ -16,3 +16,16 @@ describe("model review schema", () => {
     expect(parsed.reviews[0]?.verdict).toBe("defect");
   });
 });
+
+describe("the Anthropic client wrapper", () => {
+  it("loads nothing until the first call and explains failures by status", async () => {
+    const { createAnthropicLlm, describeLlmError } = await import("../src/llm/client.ts");
+    const llm = createAnthropicLlm({ model: "claude-opus-5-5" });
+    expect(llm.model).toBe("claude-opus-5-5");
+    expect(llm.usage.calls).toBe(0);
+    expect(describeLlmError(Object.assign(new Error("Unauthorized"), { status: 401 }))).toMatch(/no valid Anthropic credentials/);
+    expect(describeLlmError(Object.assign(new Error("slow down"), { status: 429 }))).toBe("Anthropic rate limit reached");
+    expect(describeLlmError(Object.assign(new Error("boom"), { status: 500 }))).toBe("Anthropic API error 500: boom");
+    expect(describeLlmError(new Error("The ANTHROPIC_API_KEY environment variable is missing"))).toMatch(/no Anthropic credentials found/);
+  });
+});
