@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { execShell } from "../src/exec.ts";
-import { detectHostSandbox, hostSandboxFor, sandboxExecProfile, specFor, type HostSandboxSpec } from "../src/hostbox.ts";
+import { detectHostSandbox, hostSandboxFor, OFFLINE_ENV, sandboxExecProfile, specFor, type HostSandboxSpec } from "../src/hostbox.ts";
 
 const env = { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "", TMPDIR: process.env["TMPDIR"] ?? os.tmpdir() };
 const available = detectHostSandbox();
@@ -132,8 +132,9 @@ describe.skipIf(!available)("host sandbox strict mode (OS)", () => {
     const documents = await run(`cat "${path.join(home, "Documents", "taxes.txt")}"`);
     expect(documents.output).not.toContain("PRIVATE");
     expect(documents.exitCode).not.toBe(0);
-    const listing = await run(`ls "${home}"`);
-    expect(listing.exitCode).not.toBe(0);
+    // macOS refuses the listing; bubblewrap shows an empty directory. Either way nothing private is visible.
+    const listing = await run(`ls -a "${home}"`);
+    expect(listing.output).not.toContain("Documents");
   });
 });
 
@@ -166,4 +167,21 @@ describe.skipIf(!available)("host sandbox temp directories (OS)", () => {
       expect(direct.exitCode).toBe(0);
     }
   });
+});
+
+describe("OFFLINE_ENV", () => {
+  it("tells package managers the network is gone so they fail fast instead of retrying", () => {
+    expect(OFFLINE_ENV).toMatchObject({ npm_config_offline: "true", YARN_ENABLE_NETWORK: "0", PIP_NO_INDEX: "1", UV_OFFLINE: "1", CARGO_NET_OFFLINE: "true", GOPROXY: "off" });
+  });
+});
+
+describe.skipIf(!available)("offline checks (OS)", () => {
+  it("makes npx fail in seconds when the package is not installed and the network is cut", async () => {
+    const ws = mkdtempSync(path.join(os.tmpdir(), "gg-offline-"));
+    writeFileSync(path.join(ws, "package.json"), "{}");
+    const started = Date.now();
+    const r = await execShell("npx --no-install definitely-not-a-real-package-gg", { cwd: ws, env: { ...env, ...OFFLINE_ENV }, wrap: (c) => available!.wrap(c, specFor(ws, false)), timeoutMs: 60_000 });
+    expect(r.exitCode).not.toBe(0);
+    expect(Date.now() - started).toBeLessThan(30_000);
+  }, 60_000);
 });
