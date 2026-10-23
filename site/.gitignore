@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.astro/
+# Copied from ../brand by scripts/sync-brand.mjs
+public/favicon.svg
+public/favicon.ico
+public/favicon-16.png
+public/favicon-32.png
+public/apple-touch-icon.png
+public/icon-192.png
+public/icon-512.png
+public/og.png

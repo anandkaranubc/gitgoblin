@@ -1,0 +1,23 @@
+{
+  "name": "@gitgoblin/core",
+  "version": "0.1.0",
+  "description": "Shared contracts for gitgoblin: repository identity, discovery goals, results and signals",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.5"
+  }
+}

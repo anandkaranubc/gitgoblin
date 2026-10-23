@@ -1,0 +1,44 @@
+---
+/** The full-body goblin from brand/mascot, one sprite per theme. Decorative. */
+import foundLight from "../../../brand/mascot/goblin-found-light.svg?raw";
+import foundDark from "../../../brand/mascot/goblin-found-dark.svg?raw";
+import peekLight from "../../../brand/mascot/goblin-peek-light.svg?raw";
+import peekDark from "../../../brand/mascot/goblin-peek-dark.svg?raw";
+
+interface Props {
+  pose: "found" | "peek";
+  width: number;
+}
+
+const { pose, width } = Astro.props;
+const sprites = pose === "found" ? [foundLight, foundDark] : [peekLight, peekDark];
+const [light, dark] = sprites.map((s, i) =>
+  s.replace("<svg ", `<svg width="${width}" aria-hidden="true" focusable="false" class="pixel mascot mascot--${i ? "dark" : "light"}" `),
+);
+---
+
+<Fragment set:html={light + dark} />
+
+<style is:global>
+  .mascot--dark {
+    display: none;
+  }
+
+  :root[data-theme="dark"] .mascot--light {
+    display: none;
+  }
+
+  :root[data-theme="dark"] .mascot--dark {
+    display: block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .mascot--light {
+      display: none;
+    }
+
+    :root:not([data-theme="light"]) .mascot--dark {
+      display: block;
+    }
+  }
+</style>

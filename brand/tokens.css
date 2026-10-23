@@ -1,0 +1,48 @@
+/* gitgoblin brand tokens. Values and usage rules live in brand/README.md. */
+:root {
+  --gg-goblin: #6fdc4f; /* the green: mark, accents on dark; graphic only on light */
+  --gg-moss: #2f6b27;   /* text-safe green on light backgrounds */
+  --gg-ink: #10140f;    /* near-black: text on light, dark backgrounds */
+  --gg-ink-2: #41503f;  /* secondary text on light */
+  --gg-bone: #f4f1e6;   /* warm off-white: light backgrounds, text on dark */
+  --gg-bone-2: #e9e6d8; /* raised surfaces on light */
+  --gg-line: #d3cfbf;   /* borders on light */
+  --gg-loot: #ffc53d;   /* gold: found things, highlights; graphic only on light */
+  --gg-ember: #b8411a;  /* stops, errors, warnings */
+  --gg-cave: #1b2418;   /* raised surfaces on dark; the lurk silhouette */
+
+  --gg-font-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --gg-font-body: "Recursive", system-ui, sans-serif;
+  --gg-font-mono: "Recursive Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+
+  /* roles, light */
+  --gg-bg: var(--gg-bone);
+  --gg-bg-2: var(--gg-bone-2);
+  --gg-fg: var(--gg-ink);
+  --gg-fg-2: var(--gg-ink-2);
+  --gg-border: var(--gg-line);
+  --gg-accent: var(--gg-moss);
+  --gg-accent-fg: var(--gg-bone);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --gg-bg: var(--gg-ink);
+    --gg-bg-2: var(--gg-cave);
+    --gg-fg: var(--gg-bone);
+    --gg-fg-2: #a9b3a3;
+    --gg-border: #2c3627;
+    --gg-accent: var(--gg-goblin);
+    --gg-accent-fg: var(--gg-ink);
+  }
+}
+
+:root[data-theme="dark"] {
+  --gg-bg: var(--gg-ink);
+  --gg-bg-2: var(--gg-cave);
+  --gg-fg: var(--gg-bone);
+  --gg-fg-2: #a9b3a3;
+  --gg-border: #2c3627;
+  --gg-accent: var(--gg-goblin);
+  --gg-accent-fg: var(--gg-ink);
+}

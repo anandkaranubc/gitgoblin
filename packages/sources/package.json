@@ -1,0 +1,27 @@
+{
+  "name": "@gitgoblin/sources",
+  "version": "0.1.0",
+  "description": "Data sources for gitgoblin: GitHub and ecosyste.ms clients with a shared SQLite cache and rate-limit handling",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@gitgoblin/core": "0.1.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.5"
+  }
+}

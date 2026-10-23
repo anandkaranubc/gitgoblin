@@ -1,0 +1,768 @@
+{
+  "version": "1",
+  "profile": {
+    "repo": {
+      "host": "github.com",
+      "owner": "jd",
+      "name": "tenacity"
+    },
+    "analyzedAt": "2026-10-23T02:42:48.907Z",
+    "headSha": "32ac68f0941319c0d2f4fb927f96e4ee29bb46c6",
+    "defaultBranch": "main",
+    "topics": [
+      "failure",
+      "hacktoberfest",
+      "python",
+      "retry",
+      "retry-library"
+    ],
+    "stars": 8811,
+    "forks": 396,
+    "archived": false,
+    "isFork": false,
+    "nature": "library",
+    "natureReason": "installable Python package",
+    "languages": [
+      {
+        "name": "Python",
+        "bytes": 203949,
+        "share": 1
+      }
+    ],
+    "ecosystems": [
+      {
+        "name": "python",
+        "manifests": [
+          "pyproject.toml"
+        ],
+        "packageManager": "hatch",
+        "tooling": [
+          "ruff",
+          "mypy",
+          "pytest",
+          "hatch"
+        ],
+        "commands": {
+          "install": "pip install -e \".[dev]\"",
+          "test": "pytest",
+          "lint": "ruff check .",
+          "format": "ruff format .",
+          "typecheck": "mypy tenacity"
+        },
+        "runtime": "python >=3.10"
+      }
+    ],
+    "ci": {
+      "provider": "github_actions",
+      "workflows": [
+        ".github/workflows/ci.yaml",
+        ".github/workflows/release.yml"
+      ],
+      "lastRunConclusion": "success",
+      "lastRunAt": "2026-10-12T13:10:58Z"
+    },
+    "structure": {
+      "fileCount": 97,
+      "analyzedFileCount": 97,
+      "sourceDirs": [
+        "tenacity",
+        "doc"
+      ],
+      "testDirs": [
+        "tests"
+      ],
+      "docsDirs": [
+        "doc"
+      ],
+      "entryPoints": []
+    },
+    "activity": {
+      "commits90d": 29,
+      "commits365d": 89,
+      "authors90d": 8,
+      "authors365d": 20,
+      "busFactor": 1,
+      "openIssues": 22,
+      "openPullRequests": 59,
+      "sampleSizes": {
+        "issues": 59,
+        "pullRequests": 54,
+        "externalPullRequests": 16
+      },
+      "lastPushAt": "2026-10-12T13:10:05Z",
+      "lastReleaseAt": "2026-10-07T12:12:36Z",
+      "releaseCadenceDays": 63,
+      "medianPrResponseHours": 487.9,
+      "medianIssueResponseHours": 2286.8,
+      "externalPrMergeRate": 0.44
+    },
+    "welcomeness": {
+      "score": 0.65,
+      "level": "open",
+      "signals": [
+        {
+          "signal": "active development in the last 90 days",
+          "weight": 0.05,
+          "evidence": {
+            "id": "ev-c19481ce",
+            "kind": "computed",
+            "locator": "git log --since=90d",
+            "note": "29 commits",
+            "observedAt": "2026-10-23T02:42:48.907Z"
+          }
+        },
+        {
+          "signal": "a fair share of outside PRs get merged",
+          "weight": 0.15,
+          "evidence": {
+            "id": "ev-57f9a61a",
+            "kind": "computed",
+            "locator": "GraphQL closed pull requests",
+            "note": "44% of 16 recently closed PRs from non-maintainers were merged",
+            "observedAt": "2026-10-23T02:42:48.907Z"
+          }
+        },
+        {
+          "signal": "issues wait months for an answer",
+          "weight": -0.2,
+          "evidence": {
+            "id": "ev-f7f37ba0",
+            "kind": "computed",
+            "locator": "GraphQL issue comments",
+            "note": "median 2287h to first response on 59 outside issues",
+            "observedAt": "2026-10-23T02:42:48.907Z"
+          }
+        },
+        {
+          "signal": "merged outside PRs in the last 90 days",
+          "weight": 0.1,
+          "evidence": {
+            "id": "ev-babcfbcf",
+            "kind": "pull_request",
+            "locator": "https://github.com/jd/tenacity/pull/743",
+            "note": "7 outside PRs merged recently, e.g. #743",
+            "observedAt": "2026-10-23T02:42:48.907Z"
+          }
+        },
+        {
+          "signal": "has help labels but none open",
+          "weight": 0.05,
+          "evidence": {
+            "id": "ev-b8a6cea8",
+            "kind": "api",
+            "locator": "/repos/jd/tenacity/labels",
+            "note": "help wanted",
+            "observedAt": "2026-10-23T02:42:48.907Z"
+          }
+        }
+      ],
+      "rules": {
+        "requiresIssueFirst": false,
+        "cla": false,
+        "dco": false,
+        "issueTemplates": false,
+        "pullRequestTemplate": false,
+        "helpLabels": [
+          "help wanted"
+        ],
+        "rejectedChanges": [],
+        "dependencyBot": true,
+        "requiresTests": false,
+        "requiresChangelog": false
+      }
+    },
+    "conventions": {
+      "commitStyle": "conventional",
+      "recentCommitSubjects": [
+        "feat: support Python 3.15 (#754)",
+        "docs: use the event loop for asyncio address resolution (#743)",
+        "docs: read statistics from the retry_with wrapper (#744)",
+        "ci: check built distributions with twine (#742)",
+        "fix: restore PyPI-compatible package description (#725)",
+        "fix: only treat None and 0 as \"no wait\" (#741)",
+        "ci: drop the Mergify queue rule (#739)",
+        "ci: drop Mergify dismiss_reviews rule (#737)"
+      ],
+      "branchNaming": "fix/<topic>, docs/<topic>, mergify/<topic>",
+      "typicalPrSizeLines": 17,
+      "testFramework": "pytest",
+      "formatter": "ruff format",
+      "linter": "ruff",
+      "typeChecker": "mypy"
+    },
+    "hotFiles": [
+      {
+        "path": "tenacity/__init__.py",
+        "commits365d": 34,
+        "authors365d": 10
+      },
+      {
+        "path": "tests/test_tenacity.py",
+        "commits365d": 33,
+        "authors365d": 12
+      },
+      {
+        "path": "tenacity/asyncio/__init__.py",
+        "commits365d": 16,
+        "authors365d": 5
+      },
+      {
+        "path": "tests/test_asyncio.py",
+        "commits365d": 14,
+        "authors365d": 6
+      },
+      {
+        "path": "tenacity/wait.py",
+        "commits365d": 14,
+        "authors365d": 6
+      },
+      {
+        "path": "tenacity/retry.py",
+        "commits365d": 11,
+        "authors365d": 4
+      },
+      {
+        "path": "tenacity/_utils.py",
+        "commits365d": 6,
+        "authors365d": 2
+      },
+      {
+        "path": "tests/test_after.py",
+        "commits365d": 6,
+        "authors365d": 1
+      },
+      {
+        "path": "tests/test_tornado.py",
+        "commits365d": 4,
+        "authors365d": 1
+      },
+      {
+        "path": "tenacity/asyncio/retry.py",
+        "commits365d": 4,
+        "authors365d": 1
+      },
+      {
+        "path": "tenacity/tornadoweb.py",
+        "commits365d": 4,
+        "authors365d": 1
+      },
+      {
+        "path": "tenacity/stop.py",
+        "commits365d": 2,
+        "authors365d": 1
+      },
+      {
+        "path": "tenacity/before_sleep.py",
+        "commits365d": 2,
+        "authors365d": 1
+      },
+      {
+        "path": "tenacity/after.py",
+        "commits365d": 2,
+        "authors365d": 1
+      },
+      {
+        "path": "doc/source/conf.py",
+        "commits365d": 2,
+        "authors365d": 1
+      }
+    ],
+    "instructionFiles": [],
+    "notes": [],
+    "description": "Retrying library for Python",
+    "homepage": "http://tenacity.readthedocs.io",
+    "license": "Apache-2.0"
+  },
+  "opportunities": [
+    {
+      "id": "opp-60cd9b6b",
+      "repo": {
+        "host": "github.com",
+        "owner": "jd",
+        "name": "tenacity"
+      },
+      "kind": "issue",
+      "title": "Fix #763: pyright: @retry on a method that overrides a base method reports reportIncompatibleMethod…",
+      "summary": "Since 9.2, @retry returns the RetryDecorated Protocol (#601). Pyright now reports reportIncompatibleMethodOverride on each @retry method that overrides a base-class method. Runtime behavior is correct, and mypy (--strict) reports no error. 9.1.4 gave no error, because there retry kept the type of t…",
+      "evidence": [
+        {
+          "id": "ev-d2eff15a",
+          "kind": "issue",
+          "locator": "https://github.com/jd/tenacity/issues/763",
+          "observedAt": "2026-10-23T02:42:48.907Z",
+          "excerpt": "pyright: @retry on a method that overrides a base method reports reportIncompatibleMethodOverride (since 9.2)",
+          "note": "labels: none; 0 comments; 0 reactions; opened 2026-10-21"
+        }
+      ],
+      "factors": [
+        {
+          "name": "value",
+          "score": 0.5,
+          "reason": "open defect"
+        },
+        {
+          "name": "feasibility",
+          "score": 0.6000000000000001,
+          "reason": "reproduction steps or trace included"
+        },
+        {
+          "name": "welcomeness",
+          "score": 0.65,
+          "reason": "repository is open (0.65)"
+        },
+        {
+          "name": "confidence",
+          "score": 0.6,
+          "reason": "inferred from the issue text alone"
+        },
+        {
+          "name": "novelty",
+          "score": 0.9,
+          "reason": "no assignee, linked PR or recent claim"
+        }
+      ],
+      "score": 0.598,
+      "effort": "small",
+      "skills": [
+        "python",
+        "debugging"
+      ],
+      "files": [],
+      "approach": [
+        "Reproduce using the steps in #763 on the default branch.",
+        "Locate the code path from the error message or feature name.",
+        "Add a regression test, then fix.",
+        "Open the PR with \"Fixes #763\"."
+      ],
+      "acceptanceCriteria": [
+        "The reported behaviour no longer occurs and a test guards against regression.",
+        "Existing tests pass."
+      ],
+      "etiquette": [
+        "Comment on #763 that you are starting, so nobody duplicates the work.",
+        "Use conventional commit messages (feat:, fix:, docs:)."
+      ],
+      "risks": [
+        "No maintainer has confirmed the issue; ask before investing heavily."
+      ],
+      "issue": {
+        "number": 763,
+        "url": "https://github.com/jd/tenacity/issues/763",
+        "title": "pyright: @retry on a method that overrides a base method reports reportIncompatibleMethodOverride (since 9.2)",
+        "labels": [],
+        "assignees": [],
+        "inFlight": false,
+        "createdAt": "2026-10-21T17:29:00Z",
+        "updatedAt": "2026-10-21T17:29:00Z"
+      }
+    },
+    {
+      "id": "opp-0e2cdef4",
+      "repo": {
+        "host": "github.com",
+        "owner": "jd",
+        "name": "tenacity"
+      },
+      "kind": "issue",
+      "title": "Fix #534: Incorrect exception raised with two retrying blocks in function",
+      "summary": "Caveats I've tried to work out what's going on here with Googling, but I've been unsuccessful. I think this is a bug, but appreciate it could be either - Expected behaviour - Unsupported use case It's also unusual for me to use two seperate retrying blocks in the same test case, but the test I'm wr…",
+      "evidence": [
+        {
+          "id": "ev-ff257eae",
+          "kind": "issue",
+          "locator": "https://github.com/jd/tenacity/issues/534",
+          "observedAt": "2026-10-23T02:42:48.907Z",
+          "excerpt": "Incorrect exception raised with two retrying blocks in function",
+          "note": "labels: none; 2 comments; 0 reactions; opened 2025-09-01"
+        }
+      ],
+      "factors": [
+        {
+          "name": "value",
+          "score": 0.5,
+          "reason": "open defect"
+        },
+        {
+          "name": "feasibility",
+          "score": 0.6000000000000001,
+          "reason": "reproduction steps or trace included"
+        },
+        {
+          "name": "welcomeness",
+          "score": 0.65,
+          "reason": "repository is open (0.65)"
+        },
+        {
+          "name": "confidence",
+          "score": 0.6,
+          "reason": "inferred from the issue text alone"
+        },
+        {
+          "name": "novelty",
+          "score": 0.9,
+          "reason": "no assignee, linked PR or recent claim"
+        }
+      ],
+      "score": 0.598,
+      "effort": "small",
+      "skills": [
+        "python",
+        "debugging"
+      ],
+      "files": [],
+      "approach": [
+        "Reproduce using the steps in #534 on the default branch.",
+        "Locate the code path from the error message or feature name.",
+        "Add a regression test, then fix.",
+        "Open the PR with \"Fixes #534\"."
+      ],
+      "acceptanceCriteria": [
+        "The reported behaviour no longer occurs and a test guards against regression.",
+        "Existing tests pass."
+      ],
+      "etiquette": [
+        "Comment on #534 that you are starting, so nobody duplicates the work.",
+        "Use conventional commit messages (feat:, fix:, docs:)."
+      ],
+      "risks": [
+        "Opened 1.1 years ago; confirm it still reproduces on the default branch.",
+        "No maintainer has confirmed the issue; ask before investing heavily."
+      ],
+      "issue": {
+        "number": 534,
+        "url": "https://github.com/jd/tenacity/issues/534",
+        "title": "Incorrect exception raised with two retrying blocks in function",
+        "labels": [],
+        "assignees": [],
+        "inFlight": false,
+        "createdAt": "2025-09-01T15:43:41Z",
+        "updatedAt": "2026-08-13T09:52:39Z"
+      }
+    },
+    {
+      "id": "opp-d6b43e61",
+      "repo": {
+        "host": "github.com",
+        "owner": "jd",
+        "name": "tenacity"
+      },
+      "kind": "issue",
+      "title": "Fix #511: Unreachable code in `before_log` reached",
+      "summary": "Hello, I've reached code that is marked as unreachable in beforelog function: [code] This code sample produces: [code] This is because retrystate.fn is probably not being set here. Python 3.9.19 & tenacity 9.0.0.",
+      "evidence": [
+        {
+          "id": "ev-e6035a3a",
+          "kind": "issue",
+          "locator": "https://github.com/jd/tenacity/issues/511",
+          "observedAt": "2026-10-23T02:42:48.907Z",
+          "excerpt": "Unreachable code in `before_log` reached",
+          "note": "labels: none; 2 comments; 1 reactions; opened 2025-01-28"
+        },
+        {
+          "id": "ev-1da6164d",
+          "kind": "pull_request",
+          "locator": "https://github.com/jd/tenacity/pull/665",
+          "observedAt": "2026-10-23T02:42:48.907Z",
+          "note": "linked PR is closed, updated 2026-10-17"
+        }
+      ],
+      "factors": [
+        {
+          "name": "value",
+          "score": 0.52,
+          "reason": "open defect; 1 reactions"
+        },
+        {
+          "name": "feasibility",
+          "score": 0.6000000000000001,
+          "reason": "reproduction steps or trace included"
+        },
+        {
+          "name": "welcomeness",
+          "score": 0.65,
+          "reason": "repository is open (0.65)"
+        },
+        {
+          "name": "confidence",
+          "score": 0.6,
+          "reason": "inferred from the issue text alone"
+        },
+        {
+          "name": "novelty",
+          "score": 0.7,
+          "reason": "an earlier PR #665 was closed without merging"
+        }
+      ],
+      "score": 0.591,
+      "effort": "small",
+      "skills": [
+        "python",
+        "debugging"
+      ],
+      "files": [],
+      "approach": [
+        "Reproduce using the steps in #511 on the default branch.",
+        "Locate the code path from the error message or feature name.",
+        "Add a regression test, then fix.",
+        "Open the PR with \"Fixes #511\"."
+      ],
+      "acceptanceCriteria": [
+        "The reported behaviour no longer occurs and a test guards against regression.",
+        "Existing tests pass."
+      ],
+      "etiquette": [
+        "Comment on #511 first: an earlier PR #665 was closed without merging.",
+        "Use conventional commit messages (feat:, fix:, docs:)."
+      ],
+      "risks": [
+        "Opened 1.7 years ago; confirm it still reproduces on the default branch.",
+        "A previous PR was closed without merging; read its review to learn what maintainers rejected.",
+        "No maintainer has confirmed the issue; ask before investing heavily."
+      ],
+      "issue": {
+        "number": 511,
+        "url": "https://github.com/jd/tenacity/issues/511",
+        "title": "Unreachable code in `before_log` reached",
+        "labels": [],
+        "assignees": [],
+        "inFlight": false,
+        "createdAt": "2025-01-28T14:19:19Z",
+        "updatedAt": "2026-07-30T15:45:50Z"
+      }
+    },
+    {
+      "id": "opp-917f92c3",
+      "repo": {
+        "host": "github.com",
+        "owner": "jd",
+        "name": "tenacity"
+      },
+      "kind": "issue",
+      "title": "Fix #507: Statistics can be incorrectly initialized inside Temporal contexts",
+      "summary": "Within temporal, an asynchronous python workflow manager, statistics are not being correctly initialized. Given that statistics are on a local thread, my best guess is that a different thread is calling \"nextaction\" than the one that initializes the AsyncRetrying object. Temporal has a custom Async…",
+      "evidence": [
+        {
+          "id": "ev-309807b5",
+          "kind": "issue",
+          "locator": "https://github.com/jd/tenacity/issues/507",
+          "observedAt": "2026-10-23T02:42:48.907Z",
+          "excerpt": "Statistics can be incorrectly initialized inside Temporal contexts",
+          "note": "labels: none; 1 comments; 0 reactions; opened 2025-01-14"
+        },
+        {
+          "id": "ev-6514f373",
+          "kind": "pull_request",
+          "locator": "https://github.com/jd/tenacity/pull/508",
+          "observedAt": "2026-10-23T02:42:48.907Z",
+          "note": "linked PR is open, updated 2025-01-14"
+        },
+        {
+          "id": "ev-7a25bcd6",
+          "kind": "pull_request",
+          "locator": "https://github.com/jd/tenacity/pull/700",
+          "observedAt": "2026-10-23T02:42:48.907Z",
+          "note": "linked PR is closed, updated 2026-10-17"
+        }
+      ],
+      "factors": [
+        {
+          "name": "value",
+          "score": 0.5,
+          "reason": "open defect"
+        },
+        {
+          "name": "feasibility",
+          "score": 0.6000000000000001,
+          "reason": "reproduction steps or trace included"
+        },
+        {
+          "name": "welcomeness",
+          "score": 0.65,
+          "reason": "repository is open (0.65)"
+        },
+        {
+          "name": "confidence",
+          "score": 0.6,
+          "reason": "inferred from the issue text alone"
+        },
+        {
+          "name": "novelty",
+          "score": 0.45,
+          "reason": "PR #508 is open but idle for 646 days; it may be abandoned"
+        }
+      ],
+      "score": 0.558,
+      "effort": "small",
+      "skills": [
+        "python",
+        "debugging"
+      ],
+      "files": [],
+      "approach": [
+        "Reproduce using the steps in #507 on the default branch.",
+        "Locate the code path from the error message or feature name.",
+        "Add a regression test, then fix.",
+        "Open the PR with \"Fixes #507\"."
+      ],
+      "acceptanceCriteria": [
+        "The reported behaviour no longer occurs and a test guards against regression.",
+        "Existing tests pass."
+      ],
+      "etiquette": [
+        "Comment on #507 first: PR #508 is open but idle for 646 days; it may be abandoned.",
+        "Use conventional commit messages (feat:, fix:, docs:)."
+      ],
+      "risks": [
+        "Opened 1.8 years ago; confirm it still reproduces on the default branch.",
+        "No maintainer has confirmed the issue; ask before investing heavily."
+      ],
+      "issue": {
+        "number": 507,
+        "url": "https://github.com/jd/tenacity/issues/507",
+        "title": "Statistics can be incorrectly initialized inside Temporal contexts",
+        "labels": [],
+        "assignees": [],
+        "inFlight": true,
+        "createdAt": "2025-01-14T14:58:17Z",
+        "updatedAt": "2025-01-14T15:24:10Z"
+      }
+    },
+    {
+      "id": "opp-8b4f3a59",
+      "repo": {
+        "host": "github.com",
+        "owner": "jd",
+        "name": "tenacity"
+      },
+      "kind": "triage",
+      "title": "Triage #549: set reraise true project wide",
+      "summary": "Opened 267 days ago by an outside user and nobody has replied. It includes reproduction details, so it can be confirmed or refuted.",
+      "evidence": [
+        {
+          "id": "ev-dd4807af",
+          "kind": "issue",
+          "locator": "https://github.com/jd/tenacity/issues/549",
+          "observedAt": "2026-10-23T02:42:48.907Z",
+          "excerpt": "set reraise true project wide",
+          "note": "0 replies after 267 days; labels: none"
+        }
+      ],
+      "factors": [
+        {
+          "name": "value",
+          "score": 0.26,
+          "reason": "unblocks a reporter and saves maintainer time; no code changes"
+        },
+        {
+          "name": "feasibility",
+          "score": 0.8,
+          "reason": "needs only a local run or a careful reply"
+        },
+        {
+          "name": "welcomeness",
+          "score": 0.5850000000000001,
+          "reason": "repository is open (0.65); adjusted x0.9"
+        },
+        {
+          "name": "confidence",
+          "score": 0.9,
+          "reason": "comment count and ages come from the API"
+        },
+        {
+          "name": "novelty",
+          "score": 0.9,
+          "reason": "no sign of in-flight work"
+        }
+      ],
+      "score": 0.514,
+      "effort": "trivial",
+      "skills": [
+        "communication",
+        "python"
+      ],
+      "files": [],
+      "approach": [
+        "Try to reproduce on the default branch and report exactly what you observed, with versions.",
+        "If it reproduces, say so and suggest a label; if not, ask what differs in the reporter's setup."
+      ],
+      "acceptanceCriteria": [
+        "The issue has a reply that moves it toward confirmed or closed."
+      ],
+      "etiquette": [
+        "You are not a maintainer: offer findings, do not promise fixes or close issues.",
+        "Use conventional commit messages (feat:, fix:, docs:)."
+      ],
+      "risks": [
+        "Maintainers may already be aware and simply backlogged."
+      ],
+      "issue": {
+        "number": 549,
+        "url": "https://github.com/jd/tenacity/issues/549",
+        "title": "set reraise true project wide",
+        "labels": [],
+        "assignees": [],
+        "inFlight": false,
+        "createdAt": "2026-01-28T15:10:54Z",
+        "updatedAt": "2026-01-28T15:20:06Z"
+      }
+    }
+  ],
+  "skipped": [
+    {
+      "kind": "issue",
+      "title": "Fix #766: AsyncRetrying object can't be a singletone",
+      "reason": "PR #767 is open and active"
+    },
+    {
+      "kind": "issue",
+      "title": "Fix #756: pyright regression: combining `@classmethod` and `@retry` throws error.",
+      "reason": "PR #759 is open and active"
+    },
+    {
+      "kind": "issue",
+      "title": "Fix #748: Large sums of wait strategies raise RecursionError",
+      "reason": "PR #749 is open and active"
+    },
+    {
+      "kind": "issue",
+      "title": "Fix #715: Three repr tests assert nothing; wait_incrementing's max cap and the idle_for statistic h…",
+      "reason": "PR #717 is open and active"
+    },
+    {
+      "kind": "issue",
+      "title": "Fix #710: Zero exponential multiplier can overflow into maximum wait",
+      "reason": "PR #718 is open and active"
+    },
+    {
+      "kind": "issue",
+      "title": "Improve docs: #514: docs/Changelog: 9.0 release notes are missing",
+      "reason": "PR #708 is open and active"
+    },
+    {
+      "kind": "issue",
+      "title": "Fix #701: wraps(): concurrent or reentrant calls share and clear one statistics dict, violating thr…",
+      "reason": "PR #720 is open and active"
+    },
+    {
+      "kind": "issue",
+      "title": "Fix #531: Not able to log \"retry_success\", only if retry was triggered",
+      "reason": "PR #705 is open and active"
+    },
+    {
+      "kind": "issue",
+      "title": "Fix #529: retry_if_not_exception_type swallows asyncio.CancelledError",
+      "reason": "PR #698 is open and active"
+    }
+  ],
+  "budget": {
+    "apiRequests": 8,
+    "httpChecks": 0,
+    "cloneMs": 640,
+    "totalMs": 2744,
+    "truncated": false,
+    "notes": [
+      "issues passed over: #504: feature request without maintainer endorsement or a help label; #644: feature request without maintainer endorsement or a help label; #625: feature request without maintainer endorsement or a help label; #521: reads as a question, not a change request; #517: unclear whether maintainers want this changed (no label, confirmation or repro); #509: feature request without maintainer endorsement or a help label; #506: feature request without maintainer endorsement or a help label; #496: unclear whether maintainers want this changed (no label, confirmation or repro)",
+      "external link checks disabled"
+    ]
+  }
+}

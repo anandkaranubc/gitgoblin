@@ -1,0 +1,14 @@
+# "peek": the goblin looking over a ledge. 16x11. Rows 0-8 sit above the ledge,
+# rows 9-10 are the fingers gripping it; draw the ledge between them.
+# . transparent  g goblin  k ink  w bone
+g..............g
+gg...gggggg...gg
+ggg.gggggggg.ggg
+.gggggggggggggg.
+.ggggkggggkgggg.
+..ggkkggggkkgg..
+..gggggggggggg..
+...gkggggggkg...
+...ggkwkkkkgg...
+..g.g......g.g..
+..g.g......g.g..

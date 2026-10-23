@@ -1,0 +1,20 @@
+{
+  "id": "example/paginate#7",
+  "repo": {
+    "host": "github.com",
+    "owner": "acme",
+    "name": "widgets",
+    "localPath": "/path/to/a/local/checkout",
+    "defaultBranch": "main"
+  },
+  "commands": { "install": "npm ci", "test": "npm test", "lint": "npm run lint" },
+  "conventions": { "commitStyle": "conventional", "testFramework": "vitest" },
+  "rules": { "contributingPath": "CONTRIBUTING.md", "requiresTests": true, "dco": false },
+  "kind": "issue",
+  "title": "paginate() drops the last item of the final page",
+  "summary": "Slicing uses size - 1, so the final element of every page is lost.",
+  "issue": { "number": 7, "url": "https://github.com/acme/widgets/issues/7", "labels": ["bug"] },
+  "files": ["src/paginate.ts"],
+  "acceptanceCriteria": ["paginate([1,2,3], 1, 2) returns [3]"],
+  "etiquette": ["Reference the issue in the pull request"]
+}

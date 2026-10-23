@@ -1,0 +1,31 @@
+{
+  "name": "@gitgoblin/intel",
+  "version": "0.1.0",
+  "description": "Repository understanding and contribution-opportunity discovery for gitgoblin",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contracts": "./src/contracts.ts"
+  },
+  "bin": {
+    "gitgoblin-intel": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "analyze": "node src/cli.ts analyze"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.1.0",
+    "@gitgoblin/sources": "0.1.0",
+    "smol-toml": "^1.9.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

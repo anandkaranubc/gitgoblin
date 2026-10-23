@@ -1,0 +1,77 @@
+---
+import { Font } from "astro:assets";
+import "../styles/global.css";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+import { description as defaultDescription, href, siteName, tagline } from "../lib/site";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = defaultDescription } = Astro.props;
+const fullTitle = title === siteName ? `${siteName}: ${tagline}` : `${title} | ${siteName}`;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const ogImage = new URL(href("/og.png"), Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href={href("/favicon.svg")} type="image/svg+xml" />
+    <link rel="icon" href={href("/favicon.ico")} sizes="32x32" />
+    <link rel="icon" href={href("/favicon-32.png")} type="image/png" sizes="32x32" />
+    <link rel="icon" href={href("/favicon-16.png")} type="image/png" sizes="16x16" />
+    <link rel="apple-touch-icon" href={href("/apple-touch-icon.png")} />
+    <link rel="manifest" href={href("/site.webmanifest")} />
+    <link rel="sitemap" href={href("/sitemap-index.xml")} />
+    <meta name="theme-color" content="#f4f1e6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#10140f" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={siteName} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="640" />
+    <meta property="og:image:alt" content="The gitgoblin wordmark, the line “digs up forgotten work. ships it.” and the pixel goblin" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <Font cssVariable="--font-display" preload />
+    <Font cssVariable="--font-sans" preload />
+    <Font cssVariable="--font-mono" preload />
+    <script is:inline>
+      // Apply a saved theme before first paint; the OS preference applies otherwise.
+      try {
+        var saved = localStorage.getItem("theme");
+        if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
+      } catch (e) {}
+      document.documentElement.classList.add("js");
+    </script>
+    <slot name="head" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <Nav />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer />
+    <script>
+      // Code blocks that overflow sideways must be reachable from the keyboard.
+      const pres = document.querySelectorAll("pre");
+      const mark = () => pres.forEach((pre) => (pre.tabIndex = pre.scrollWidth > pre.clientWidth ? 0 : -1));
+      mark();
+      addEventListener("resize", mark, { passive: true });
+    </script>
+  </body>
+</html>

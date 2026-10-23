@@ -1,0 +1,400 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
+import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
+import { execShell } from "./exec.ts";
+import { commandEnv, isSafeCommand, scrubEnv } from "./guard.ts";
+import { parseTask, taskFromIntel } from "./intake.ts";
+import { consoleReporter, RunJournal, type Reporter } from "./journal.ts";
+import {
+  afterDiff,
+  afterOrient,
+  atIntake,
+  afterPlan,
+  afterReview,
+  afterVerify,
+  blockerKeys,
+  checkBudget,
+  DEFAULT_LIMITS,
+  failureSignature,
+  findSecrets,
+  type Decision,
+  type Limits,
+} from "./policy.ts";
+import { builderSystemPrompt, fixReviewPrompt, fixVerificationPrompt, implementPrompt, orientPrompt, planPrompt, reviewerSystemPrompt, reviewPrompt, type RepositoryGuidance } from "./prompts.ts";
+import { renderReport, type PhaseSummary } from "./report.ts";
+import {
+  ChangePlanSchema,
+  ImplementationNotesSchema,
+  InvestigationSchema,
+  ReviewSchema,
+  type ChangePlan,
+  type Commands,
+  type ImplementationNotes,
+  type Investigation,
+  type PreparedDelivery,
+  type Review,
+  type RunResult,
+  type Task,
+  type TaskInput,
+  type Verification,
+} from "./types.ts";
+import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
+import { diffPatch, diffStats, git, prepareWorkspace, type Workspace } from "./workspace.ts";
+
+export interface RunInput {
+  /** A Task written by hand or exported from an earlier run. */
+  task?: TaskInput;
+  /** Alternatively, intel's RepositoryProfile and ContributionOpportunity. */
+  profile?: unknown;
+  opportunity?: unknown;
+}
+
+export interface RunnerContext {
+  workspace: string;
+  task: Task;
+}
+
+export interface RunOptions {
+  /** Directory that holds `runs/<id>/`. Defaults to `.gitgoblin` in the current directory. */
+  workdir?: string;
+  limits?: Partial<Limits>;
+  reporter?: Reporter;
+  /** Environment for agent sessions. Defaults to a scrubbed copy of process.env; repository commands get it minus model credentials. */
+  env?: Record<string, string>;
+  model?: string;
+  effort?: Effort;
+  isolation?: "sandbox" | "none";
+  /** Timeout for each repository command (install, test, lint...). */
+  checkTimeoutMs?: number;
+  skipInstall?: boolean;
+  /** Optional human checkpoint between planning and implementation. */
+  approvePlan?: (plan: ChangePlan) => Promise<boolean>;
+  /** Replaces the Claude Agent SDK runner; tests use a scripted one. */
+  runnerFactory?: (ctx: RunnerContext) => AgentRunner;
+}
+
+const PHASE_TURNS = { orient: 80, plan: 12, implement: 150, review: 40 } as const;
+
+const GUIDANCE_CANDIDATES = ["CONTRIBUTING.md", ".github/CONTRIBUTING.md", "AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md"];
+const TEMPLATE_CANDIDATES = [".github/pull_request_template.md", ".github/PULL_REQUEST_TEMPLATE.md", "PULL_REQUEST_TEMPLATE.md", "docs/pull_request_template.md"];
+const MAX_GUIDANCE_FILE_CHARS = 20_000;
+
+export function readGuidance(wsPath: string, task: Task): RepositoryGuidance & { template?: string } {
+  const read = (rel: string): string | undefined => {
+    const file = path.join(wsPath, rel);
+    if (!existsSync(file)) return undefined;
+    const content = readFileSync(file, "utf8");
+    return content.length > MAX_GUIDANCE_FILE_CHARS ? `${content.slice(0, MAX_GUIDANCE_FILE_CHARS)}\n[truncated]` : content;
+  };
+  const wanted = [...new Set([task.rules.contributingPath ?? "", ...task.rules.instructionFiles, ...GUIDANCE_CANDIDATES].filter(Boolean))];
+  const files: RepositoryGuidance["files"] = [];
+  for (const rel of wanted) {
+    const content = read(rel);
+    if (content) files.push({ path: rel, content });
+  }
+  const templatePath = [task.rules.prTemplatePath ?? "", ...TEMPLATE_CANDIDATES].filter(Boolean).find((p) => existsSync(path.join(wsPath, p)));
+  const template = templatePath ? read(templatePath) : undefined;
+  return { files, ...(template ? { template } : {}) };
+}
+
+class RunAborted extends Error {
+  readonly status: RunResult["status"];
+  readonly reason: string;
+  readonly questions: string[];
+
+  constructor(status: RunResult["status"], reason: string, questions: string[] = []) {
+    super(reason);
+    this.status = status;
+    this.reason = reason;
+    this.questions = questions;
+  }
+}
+
+/** Model-discovered commands run on the host; keep only plain, known tool invocations. */
+function adoptDiscoveredCommands(task: Task, discovered: Commands, reporter: Reporter): (keyof Commands)[] {
+  const adopted: (keyof Commands)[] = [];
+  for (const [key, value] of Object.entries(discovered) as [keyof Commands, string | undefined][]) {
+    if (!value || task.commands[key]) continue;
+    if (!isSafeCommand(value)) {
+      reporter.warn(`ignoring ${key} command from orientation (not a plain tool invocation): ${value}`);
+      continue;
+    }
+    task.commands[key] = value;
+    adopted.push(key);
+  }
+  return adopted;
+}
+
+/** Runs one contribution end to end and leaves the result in the run directory, ready for a human. */
+export async function runContribution(input: RunInput, options: RunOptions = {}): Promise<RunResult> {
+  const task = input.task ? parseTask(input.task) : taskFromIntel(input.profile, input.opportunity);
+  const workdir = options.workdir ?? path.resolve(".gitgoblin");
+  const limits: Limits = { ...DEFAULT_LIMITS, ...options.limits };
+  const reporter = options.reporter ?? consoleReporter();
+  const env = options.env ?? scrubEnv();
+  const hostEnv = commandEnv(env);
+  const journal = RunJournal.create(workdir);
+  const started = Date.now();
+  const phases: PhaseSummary[] = [];
+  let costUsd = 0;
+  let workspace: Workspace | undefined;
+  let investigation: Investigation | undefined;
+  let verification: Verification | undefined;
+  let review: Review | undefined;
+  let delivery: PreparedDelivery | undefined;
+
+  journal.artifact("task", task);
+  journal.event("run", "start", { runId: journal.runId, task: task.id });
+  reporter.phase("run", `${journal.runId} for ${task.title}`);
+
+  const decide = (phase: string, decision: Decision): void => {
+    journal.event(phase, "decision", { ...decision });
+    if (decision.action === "stop") throw new RunAborted("stopped", decision.reason);
+    if (decision.action === "escalate") throw new RunAborted("escalated", decision.reason, decision.questions);
+  };
+
+  const phase = async <T>(runner: AgentRunner, spec: PhaseSpec<T>): Promise<PhaseResult<T> & { output: T }> => {
+    reporter.phase(spec.name);
+    journal.event(spec.name, "start", { resume: spec.resume ?? null });
+    const result = await runner.run({ ...spec, maxBudgetUsd: Math.max(0.5, limits.maxCostUsd - costUsd) });
+    costUsd += result.costUsd;
+    phases.push({ name: spec.name, costUsd: result.costUsd, turns: result.turns, durationMs: result.durationMs, ok: result.ok, denials: result.denials.length });
+    journal.event(spec.name, "end", { ok: result.ok, costUsd: result.costUsd, turns: result.turns, errors: result.errors, denials: result.denials });
+    for (const d of result.denials) reporter.warn(`${spec.name}: denied ${d.tool}: ${d.reason}`);
+    if (!result.ok) {
+      journal.text(`${spec.name}-output.txt`, result.text);
+      throw new RunAborted("failed", `${spec.name} did not produce a result: ${result.errors.join("; ") || "no structured output"}`);
+    }
+    decide(spec.name, checkBudget(costUsd, Date.now() - started, limits));
+    return result as PhaseResult<T> & { output: T };
+  };
+
+  try {
+    decide("intake", atIntake(task));
+
+    // Workspace, dependencies, guidance, baseline. Install and checks run on the host (setup phase),
+    // with a credential-free environment; the agent's own commands run in the sandbox.
+    reporter.phase("workspace", task.repo.localPath ? `worktree from ${task.repo.localPath}` : `clone ${task.repo.cloneUrl}`);
+    workspace = await prepareWorkspace(task, journal.dir, env);
+    journal.artifact("workspace", workspace);
+    if (workspace.startNote) reporter.warn(workspace.startNote);
+    if (options.isolation === "none" && workspace.source === "worktree") {
+      reporter.warn("running without a sandbox on a worktree: the agent could reach the original checkout's git directory");
+    }
+    const checkOptions = { cwd: workspace.path, env: hostEnv, ...(options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {}) };
+    if (task.commands.install && !options.skipInstall) {
+      reporter.phase("install", task.commands.install);
+      const install = await execShell(task.commands.install, checkOptions);
+      journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs });
+      if (install.exitCode !== 0) reporter.warn(`install failed (exit ${install.exitCode}); continuing, checks may fail`);
+    }
+    const guidance = readGuidance(workspace.path, task);
+    reporter.phase("baseline", checkSpecs(task.commands).map((s) => s.name).join(", ") || "no commands known");
+    const baselineChecks = await runChecks(checkSpecs(task.commands), checkOptions);
+    const baseline = compareWithBaseline(baselineChecks, undefined, { files: 0, insertions: 0, deletions: 0, changedFiles: [] });
+    journal.artifact("baseline", baseline);
+    for (const c of baselineChecks.filter((c) => c.status !== "pass")) reporter.warn(`baseline ${c.name}: ${c.status}`);
+
+    const runner = (options.runnerFactory ?? defaultRunnerFactory(options, env, reporter))({ workspace: workspace.path, task });
+    const builderPrompt = builderSystemPrompt(task, workspace.path, guidance);
+    const common = { systemPrompt: builderPrompt, profile: "build" as const, ...(options.model ? { model: options.model } : {}), ...(options.effort ? { effort: options.effort } : {}) };
+
+    // Orient.
+    const orient = await phase(runner, { ...common, name: "orient", prompt: orientPrompt(task, baseline), schema: InvestigationSchema, maxTurns: PHASE_TURNS.orient, maxBudgetUsd: 0 });
+    investigation = orient.output;
+    journal.artifact("investigation", investigation);
+    decide("orient", afterOrient(investigation));
+    const adopted = adoptDiscoveredCommands(task, investigation.commands, reporter);
+    if (adopted.length > 0) {
+      journal.artifact("task", task);
+      // Lint, build and typecheck discovered now still need a baseline; the test command does not get
+      // one because the reproduction test already in the tree is meant to fail.
+      const late = checkSpecs(Object.fromEntries(adopted.filter((k) => k !== "test").map((k) => [k, task.commands[k]])));
+      if (late.length > 0) {
+        reporter.phase("baseline", `late: ${late.map((s) => s.name).join(", ")}`);
+        baseline.checks.push(...(await runChecks(late, checkOptions)));
+        journal.artifact("baseline", baseline);
+      }
+    }
+    let session = orient.sessionId;
+
+    // Plan.
+    const planned = await phase(runner, { ...common, name: "plan", prompt: planPrompt(limits.maxFilesChanged), schema: ChangePlanSchema, maxTurns: PHASE_TURNS.plan, maxBudgetUsd: 0, ...(session ? { resume: session } : {}) });
+    const plan = planned.output;
+    journal.artifact("plan", plan);
+    decide("plan", afterPlan(plan, task, limits));
+    if (options.approvePlan && !(await options.approvePlan(plan))) throw new RunAborted("stopped", "plan rejected by the operator");
+    session = planned.sessionId ?? session;
+
+    // Implement, verify, review: a bounded loop.
+    const repro = investigation.reproduction;
+    const reproduction = repro.kind === "test" && repro.command && isSafeCommand(repro.command) ? [{ name: "reproduction", command: repro.command }] : [];
+    if (repro.kind === "test" && repro.command && reproduction.length === 0) reporter.warn(`ignoring reproduction command (not a plain tool invocation): ${repro.command}`);
+    let prompt = implementPrompt(plan);
+    let attempt = 0;
+    let reviewRound = 0;
+    let previousSignature: string | undefined;
+    let previousBlockers: string[] = [];
+    let notes: ImplementationNotes | undefined;
+    let reviewedPatch = "";
+
+    for (;;) {
+      attempt += 1;
+      const implemented = await phase(runner, { ...common, name: `implement-${attempt}`, prompt, schema: ImplementationNotesSchema, maxTurns: PHASE_TURNS.implement, maxBudgetUsd: 0, ...(session ? { resume: session } : {}) });
+      notes = implemented.output;
+      session = implemented.sessionId ?? session;
+      journal.artifact(`implementation-${attempt}`, notes);
+
+      const diff = await diffStats(workspace.path, workspace.baseSha, env);
+      if (diff.files === 0) throw new RunAborted("stopped", "the implementation changed no files");
+      decide("diff", afterDiff(diff, task, limits));
+      reporter.phase("verify", `${diff.files} files changed, +${diff.insertions} -${diff.deletions}`);
+      const checks = await runChecks(checkSpecs(task.commands, reproduction), checkOptions);
+      verification = compareWithBaseline(checks, baseline.checks, diff);
+      journal.artifact(`verification-${attempt}`, verification);
+      for (const c of checks) reporter.info(`${c.name}: ${c.status}`);
+
+      const afterVerifyDecision = afterVerify(verification, attempt, previousSignature, limits);
+      previousSignature = failureSignature(verification);
+      if (afterVerifyDecision.action === "retry") {
+        reporter.warn(afterVerifyDecision.reason);
+        journal.event("verify", "retry", { attempt, reason: afterVerifyDecision.reason });
+        prompt = fixVerificationPrompt(verification);
+        continue;
+      }
+      decide("verify", afterVerifyDecision);
+
+      reviewedPatch = await diffPatch(workspace.path, workspace.baseSha, env);
+      journal.text(`diff-${attempt}.patch`, reviewedPatch);
+      const secrets = findSecrets(reviewedPatch);
+      if (secrets.length > 0) throw new RunAborted("escalated", `the diff adds something that looks like a secret (${secrets.join(", ")})`, ["Inspect the diff before anything is pushed."]);
+
+      reviewRound += 1;
+      const reviewed = await phase(runner, {
+        name: `review-${reviewRound}`,
+        systemPrompt: reviewerSystemPrompt(task, workspace.path, guidance),
+        prompt: reviewPrompt(task, plan, notes, verification, reviewedPatch),
+        schema: ReviewSchema,
+        profile: "review",
+        maxTurns: PHASE_TURNS.review,
+        maxBudgetUsd: 0,
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.effort ? { effort: options.effort } : {}),
+      });
+      review = reviewed.output;
+      journal.artifact(`review-${reviewRound}`, review);
+      reporter.info(`review: ${review.verdict}${review.findings.length ? ` (${review.findings.length} findings)` : ""}`);
+
+      const afterReviewDecision = afterReview(review, reviewRound, attempt, previousBlockers, limits);
+      previousBlockers = blockerKeys(review);
+      if (afterReviewDecision.action === "retry") {
+        reporter.warn(afterReviewDecision.reason);
+        journal.event("review", "retry", { round: reviewRound, reason: afterReviewDecision.reason });
+        prompt = fixReviewPrompt(review);
+        continue;
+      }
+      decide("review", afterReviewDecision);
+      break;
+    }
+
+    // The reviewer has no write tools and a write-free sandbox, but the commit must still be exactly what was reviewed.
+    if ((await diffPatch(workspace.path, workspace.baseSha, env)) !== reviewedPatch) {
+      throw new RunAborted("escalated", "the workspace changed after the review", ["Compare the workspace with the reviewed diff before trusting it."]);
+    }
+
+    // Deliver: commit locally and write the pull request text. Publishing is a separate, approved step.
+    reporter.phase("prepare", "commit and pull request text");
+    delivery = await preparePullRequest({ task, plan, notes: notes!, verification: verification!, review: review!, ...(guidance.template ? { template: guidance.template } : {}) }, workspace.path, workspace.baseSha, env);
+    journal.artifact("delivery", delivery);
+    journal.text("pr.md", delivery.prBody);
+    journal.text("pr-title.txt", `${delivery.prTitle}\n`);
+    journal.text("diff.patch", await git(["show", "--format=%H%n%s%n", "HEAD"], workspace.path, env));
+    return finish("awaiting_approval", "ready for human review", []);
+  } catch (err) {
+    if (err instanceof RunAborted) return finish(err.status, err.reason, err.questions);
+    const message = err instanceof Error ? err.message : String(err);
+    journal.event("run", "error", { message });
+    return finish("failed", message, []);
+  }
+
+  function finish(status: RunResult["status"], reason: string, questions: string[]): RunResult {
+    const result: RunResult = {
+      runId: journal.runId,
+      runDir: journal.dir,
+      status,
+      reason,
+      questions,
+      workspace: workspace?.path,
+      branch: workspace?.branch,
+      costUsd,
+      durationMs: Date.now() - started,
+    };
+    journal.artifact("result", result);
+    journal.text(
+      "report.md",
+      renderReport({
+        result,
+        task,
+        phases,
+        ...(investigation ? { investigation } : {}),
+        ...(verification ? { verification } : {}),
+        ...(review ? { review } : {}),
+        ...(delivery ? { prTitle: delivery.prTitle } : {}),
+      }),
+    );
+    journal.event("run", "end", { status, reason, costUsd });
+    reporter.phase("done", `${status}: ${reason} ($${costUsd.toFixed(2)})`);
+    return result;
+  }
+}
+
+function defaultRunnerFactory(options: RunOptions, env: Record<string, string>, reporter: Reporter): (ctx: RunnerContext) => AgentRunner {
+  return (ctx) =>
+    createSdkRunner({
+      workspace: ctx.workspace,
+      task: ctx.task,
+      env,
+      ...(options.model ? { model: options.model } : {}),
+      ...(options.isolation ? { isolation: options.isolation } : {}),
+      onToolUse: (phaseName, tool, summary) => reporter.info(`${phaseName} ${tool} ${summary}`),
+    });
+}
+
+export interface PublishRunOptions {
+  workdir?: string;
+  /** Must be true. The caller is responsible for having asked a human. */
+  approved: boolean;
+  draft?: boolean;
+  dryRun?: boolean;
+  env?: Record<string, string>;
+  log?: (line: string) => void;
+}
+
+/** Pushes a prepared run's branch and opens the pull request. Refuses without explicit approval. */
+export async function publishRun(runId: string, options: PublishRunOptions): Promise<PublishResult> {
+  if (options.approved !== true) throw new Error("publishRun requires approved: true from a human");
+  const journal = RunJournal.open(options.workdir ?? path.resolve(".gitgoblin"), runId);
+  const result = journal.readArtifact<RunResult>("result");
+  const task = journal.readArtifact<Task>("task");
+  const delivery = journal.readArtifact<PreparedDelivery>("delivery");
+  const workspace = journal.readArtifact<Workspace>("workspace");
+  if (!result || !task || !delivery || !workspace) throw new Error(`run ${runId} has no prepared delivery`);
+  if (result.status !== "awaiting_approval") throw new Error(`run ${runId} is ${result.status}, not awaiting approval`);
+  const published = await publishPullRequest({
+    task,
+    delivery,
+    wsPath: workspace.path,
+    bodyFile: journal.pathFor("pr.md"),
+    env: options.env ?? (process.env as Record<string, string>),
+    ...(options.draft !== undefined ? { draft: options.draft } : {}),
+    ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),
+    ...(options.log ? { log: options.log } : {}),
+  });
+  if (!options.dryRun) {
+    journal.artifact("published", published);
+    journal.artifact("result", { ...result, status: "published", reason: published.url });
+    journal.event("publish", "end", { url: published.url });
+  }
+  return published;
+}

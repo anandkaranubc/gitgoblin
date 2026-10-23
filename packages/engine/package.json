@@ -1,0 +1,31 @@
+{
+  "name": "@gitgoblin/engine",
+  "version": "0.1.0",
+  "description": "Execution, orchestration, review and delivery engine for gitgoblin",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "gitgoblin-engine": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "engine": "node src/cli.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.309",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.5"
+  }
+}

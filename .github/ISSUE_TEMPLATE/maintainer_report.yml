@@ -1,0 +1,30 @@
+name: I maintain another project
+description: Report a gitgoblin-assisted contribution to your project, or opt your project out.
+labels: ["etiquette"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for telling us. gitgoblin's commitments to other projects are in [docs/etiquette.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md); breaking them is a bug we want to know about. You do not need to give a reason to opt out.
+  - type: input
+    id: repo
+    attributes:
+      label: Your project
+      placeholder: owner/repository
+    validations:
+      required: true
+  - type: dropdown
+    id: request
+    attributes:
+      label: What you need
+      options:
+        - Exclude my project from gitgoblin
+        - Report a contribution that broke the etiquette commitments
+        - Both
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: For a report, link the pull request, issue, or comment and say what went wrong. For an opt-out, this is optional.

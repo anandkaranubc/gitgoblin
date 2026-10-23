@@ -1,0 +1,45 @@
+import { describe, expect, it } from "vitest";
+import { buildTestIndex, findSkippedTests, looksUntested, testedStem } from "../src/analyzers/test-gaps.ts";
+
+describe("test gap heuristics", () => {
+  it("derives the tested module from test file names", () => {
+    expect(testedStem("tests/test_parser.py")).toBe("parser");
+    expect(testedStem("pkg/parser_test.go")).toBe("parser");
+    expect(testedStem("src/Parser.test.tsx")).toBe("parser");
+    expect(testedStem("spec/parser_spec.rb")).toBe("parser");
+    expect(testedStem("src/test/java/ParserTest.java")).toBe("parser");
+    expect(testedStem("tests/conftest.py")).toBeUndefined();
+  });
+
+  it("treats a source as tested when a test names or mentions it, and stays quiet on generic names", () => {
+    const index = buildTestIndex([
+      { path: "tests/test_parser.py", text: "from pkg.parser import parse\nfrom pkg import renderer\n" },
+      { path: "pkg/net/conn_test.go", text: "package net" },
+    ]);
+    expect(looksUntested("pkg/parser.py", "", index)).toBe(false);
+    expect(looksUntested("pkg/renderer.py", "", index)).toBe(false);
+    expect(looksUntested("pkg/scheduler.py", "", index)).toBe(true);
+    expect(looksUntested("pkg/utils.py", "", index)).toBe(false);
+    expect(looksUntested("pkg/net/conn.go", "", index)).toBe(false);
+    expect(looksUntested("pkg/other/thing.go", "", index)).toBe(true);
+    expect(looksUntested("src/engine.rs", "#[cfg(test)]\nmod tests {}", index)).toBe(false);
+  });
+
+  it("finds skips without an environmental reason", () => {
+    const py = `
+@pytest.mark.skip(reason="flaky, see #123")
+def test_a(): ...
+@pytest.mark.skipif(sys.platform == "win32", reason="windows")
+def test_b(): ...
+@pytest.mark.skip(reason="requires GPU")
+def test_c(): ...
+@pytest.mark.xfail
+def test_d(): ...
+`;
+    const found = findSkippedTests("tests/test_x.py", py);
+    expect(found.map((f) => f.line)).toEqual([2, 8]);
+    expect(found[0]?.reason).toBe("flaky, see #123");
+    const js = "it.skip('does thing', () => {});\ntest('ok', () => {});\nit.skip('needs network', () => {});";
+    expect(findSkippedTests("a.test.js", js).map((f) => f.line)).toEqual([1]);
+  });
+});

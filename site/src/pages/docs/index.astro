@@ -1,0 +1,47 @@
+---
+import { getCollection } from "astro:content";
+import Docs from "../../layouts/Docs.astro";
+import { href, repo } from "../../lib/site";
+
+const pages = (await getCollection("docs")).sort((a, b) => a.data.order - b.data.order);
+---
+
+<Docs title="Docs" description="Documentation for gitgoblin: how it works, what it finds, how it keeps itself safe, and how to run the code today.">
+  <h1>Docs</h1>
+  <p>
+    Everything here describes gitgoblin as designed and as it exists today, with the difference marked. The deeper material lives in
+    the repository and is linked from every page.
+  </p>
+  <dl class="index">
+    {
+      pages.map((p) => (
+        <>
+          <dt>
+            <a href={href(`/docs/${p.id}/`)}>{p.data.title}</a>
+          </dt>
+          <dd>{p.data.description}</dd>
+        </>
+      ))
+    }
+  </dl>
+  <h2>Source of truth</h2>
+  <p>
+    When this site and the repository disagree, the repository wins. The <a href={`${repo.url}#readme`}>README</a> keeps the
+    status table, <a href={`${repo.url}/blob/main/docs/architecture.md`}>architecture.md</a> explains how the packages fit, and
+    <a href={`${repo.url}/blob/main/docs/etiquette.md`}>etiquette.md</a> is the policy gitgoblin holds itself to in other people's
+    projects.
+  </p>
+</Docs>
+
+<style>
+  .index dt {
+    font-weight: 700;
+    font-size: 1.15rem;
+    margin-top: 1.25rem;
+  }
+
+  .index dd {
+    margin: 0.2rem 0 0;
+    color: var(--fg-2);
+  }
+</style>

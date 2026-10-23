@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/anandkaranubc/gitgoblin/security/advisories/new
+    about: Private report, seen only by maintainers. Please use this instead of a public issue.

@@ -1,0 +1,30 @@
+{
+  "name": "gitgoblin-site",
+  "private": true,
+  "type": "module",
+  "description": "The public website for gitgoblin",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "predev": "node scripts/sync-brand.mjs",
+    "dev": "astro dev",
+    "prebuild": "node scripts/sync-brand.mjs",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "test": "node scripts/check-dist.mjs"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.4",
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/recursive": "^5.3.0",
+    "astro": "^7.4.2"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "fontkit": "^2.0.4",
+    "sharp": "^0.35.5",
+    "typescript": "^5.9.3"
+  }
+}

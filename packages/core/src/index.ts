@@ -1,0 +1,27 @@
+export {
+  normalizeHost,
+  parseRepoRef,
+  repoId,
+  repoUrl,
+  sameRepo,
+  toRepoRef,
+  type RepoFacts,
+  type RepoRef,
+} from "./repo.ts";
+export {
+  GOAL_DESCRIPTIONS,
+  GOALS,
+  isGoal,
+  SIGNAL_DESCRIPTIONS,
+  SIGNAL_NAMES,
+  type Discoverer,
+  type DiscoveryFilters,
+  type DiscoveryQuery,
+  type DiscoveryResult,
+  type Evidence,
+  type Goal,
+  type IssueCandidate,
+  type Reason,
+  type SignalName,
+  type Signals,
+} from "./discovery.ts";

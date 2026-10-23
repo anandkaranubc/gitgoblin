@@ -1,0 +1,27 @@
+name: Idea or feature request
+description: Propose something gitgoblin should do, or do differently.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today? A concrete story beats an abstract wish.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: Your idea for a solution, if you have one. It is fine to leave this open.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Other ways to solve it, including "do nothing". Optional.
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Working on it
+      options:
+        - label: I would like to implement this myself if it is accepted.

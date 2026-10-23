@@ -1,0 +1,780 @@
+---
+import Base from "../layouts/Base.astro";
+import Terminal from "../components/Terminal.astro";
+import GitHubIcon from "../components/GitHubIcon.astro";
+import Mascot from "../components/Mascot.astro";
+import { href, repo, siteName } from "../lib/site";
+
+const stages = [
+  {
+    name: "Discover",
+    title: "Projects worth your time",
+    body: "Tell it what you want: to contribute, learn, adopt, revive or explore. It ranks public repositories against that goal and shows the reasons behind every rank, so the quiet library your app depends on can beat the crowded project everyone else already found. This part works today.",
+  },
+  {
+    name: "Understand",
+    title: "Read the repo like a careful new maintainer",
+    body: "A profile of what the project is, how it is built and tested, how it treats outside contributors and which conventions it follows. Missing data stays unknown; nothing is punished for it. This works today too, with scores still being calibrated.",
+  },
+  {
+    name: "Find the work",
+    title: "Loot, with receipts",
+    body: "Concrete opportunities: issues nobody is working on, CI about to break, docs that contradict the code, dead links, tests missing where the code changes most. Each one points at something you can check and scores on named factors with reasons.",
+  },
+  {
+    name: "Contribute",
+    title: "One good pull request",
+    body: "For one opportunity, the engine investigates, plans, implements, runs the project's own checks against a baseline, gets an independent review and prepares the commit and the PR description. You read it and decide whether to publish.",
+  },
+];
+
+// Straight from packages/intel/src/contracts.ts (OpportunityKind), grouped for reading.
+const kinds = [
+  {
+    group: "Things people asked for",
+    items: [
+      ["issue", "An open issue worth fixing."],
+      ["feature_request", "A maintainer-endorsed feature request with no implementation underway."],
+      ["stale_pr", "An abandoned pull request with maintainer interest, worth reviving."],
+      ["triage", "An unanswered issue that needs reproduction or an answer."],
+    ],
+  },
+  {
+    group: "Things quietly rotting",
+    items: [
+      ["ci_rot", "CI that will break or has broken: deprecated actions, retired runners, unsafe triggers."],
+      ["deprecation", "Use of deprecated or removed APIs and libraries."],
+      ["dependency", "Vulnerable or deprecated dependencies."],
+      ["docs_drift", "Documentation that contradicts the code."],
+      ["broken_link", "Dead links or references in documentation."],
+    ],
+  },
+  {
+    group: "Things nobody got to",
+    items: [
+      ["test_gap", "Frequently changed code with no tests, or tests that are skipped."],
+      ["tech_debt", "Self-admitted technical debt with enough context to act on."],
+      ["hygiene", "Missing project scaffolding that the repository's nature warrants."],
+    ],
+  },
+];
+
+const factors = [
+  ["value", 0.6, "Warning noise now, breakage when the call is removed."],
+  ["feasibility", 0.95, "One call site, tests already cover the module."],
+  ["welcomeness", 0.85, "CONTRIBUTING invites small fixes; median PR response 20 hours."],
+  ["confidence", 0.9, "Reproduced the warning on Python 3.12."],
+  ["novelty", 0.8, "No open PR or issue mentions utcnow."],
+] as const;
+
+// Captured from a real run; see "Try it today". Descriptions belong to those projects.
+const discoverOutput = ` 1. Bitterbot-AI/bitterbot-desktop  ★ 2.5k · TypeScript · MIT  score 0.91
+    Bitterbot - a mesh of agents that turns shared experience into collective capability.
+    https://github.com/Bitterbot-AI/bitterbot-desktop
+    + CONTRIBUTING guide, code of conduct
+    + last change today, 68 pull requests in the past year
+    + pull requests in ~2 days
+
+ 2. ccch1mneyyy/dsh-TUI  ★ 5.3k · TypeScript · MIT  score 0.90
+    DSH's officially top-recommended TUI plugin — high performance, low overhead, cute pixel whale, smo…
+    https://github.com/ccch1mneyyy/dsh-TUI
+    + CONTRIBUTING guide, code of conduct
+    + last change today, 555 pull requests in the past year
+    + issues close in ~4 days, pull requests in ~21 hours
+
+ 3. mvschwarz/openrig  ★ 8.1k · TypeScript · Apache-2.0  score 0.90
+    Build your own network of agents from Claude Code, Codex and Pi: persistent teams with roles, share…
+    https://github.com/mvschwarz/openrig
+    + CONTRIBUTING guide, code of conduct
+    + last change today, 282 pull requests in the past year
+    + README, description, homepage, changelog`;
+
+const never = [
+  "push, or change a remote",
+  "call gh, or reach the network at all",
+  "install packages, or publish anything",
+  "use sudo, containers or system tools",
+  "write outside its workspace, or into .git",
+  "touch protected paths: CI workflows, release config, secrets",
+];
+
+const faq = [
+  {
+    q: "Is this a bot that opens pull requests?",
+    a: "No. gitgoblin prepares work; a person reads it, approves it and publishes it from their own account. It never opens pull requests, pushes commits or posts comments on its own, and that rule is enforced in code, not in a prompt.",
+  },
+  {
+    q: "Does it work yet?",
+    a: "Discovery and repository analysis do, from a clone: gitgoblin discover ranks public repositories for a goal with the reasons behind each ranking, explain shows why one ranked where it did, and analyze profiles one repository and lists its evidence-backed opportunities, with scores still being calibrated. Preparing a contribution with the engine runs end to end on a test repository and is experimental. Nothing is on npm yet, and no single command runs from discovery to pull request. The README keeps the table of what works.",
+  },
+  {
+    q: "Which model does it use, and what does it see?",
+    a: "The engine drives its agent sessions through the Claude Agent SDK, inside a sandbox with a per-phase tool allowlist, so the target repository's code and issue text go to the model provider during a run. Discovery and analysis read public data from GitHub and the ecosyste.ms APIs and need no model at all. Publishing is the only step that writes to the outside world, and it waits for you.",
+  },
+  {
+    q: "I maintain a project. Can I keep it away?",
+    a: "Yes. Fill in the maintainer form in the gitgoblin repository and the project goes on the excluded list, which gitgoblin users must respect and its tools are expected to enforce. No reason needed. Archived projects and projects that say they do not take outside contributions are skipped anyway.",
+  },
+  {
+    q: "Can I point it at my own repository?",
+    a: "By design, yes: a repository reference can name a local checkout instead of something to clone, so you can analyze and contribute to your own code with the same pipeline. Like the rest, this is in progress.",
+  },
+  {
+    q: "Why a goblin?",
+    a: "Goblins hoard, scavenge and tinker in corners nobody visits. gitgoblin does the same in repositories: it finds the neglected and the half-finished and turns it into something worth having. It is small, a little mischievous, and it stops when told.",
+  },
+];
+---
+
+<Base title={siteName}>
+  <section class="hero">
+    <div class="wrap hero__grid">
+      <div class="hero__copy">
+        <h1>digs up forgotten work. ships it.</h1>
+        <p class="lede">
+          gitgoblin digs through public repositories for work that actually matters, backs every find with evidence, and crafts one
+          small pull request a maintainer would be glad to merge. Nothing is published until you say so.
+        </p>
+        <div class="hero__actions">
+          <a class="btn" href={repo.url}><GitHubIcon /> Star on GitHub</a>
+          <a class="btn btn--quiet" href="#how">See how it works</a>
+        </div>
+        <p class="hero__status">
+          Early development: discovery and analysis work from a clone, contributing is experimental, nothing on npm yet. MIT licensed.
+          <a href={href("/docs/status/")}>What works today</a>
+        </p>
+      </div>
+      <div class="hero__demo">
+        <Terminal />
+        <p class="hero__hint muted">
+          A scripted run, not a recording: the scenario is invented, the phases and the approval gate are how the engine works.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="how" aria-labelledby="how-title">
+    <div class="wrap">
+      <h2 id="how-title">How it works</h2>
+      <p class="lede">Four stages that hand each other plain data. A person approves anything that gets published.</p>
+      <ol class="stages">
+        {
+          stages.map((s, i) => (
+            <li>
+              <span class="stages__num" aria-hidden="true">{i + 1}</span>
+              <div>
+                <h3>
+                  <span class="stages__name">{s.name}.</span> {s.title}
+                </h3>
+                <p>{s.body}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+      <p>
+        The engine's full pipeline, retry rules and security boundaries are in <a href={href("/docs/how-it-works/")}>How it works</a>
+        and in the <a href={`${repo.url}/blob/main/packages/engine/docs/design.md`}>engine design</a>.
+      </p>
+    </div>
+  </section>
+
+  <section class="band band--deep" id="finds" aria-labelledby="finds-title">
+    <div class="wrap">
+      <h2 id="finds-title">What the goblin digs up</h2>
+      <p class="lede">
+        Twelve kinds of opportunity, straight from the contract in <code>packages/intel/src/contracts.ts</code>. Every one must carry at
+        least one piece of evidence a person can check.
+      </p>
+      <div class="kinds">
+        {
+          kinds.map((g) => (
+            <div class="kinds__group">
+              <h3>{g.group}</h3>
+              <dl>
+                {g.items.map(([name, def]) => (
+                  <div class="kinds__item">
+                    <dt>
+                      <code>{name}</code>
+                    </dt>
+                    <dd>{def}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ))
+        }
+      </div>
+
+      <div class="receipts">
+        <div class="receipts__copy">
+          <h3>Receipts included</h3>
+          <p>
+            An opportunity is not "this could be better". It is a claim with evidence, a score that decomposes into named factors
+            with reasons, an estimate of effort, the files to read first, the steps to take, how to behave in that project, and the
+            ways it might be wasted work.
+          </p>
+          <p class="muted">The card shows the shape of one. The project and the numbers are made up.</p>
+        </div>
+        <article class="card" aria-label="Example opportunity">
+          <p class="card__chips">
+            <span class="chip chip--kind">deprecation</span>
+            <span class="chip">small effort</span>
+            <span class="chip">python</span>
+          </p>
+          <h4>kelp/cache.py calls datetime.utcnow(), deprecated since Python 3.12</h4>
+          <p>Every call logs a DeprecationWarning; when the method is removed the cache stops working. One call site, already covered by tests.</p>
+          <h5>Evidence</h5>
+          <ul class="card__evidence">
+            <li><code>kelp/cache.py:41</code> <q>return datetime.utcnow()</q></li>
+            <li><code>workflow run 4182</code> <q>DeprecationWarning: datetime.utcnow() is deprecated</q></li>
+          </ul>
+          <h5>Score 0.81</h5>
+          <dl class="factors">
+            {
+              factors.map(([name, score, reason]) => (
+                <div class="factors__row">
+                  <dt>{name}</dt>
+                  <dd>
+                    <span class="factors__bar" aria-hidden="true">
+                      <span style={`width: ${score * 100}%`} />
+                    </span>
+                    <span class="factors__val">{score.toFixed(2)}</span>
+                    <span class="factors__why">{reason}</span>
+                  </dd>
+                </div>
+              ))
+            }
+          </dl>
+          <h5>Etiquette</h5>
+          <ul>
+            <li>Small fixes need no issue first, per CONTRIBUTING.md.</li>
+            <li>Fill in the pull request template.</li>
+          </ul>
+          <h5>Risks</h5>
+          <ul>
+            <li>A maintainer may prefer one sweep of every utcnow call instead.</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="safety" aria-labelledby="safety-title">
+    <div class="wrap safety">
+      <div>
+        <h2 id="safety-title">What the goblin never does</h2>
+        <p class="lede">Maintainers did not ask for this, so gitgoblin holds itself to rules that live in code.</p>
+        <ul class="rules">
+          <li>
+            <strong>A person approves every external action.</strong> Nothing is pushed, opened or commented without someone reading
+            it and saying yes, from their own account.
+          </li>
+          <li>
+            <strong>The project's rules win.</strong> Contributing guides, templates, issue-first policies, CLA and DCO requirements and
+            "we don't want this kind of change" are read and followed. Projects that do not take outside contributions are left alone.
+          </li>
+          <li>
+            <strong>One good contribution beats ten mediocre ones.</strong> Small, tested, evidence-backed changes. No sweeps, no spam,
+            and nobody's claimed issue is taken.
+          </li>
+        </ul>
+        <p>
+          The full policy, including how a maintainer opts a project out, is in <a
+            href={`${repo.url}/blob/main/docs/etiquette.md`}>docs/etiquette.md</a
+          >.
+        </p>
+      </div>
+      <div class="never">
+        <h3>Inside a run, the agent cannot</h3>
+        <ul>
+          {never.map((n) => <li>{n}</li>)}
+        </ul>
+        <p>
+          The sandbox is the hard boundary; tool allowlists and hooks are belts on top. The agent never sees your GitHub token.
+          Publishing uses your own login from the engine process, after you approve.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--deep" id="start" aria-labelledby="start-title">
+    <div class="wrap start">
+      <div>
+        <h2 id="start-title">Try it today</h2>
+        <p>You need Node.js 24 or newer and git. There is no published package yet, so run it from a clone.</p>
+        <pre><code>git clone {repo.url}.git
+cd gitgoblin
+npm install
+npx gitgoblin discover contribute --language typescript</code></pre>
+        <p>
+          That ranks ten repositories for contributing, with the reasons behind each rank. Here are the first three from a run on
+          2026-10-22; yours will differ, because the ranking follows what changed on GitHub.
+        </p>
+        <figure class="run">
+          <figcaption>npx gitgoblin discover contribute --language typescript --limit 3</figcaption>
+          <pre><code set:html={discoverOutput} /></pre>
+        </figure>
+        <p>
+          It works without any configuration; a GitHub token unlocks more data and a higher rate limit. The <a
+            href={`${repo.url}/blob/main/docs/getting-started.md`}>getting started tutorial</a
+          > walks through the five goals, the filters, the <code>explain</code> command and the token.
+        </p>
+      </div>
+      <div>
+        <h2>Help build it</h2>
+        <p>
+          Bug reports, confusing-documentation reports and pull requests are welcome. Start with the <a
+            href={`${repo.url}/blob/main/CONTRIBUTING.md`}>contributing guide</a
+          >, pick an <a href={`${repo.url}/issues`}>issue</a>, and say hello in it before you start. AI-assisted contributions are
+          welcome too, with you accountable for them.
+        </p>
+        <p>
+          Everyone taking part agrees to the <a href={`${repo.url}/blob/main/CODE_OF_CONDUCT.md`}>code of conduct</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="faq" aria-labelledby="faq-title">
+    <div class="wrap">
+      <h2 id="faq-title">Questions people ask</h2>
+      <div class="faq">
+        {
+          faq.map((f) => (
+            <details>
+              <summary>{f.q}</summary>
+              <p>{f.a}</p>
+            </details>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--deep" aria-labelledby="follow-title">
+    <div class="wrap follow">
+      <div>
+        <h2 id="follow-title">Watch the goblin grow</h2>
+        <p class="lede">Nothing to install yet. Star the repository to follow the build, or open an issue if anything here is unclear.</p>
+        <a class="btn" href={repo.url}><GitHubIcon /> gitgoblin on GitHub</a>
+      </div>
+      <Mascot pose="found" width={192} />
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero {
+    padding-block: clamp(2rem, 6vw, 5rem) clamp(3rem, 8vw, 6rem);
+  }
+
+  .hero__grid {
+    display: grid;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .hero__copy h1 {
+    color: var(--fg);
+  }
+
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-block: 1.75rem 1.25rem;
+  }
+
+  .hero__status {
+    font-size: 0.95rem;
+    color: var(--fg-2);
+  }
+
+  .hero__status a {
+    margin-left: 0.25rem;
+  }
+
+  .hero__hint {
+    font-size: 0.85rem;
+    margin: 0.9rem 0 0;
+  }
+
+  @media (min-width: 64rem) {
+    .hero__grid {
+      grid-template-columns: 5fr 7fr;
+      gap: 3.5rem;
+    }
+  }
+
+  .stages {
+    list-style: none;
+    padding: 0;
+    margin: 2rem 0;
+    display: grid;
+    gap: 2rem 3rem;
+  }
+
+  .stages li {
+    display: grid;
+    grid-template-columns: 3.2rem 1fr;
+    gap: 0.75rem;
+    max-width: none;
+  }
+
+  .stages__num {
+    font-weight: 900;
+    font-size: 2.6rem;
+    line-height: 1;
+    color: var(--goblin);
+  }
+
+  .stages h3 {
+    margin-bottom: 0.35em;
+  }
+
+  .stages__name {
+    color: var(--accent);
+  }
+
+  @media (min-width: 52rem) {
+    .stages {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .kinds {
+    display: grid;
+    gap: 2rem;
+    margin-block: 2.5rem 4rem;
+  }
+
+  .kinds h3 {
+    font-size: 1.1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--fg);
+  }
+
+  .kinds dl {
+    margin: 0;
+  }
+
+  .kinds__item {
+    padding-block: 0.6rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .kinds dt code {
+    background: transparent;
+    padding: 0;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .kinds dd {
+    margin: 0.15rem 0 0;
+    font-size: 0.95rem;
+    color: var(--fg-2);
+  }
+
+  @media (min-width: 52rem) {
+    .kinds {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .receipts {
+    display: grid;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  @media (min-width: 60rem) {
+    .receipts {
+      grid-template-columns: 1fr 1.4fr;
+      gap: 3.5rem;
+    }
+
+    .receipts__copy {
+      position: sticky;
+      top: 2rem;
+    }
+  }
+
+  .card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-left: 6px solid var(--loot);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    font-size: 0.95rem;
+  }
+
+  .card h4 {
+    font-size: 1.25rem;
+    margin: 0.5rem 0 0.4rem;
+  }
+
+  .card h5 {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    color: var(--fg-2);
+    margin: 1.4rem 0 0.4rem;
+  }
+
+  .card ul {
+    padding-left: 1.1rem;
+    margin: 0;
+  }
+
+  .card__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0;
+  }
+
+  .chip {
+    font-family: var(--font-mono);
+    font-variation-settings: "MONO" 1;
+    font-size: 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.15rem 0.6rem;
+  }
+
+  .chip--kind {
+    background: var(--fg);
+    color: var(--bg);
+    border-color: var(--fg);
+  }
+
+  .card__evidence {
+    list-style: none;
+    padding: 0 !important;
+  }
+
+  .card__evidence li {
+    margin-bottom: 0.3rem;
+  }
+
+  .card__evidence q {
+    color: var(--fg-2);
+  }
+
+  .factors {
+    margin: 0;
+  }
+
+  .factors__row {
+    display: grid;
+    grid-template-columns: 7em 1fr;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding-block: 0.3rem;
+  }
+
+  .factors dt {
+    font-family: var(--font-mono);
+    font-variation-settings: "MONO" 1;
+    font-size: 0.85rem;
+  }
+
+  .factors dd {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 8rem 2.5rem 1fr;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .factors__bar {
+    display: block;
+    height: 0.55rem;
+    background: var(--bg-2);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .factors__bar span {
+    display: block;
+    height: 100%;
+    background: var(--goblin);
+  }
+
+  .factors__val {
+    font-family: var(--font-mono);
+    font-variation-settings: "MONO" 1;
+    font-size: 0.85rem;
+  }
+
+  .factors__why {
+    color: var(--fg-2);
+    font-size: 0.9rem;
+  }
+
+  @media (max-width: 36rem) {
+    .factors dd {
+      grid-template-columns: 1fr 2.5rem;
+    }
+
+    .factors__why {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .safety {
+    display: grid;
+    gap: 3rem;
+  }
+
+  @media (min-width: 60rem) {
+    .safety {
+      grid-template-columns: 1.2fr 1fr;
+      gap: 4rem;
+    }
+  }
+
+  .rules {
+    list-style: none;
+    padding: 0;
+  }
+
+  .rules li {
+    padding: 0.9rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .never {
+    background: var(--term);
+    color: var(--term-fg);
+    border-radius: 0.9rem;
+    padding: 1.75rem;
+    font-size: 0.95rem;
+    align-self: start;
+  }
+
+  .never h3 {
+    color: var(--goblin);
+  }
+
+  .never ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.25rem;
+  }
+
+  .never li {
+    padding: 0.45rem 0 0.45rem 1.5rem;
+    position: relative;
+    font-family: var(--font-mono);
+    font-variation-settings: "MONO" 1;
+    font-size: 0.88rem;
+    border-bottom: 1px solid rgba(217, 228, 200, 0.12);
+  }
+
+  .never li::before {
+    content: "✕";
+    position: absolute;
+    left: 0;
+    color: var(--ember);
+  }
+
+  .never p {
+    color: var(--term-dim);
+    margin: 0;
+  }
+
+  .hero__grid > *,
+  .stages li > *,
+  .receipts > *,
+  .safety > *,
+  .start > * {
+    min-width: 0;
+  }
+
+  .start {
+    display: grid;
+    gap: 3rem;
+  }
+
+  .run {
+    margin: 0 0 1.25rem;
+  }
+
+  .run figcaption {
+    font-family: var(--font-mono);
+    font-variation-settings: "MONO" 1;
+    font-size: 0.8rem;
+    color: var(--fg-2);
+    margin-bottom: 0.4rem;
+  }
+
+  .run pre {
+    margin: 0;
+    font-size: 0.8rem;
+  }
+
+  @media (min-width: 52rem) {
+    .start {
+      grid-template-columns: 1.2fr 1fr;
+      gap: 4rem;
+    }
+  }
+
+  .faq {
+    margin-top: 1.5rem;
+    max-width: 48rem;
+  }
+
+  .faq details {
+    border-top: 1px solid var(--border);
+  }
+
+  .faq details:last-child {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .faq summary {
+    cursor: pointer;
+    padding: 1rem 0;
+    font-weight: 700;
+    font-size: 1.05rem;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .faq summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .faq summary::after {
+    content: "+";
+    color: var(--accent);
+    font-weight: 400;
+    font-size: 1.4rem;
+    line-height: 1;
+  }
+
+  .faq details[open] summary::after {
+    content: "–";
+  }
+
+  .faq details p {
+    margin: 0 0 1.25rem;
+  }
+
+  .follow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+
+  .follow .lede {
+    margin-bottom: 1.5rem;
+  }
+</style>

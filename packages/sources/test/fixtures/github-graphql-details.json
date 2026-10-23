@@ -1,0 +1,196 @@
+{
+  "data": {
+    "r0": {
+      "isArchived": false,
+      "hasIssuesEnabled": true,
+      "diskUsage": 5700,
+      "licenseInfo": {
+        "spdxId": "Unlicense"
+      },
+      "contributingGuidelines": {
+        "url": "https://github.com/BurntSushi/ripgrep/blob/master/CONTRIBUTING.md"
+      },
+      "codeOfConduct": null,
+      "issueTemplates": [
+        {
+          "name": "Feature request"
+        }
+      ],
+      "pullRequestTemplates": [],
+      "starter": {
+        "totalCount": 9,
+        "nodes": [
+          {
+            "number": 3243,
+            "title": "Add linkable headings to options in man pages",
+            "url": "https://github.com/BurntSushi/ripgrep/issues/3243",
+            "createdAt": "2025-12-10T20:04:05Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "enhancement"
+                },
+                {
+                  "name": "help wanted"
+                }
+              ]
+            }
+          },
+          {
+            "number": 2962,
+            "title": "Missing support for `[[:space:]]` match group in the ignore crate",
+            "url": "https://github.com/BurntSushi/ripgrep/issues/2962",
+            "createdAt": "2025-01-06T14:08:16Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "enhancement"
+                },
+                {
+                  "name": "help wanted"
+                }
+              ]
+            }
+          },
+          {
+            "number": 2930,
+            "title": "add `blink` style support",
+            "url": "https://github.com/BurntSushi/ripgrep/issues/2930",
+            "createdAt": "2024-11-11T17:13:39Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "enhancement"
+                },
+                {
+                  "name": "help wanted"
+                }
+              ]
+            }
+          },
+          {
+            "number": 2229,
+            "title": "[globset] support more options on GlobBuilder?",
+            "url": "https://github.com/BurntSushi/ripgrep/issues/2229",
+            "createdAt": "2022-06-09T02:25:04Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "enhancement"
+                },
+                {
+                  "name": "help wanted"
+                },
+                {
+                  "name": "question"
+                }
+              ]
+            }
+          },
+          {
+            "number": 1791,
+            "title": "Support apply smart case to each individual search pattern separately",
+            "url": "https://github.com/BurntSushi/ripgrep/issues/1791",
+            "createdAt": "2021-01-31T03:09:55Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "enhancement"
+                },
+                {
+                  "name": "help wanted"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "openIssues": {
+        "totalCount": 130
+      },
+      "merged": {
+        "totalCount": 571,
+        "nodes": [
+          {
+            "mergedAt": "2026-08-04T13:46:54Z"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "totalCount": 2287,
+            "nodes": [
+              {
+                "committedDate": "2026-08-04T14:00:08Z"
+              }
+            ]
+          }
+        }
+      },
+      "mentionableUsers": {
+        "totalCount": 444
+      },
+      "releases": {
+        "totalCount": 75,
+        "nodes": [
+          {
+            "publishedAt": "2026-07-15T16:26:10Z"
+          }
+        ]
+      }
+    },
+    "r1": {
+      "isArchived": false,
+      "hasIssuesEnabled": true,
+      "diskUsage": 42743,
+      "licenseInfo": {
+        "spdxId": "NOASSERTION"
+      },
+      "contributingGuidelines": {
+        "url": "https://github.com/igtoth/tracedraw/blob/main/CONTRIBUTING.md"
+      },
+      "codeOfConduct": null,
+      "issueTemplates": [],
+      "pullRequestTemplates": [],
+      "starter": {
+        "totalCount": 0,
+        "nodes": []
+      },
+      "openIssues": {
+        "totalCount": 11
+      },
+      "merged": {
+        "totalCount": 286,
+        "nodes": [
+          {
+            "mergedAt": "2026-10-23T01:39:28Z"
+          }
+        ]
+      },
+      "defaultBranchRef": {
+        "target": {
+          "history": {
+            "totalCount": 566,
+            "nodes": [
+              {
+                "committedDate": "2026-10-23T01:39:27Z"
+              }
+            ]
+          }
+        }
+      },
+      "mentionableUsers": {
+        "totalCount": 2
+      },
+      "releases": {
+        "totalCount": 17,
+        "nodes": [
+          {
+            "publishedAt": "2026-10-23T01:35:09Z"
+          }
+        ]
+      }
+    }
+  }
+}

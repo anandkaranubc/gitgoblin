@@ -1,0 +1,120 @@
+---
+import Mark from "./Mark.astro";
+import { href, repo } from "../lib/site";
+
+const columns = [
+  {
+    heading: "Project",
+    links: [
+      { label: "GitHub repository", to: repo.url },
+      { label: "Issues", to: `${repo.url}/issues` },
+      { label: "README", to: `${repo.url}#readme` },
+      { label: "MIT license", to: `${repo.url}/blob/main/LICENSE` },
+    ],
+  },
+  {
+    heading: "Read",
+    links: [
+      { label: "Docs", to: href("/docs/") },
+      { label: "How it works", to: href("/docs/how-it-works/") },
+      { label: "Safety and etiquette", to: href("/docs/safety/") },
+      { label: "Status", to: href("/docs/status/") },
+    ],
+  },
+  {
+    heading: "Take part",
+    links: [
+      { label: "Contributing guide", to: `${repo.url}/blob/main/CONTRIBUTING.md` },
+      { label: "Code of conduct", to: `${repo.url}/blob/main/CODE_OF_CONDUCT.md` },
+      { label: "Security policy", to: `${repo.url}/blob/main/SECURITY.md` },
+      { label: "Opt your project out", to: `${repo.url}/blob/main/docs/excluded-projects.md` },
+    ],
+  },
+];
+---
+
+<footer class="footer">
+  <div class="wrap footer__grid">
+    <div class="footer__about">
+      <Mark size={48} />
+      <p>
+        gitgoblin is free and open source, built in the open under the MIT license. Nothing it prepares is published until you
+        say so.
+      </p>
+      <p class="muted">
+        This website lives in <a href={`${repo.url}/tree/main/site`}>site/</a> in the repository. Found a mistake? <a
+          href={`${repo.url}/issues/new`}>Open an issue</a
+        >.
+      </p>
+    </div>
+    {
+      columns.map((c) => (
+        <nav aria-label={c.heading}>
+          <h2>{c.heading}</h2>
+          <ul>
+            {c.links.map((l) => (
+              <li>
+                <a href={l.to}>{l.label}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ))
+    }
+  </div>
+</footer>
+
+<style>
+  .footer {
+    border-top: 1px solid var(--border);
+    padding-block: 3rem 4rem;
+    font-size: 0.95rem;
+  }
+
+  .footer__grid {
+    display: grid;
+    grid-template-columns: 2fr repeat(3, 1fr);
+    gap: 2rem;
+  }
+
+  .footer__about p {
+    max-width: 36ch;
+  }
+
+  .footer h2 {
+    font-size: 0.95rem;
+    font-family: var(--font-sans);
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+  }
+
+  .footer ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .footer li {
+    margin-bottom: 0.45rem;
+  }
+
+  .footer a {
+    color: var(--fg);
+  }
+
+  @media (max-width: 52rem) {
+    .footer__grid {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .footer__about {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 30rem) {
+    .footer__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

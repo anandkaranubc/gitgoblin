@@ -1,0 +1,372 @@
+---
+/**
+ * A scripted walkthrough of one engine run, ending at the approval gate.
+ * The visitor plays the human: approve to publish, or stop. The scenario is
+ * invented; the phases, artifacts and rules follow packages/engine/docs/design.md.
+ */
+import goblin from "../../../brand/goblin.txt?raw";
+
+const run = "01JB3G6K";
+
+// The terminal prints the goblin the way brand/terminal/goblin.ans does: two pixel
+// rows per character row, using half blocks. Ink pixels are holes on a dark panel.
+const palette: Record<string, string | undefined> = { g: "var(--goblin)", w: "var(--bone)" };
+const rows = goblin
+  .split("\n")
+  .filter((line) => line && !line.startsWith("#"))
+  .filter((line) => /[gw]/.test(line));
+const banner = [];
+for (let r = 0; r < rows.length; r += 2) {
+  const top = rows[r] ?? "";
+  const bottom = rows[r + 1] ?? "";
+  let html = "";
+  for (let c = 0; c < top.length; c += 1) {
+    const a = palette[top[c] ?? "."];
+    const b = palette[bottom[c] ?? "."];
+    if (!a && !b) html += " ";
+    else if (a && b) html += `<span style="color:${a};background:${b}">▀</span>`;
+    else if (a) html += `<span style="color:${a}">▀</span>`;
+    else html += `<span style="color:${b}">▄</span>`;
+  }
+  banner.push(html);
+}
+
+const lines = [
+  { phase: "$", text: "gitgoblin-engine run --report analysis.json --opportunity acme/kelp#58", tone: "cmd" },
+  {
+    phase: "intake",
+    text: "opportunity from intel: deprecation, small, score 0.81. “kelp/cache.py calls datetime.utcnow(), deprecated since Python 3.12; every call logs a warning.”",
+  },
+  { phase: "workspace", text: "cloned acme/kelp at 9c1e4b2, new branch goblin/utcnow-deprecation." },
+  { phase: "baseline", text: "ran the project's own checks before touching anything: pytest 112 passed, ruff ok, mypy ok." },
+  {
+    phase: "orient",
+    text: "read kelp/cache.py:41, tests/test_cache.py and CONTRIBUTING.md. reproduced the DeprecationWarning on Python 3.12. feasible.",
+  },
+  {
+    phase: "plan",
+    text: "1 file plus 1 test, 3 steps. out of scope: other utcnow calls under scripts/. risk: timezone-aware values change comparisons; the test covers it.",
+  },
+  { phase: "implement", text: "datetime.utcnow() replaced with datetime.now(timezone.utc) in cache.py; regression test added." },
+  { phase: "verify", text: "pytest 113 passed (baseline 112), ruff ok, mypy ok. no regressions." },
+  { phase: "review", text: "fresh reviewer, never saw the implementer's transcript: approve. 1 nit on the commit subject, fixed." },
+  {
+    phase: "prepare",
+    text: `commit “fix: use timezone-aware now() in cache”, pr.md and report.md written to .gitgoblin/runs/${run}/.`,
+  },
+  { phase: "awaiting approval", text: "nothing has been pushed. a person decides what happens next.", tone: "gate" },
+];
+
+const outcomes = [
+  {
+    choice: "approve",
+    phase: "publish",
+    tone: "ok",
+    text: "gitgoblin-engine publish: pushed goblin/utcnow-deprecation to your fork with your own GitHub login and opened draft pull request #913. the maintainers take it from here.",
+  },
+  {
+    choice: "stop",
+    phase: "stopped",
+    tone: "stop",
+    text: `run kept at .gitgoblin/runs/${run}/ with diff.patch, pr.md and report.md. nothing was published; gitgoblin-engine publish ${run} works later too.`,
+  },
+];
+---
+
+<figure class="term" data-terminal>
+  <figcaption class="term__bar">
+    <span class="term__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="term__title">example engine run, scripted; the engine is experimental</span>
+    <button class="term__replay" type="button" data-replay hidden>Replay</button>
+  </figcaption>
+  <ol class="term__log" aria-label="Example engine run, one phase per line">
+    <li class="term__banner" aria-hidden="true" data-line>
+      <pre set:html={banner.join("\n")} />
+    </li>
+    {
+      lines.map((l) => (
+        <li class:list={["term__line", l.tone && `term__line--${l.tone}`]} data-line>
+          <span class="term__phase">{l.phase}</span>
+          <span class="term__text">{l.text}</span>
+        </li>
+      ))
+    }
+    {
+      outcomes.map((o) => (
+        <li class:list={["term__line", `term__line--${o.tone}`]} data-outcome={o.choice} hidden>
+          <span class="term__phase">{o.phase}</span>
+          <span class="term__text">{o.text}</span>
+        </li>
+      ))
+    }
+  </ol>
+  <div class="term__gate" data-gate hidden>
+    <span class="term__prompt" aria-hidden="true">&gt;</span>
+    <span>Your call.</span>
+    <button class="term__btn term__btn--go" type="button" data-choice="approve">Approve and publish</button>
+    <button class="term__btn" type="button" data-choice="stop">Stop here</button>
+  </div>
+  <p class="visually-hidden" aria-live="polite" data-status></p>
+</figure>
+
+<style>
+  .term {
+    margin: 0;
+    background: var(--term);
+    color: var(--term-fg);
+    border-radius: 0.9rem;
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(155, 225, 93, 0.14);
+    font-family: var(--font-mono);
+    font-variation-settings: "MONO" 1;
+    font-size: 0.86rem;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+
+  .term__bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 1rem;
+    background: var(--term-2);
+    color: var(--term-dim);
+    font-size: 0.78rem;
+  }
+
+  .term__dots {
+    display: inline-flex;
+    gap: 0.35rem;
+  }
+
+  .term__dots i {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background: var(--term-dim);
+    opacity: 0.5;
+  }
+
+  .term__title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .term__replay {
+    background: none;
+    border: 1px solid var(--term-dim);
+    color: var(--term-fg);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .term__replay:hover {
+    border-color: var(--goblin);
+    color: var(--goblin);
+  }
+
+  .term__log {
+    list-style: none;
+    margin: 0;
+    padding: 1rem 1.1rem 0.5rem;
+    min-height: 19rem;
+  }
+
+  .term__banner {
+    max-width: none;
+    padding-bottom: 0.5rem;
+  }
+
+  .term__banner[hidden] {
+    display: none;
+  }
+
+  .term__banner pre {
+    margin: 0;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font-size: 0.72rem;
+    line-height: 1;
+    letter-spacing: 0;
+    overflow: visible;
+  }
+
+  .term__line {
+    display: grid;
+    grid-template-columns: 9.5em 1fr;
+    gap: 0.75rem;
+    padding: 0.22rem 0;
+    max-width: none;
+  }
+
+  .term__line[hidden] {
+    display: none;
+  }
+
+  .term__phase {
+    color: var(--goblin);
+    white-space: nowrap;
+  }
+
+  .term__phase::before {
+    content: "▸ ";
+    color: var(--term-dim);
+  }
+
+  .term__line--cmd {
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem;
+  }
+
+  .term__line--cmd .term__phase::before {
+    content: "";
+  }
+
+  .term__line--cmd .term__phase,
+  .term__line--cmd .term__text {
+    color: var(--term-fg);
+  }
+
+  .term__line--gate .term__phase,
+  .term__line--gate .term__text {
+    color: var(--loot);
+  }
+
+  .term__line--stop .term__phase {
+    color: var(--term-ember);
+  }
+
+  .term__gate {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 1.1rem 1.1rem;
+  }
+
+  .term__gate[hidden] {
+    display: none;
+  }
+
+  .term__prompt {
+    color: var(--loot);
+  }
+
+  .term__btn {
+    font: inherit;
+    border-radius: 999px;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--term-dim);
+    background: transparent;
+    color: var(--term-fg);
+    cursor: pointer;
+  }
+
+  .term__btn:hover {
+    border-color: var(--term-fg);
+  }
+
+  .term__btn--go {
+    background: var(--goblin);
+    border-color: var(--goblin);
+    color: #0b1a0a;
+    font-weight: 700;
+  }
+
+  .term__btn--go:hover {
+    background: #b6f07e;
+  }
+
+  .term :focus-visible {
+    outline-color: var(--loot);
+  }
+
+  @media (max-width: 40rem) {
+    .term__line {
+      grid-template-columns: 1fr;
+      gap: 0;
+      padding-block: 0.4rem;
+    }
+
+    .term__log {
+      min-height: 0;
+    }
+  }
+</style>
+
+<script>
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  document.querySelectorAll<HTMLElement>("[data-terminal]").forEach((term) => {
+    const lines = [...term.querySelectorAll<HTMLElement>("[data-line]")];
+    const outcomes = [...term.querySelectorAll<HTMLElement>("[data-outcome]")];
+    const gate = term.querySelector<HTMLElement>("[data-gate]")!;
+    const replay = term.querySelector<HTMLButtonElement>("[data-replay]")!;
+    const status = term.querySelector<HTMLElement>("[data-status]")!;
+    let timer = 0;
+    let started = false;
+
+    function reset() {
+      clearTimeout(timer);
+      lines.forEach((l) => (l.hidden = true));
+      outcomes.forEach((o) => (o.hidden = true));
+      gate.hidden = true;
+      replay.hidden = true;
+      status.textContent = "";
+    }
+
+    function arrive() {
+      gate.hidden = false;
+      status.textContent = "The run is waiting for approval. Choose approve and publish, or stop here.";
+    }
+
+    function play() {
+      reset();
+      if (reduced) {
+        lines.forEach((l) => (l.hidden = false));
+        arrive();
+        return;
+      }
+      let i = 0;
+      const step = () => {
+        lines[i]!.hidden = false;
+        i += 1;
+        if (i < lines.length) timer = window.setTimeout(step, i === lines.length - 1 ? 900 : 650);
+        else arrive();
+      };
+      timer = window.setTimeout(step, 400);
+    }
+
+    term.querySelectorAll<HTMLButtonElement>("[data-choice]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        gate.hidden = true;
+        const chosen = outcomes.find((o) => o.dataset.outcome === btn.dataset.choice)!;
+        chosen.hidden = false;
+        status.textContent = chosen.textContent?.trim() ?? "";
+        replay.hidden = false;
+        replay.focus();
+      });
+    });
+    replay.addEventListener("click", play);
+
+    // Start once the terminal is on screen; it sits below the fold on phones.
+    reset();
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting) && !started) {
+          started = true;
+          io.disconnect();
+          play();
+        }
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(term);
+  });
+</script>

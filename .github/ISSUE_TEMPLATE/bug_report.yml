@@ -1,0 +1,37 @@
+name: Bug report
+description: Something did not work the way the documentation says it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. If this is a security problem, please do not file it here; see [SECURITY.md](https://github.com/anandkaranubc/gitgoblin/blob/main/SECURITY.md) for how to report privately.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and what you expected instead. Paste error output in a code block.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce
+      description: The commands or steps that trigger it. If a specific repository is involved, link it.
+      placeholder: |
+        1. npm install
+        2. npm test -w packages/core
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system and the output of `node --version`.
+      placeholder: macOS 15, Node v24.10.0
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Logs, screenshots, or a guess at the cause. Optional.

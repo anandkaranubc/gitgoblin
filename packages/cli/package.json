@@ -1,0 +1,26 @@
+{
+  "name": "gitgoblin",
+  "version": "0.1.0",
+  "description": "Discover public software projects worth your time, for whatever you are trying to do",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=24" },
+  "bin": { "gitgoblin": "./src/bin.ts" },
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@gitgoblin/core": "0.1.0",
+    "@gitgoblin/discovery": "0.1.0",
+    "@gitgoblin/sources": "0.1.0",
+    "commander": "^15.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.5"
+  }
+}

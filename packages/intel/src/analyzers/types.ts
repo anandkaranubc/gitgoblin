@@ -1,0 +1,72 @@
+import type { Effort, Evidence, EvidenceKind, IssueRef, OpportunityKind, RepositoryProfile } from "../contracts.ts";
+import type { AnalysisContext } from "../context.ts";
+import { stableId, truncate } from "../util/text.ts";
+
+/** Factor inputs an analyzer knows; the evaluator fills in welcomeness from the profile. */
+export interface FindingSignals {
+  value: number;
+  valueReason: string;
+  feasibility: number;
+  feasibilityReason: string;
+  confidence: number;
+  confidenceReason: string;
+  /** Default 0.9: nothing suggests someone else is on it. */
+  novelty?: number | undefined;
+  noveltyReason?: string | undefined;
+  /** Multiplier on the repository's welcomeness for this kind of change. Default 1. */
+  welcomenessFactor?: number | undefined;
+  welcomenessReason?: string | undefined;
+}
+
+/** Internal, richer than an opportunity. Findings with the same cluster key merge. */
+export interface Finding {
+  kind: OpportunityKind;
+  clusterKey: string;
+  title: string;
+  summary: string;
+  evidence: Evidence[];
+  files: string[];
+  effort: Effort;
+  skills: string[];
+  approach: string[];
+  acceptanceCriteria: string[];
+  etiquette?: string[] | undefined;
+  risks?: string[] | undefined;
+  issue?: IssueRef | undefined;
+  signals: FindingSignals;
+}
+
+export interface Analyzer {
+  name: string;
+  run(ctx: AnalysisContext, profile: RepositoryProfile): Promise<Finding[]>;
+}
+
+export interface EvidenceDetails {
+  excerpt?: string | undefined;
+  note?: string | undefined;
+}
+
+export function evidence(ctx: Pick<AnalysisContext, "nowIso">, kind: EvidenceKind, locator: string, details: EvidenceDetails = {}): Evidence {
+  const e: Evidence = { id: stableId("ev", kind, locator, details.note ?? "", details.excerpt ?? ""), kind, locator, observedAt: ctx.nowIso };
+  if (details.excerpt) e.excerpt = truncate(details.excerpt, 240);
+  if (details.note) e.note = details.note;
+  return e;
+}
+
+/** Walk text files of a category without pulling vendored or oversized files. */
+export async function* textFiles(
+  ctx: AnalysisContext,
+  predicate: (path: string) => boolean,
+  limit = 2000,
+): AsyncGenerator<{ path: string; text: string }> {
+  let seen = 0;
+  for (const file of ctx.inventory.files) {
+    if (file.vendored || !predicate(file.path)) continue;
+    if (seen++ >= limit) {
+      ctx.budget.cut(`stopped reading files after ${limit} matches`);
+      return;
+    }
+    const text = await ctx.read(file.path);
+    if (text !== undefined) yield { path: file.path, text };
+  }
+}

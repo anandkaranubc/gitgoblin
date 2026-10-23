@@ -1,0 +1,220 @@
+import { basename, dirname, extname } from "node:path";
+
+import type { RepositoryProfile } from "../contracts.ts";
+import type { AnalysisContext } from "../context.ts";
+import type { FileEntry } from "../fs/scan.ts";
+import { type Analyzer, type Finding, evidence, textFiles } from "./types.ts";
+
+const CODE_LANGS = new Set(["Python", "JavaScript", "TypeScript", "Go", "Rust", "Java", "Kotlin", "Ruby", "PHP", "C#", "Swift", "Dart", "Elixir", "Scala", "C", "C++"]);
+const GENERIC_STEMS = new Set(["utils", "util", "helpers", "helper", "main", "index", "app", "base", "core", "types", "_types", "typing", "_typing", "const", "constants", "config", "cli", "lib", "mod", "common", "errors", "exceptions", "models", "version", "__version__", "_version", "settings", "setup", "conftest", "__init__", "__main__", "init", "enums", "compat", "_compat"]);
+const NOT_WORTH_TESTING = /^\.|(^|\/)(examples?|samples?|scripts?|benchmarks?|docs?|migrations|fixtures|__snapshots__|testdata|tools?|vendor|contrib|playground|sandbox|demos?)(\/|$)|(^|\/)(setup|conftest|settings|wsgi|asgi|manage|version|_version|__about__)\.py$|(^|\/)main\.go$|\.d\.ts$|\.config(\.\w+)*\.[cm]?[jt]s$|\.stories\.[jt]sx?$|(^|\/)test[-_]?(utils?|helpers?|support|setup)\.\w+$|(Interface|Trait|Exception|Abstract\w*)\.php$|(^|\/)(exceptions?|interfaces?|protocols?)\.py$/;
+
+/** Base name a test file is most likely testing: test_foo.py -> foo, foo.test.ts -> foo, FooTest.java -> Foo. */
+export function testedStem(testPath: string): string | undefined {
+  const name = basename(testPath).replace(/\.[^.]+$/, "");
+  const m =
+    /^test_(.+)$/.exec(name) ??
+    /^(.+)_test$/.exec(name) ??
+    /^(.+)\.(test|spec)$/.exec(name) ??
+    /^(.+)_spec$/.exec(name) ??
+    /^(.+)Tests?$/.exec(name) ??
+    /^(.+)\.e2e$/.exec(name);
+  return m?.[1]?.toLowerCase();
+}
+
+export function sourceStem(path: string): string {
+  return basename(path).replace(/\.[^.]+$/, "").toLowerCase();
+}
+
+export interface TestIndex {
+  stems: Set<string>;
+  /** Lowercased words appearing in test sources (imports, identifiers). */
+  mentions: Set<string>;
+  goTestDirs: Set<string>;
+}
+
+export function buildTestIndex(tests: { path: string; text: string | undefined }[]): TestIndex {
+  const stems = new Set<string>();
+  const mentions = new Set<string>();
+  const goTestDirs = new Set<string>();
+  for (const t of tests) {
+    const stem = testedStem(t.path);
+    if (stem) stems.add(stem);
+    if (t.path.endsWith("_test.go")) goTestDirs.add(dirname(t.path));
+    if (!t.text) continue;
+    for (const m of t.text.matchAll(/[A-Za-z_][A-Za-z0-9_]{2,}/g)) mentions.add(m[0].toLowerCase());
+  }
+  return { stems, mentions, goTestDirs };
+}
+
+/** True when nothing in the test suite seems to reference this source file. */
+export function looksUntested(path: string, text: string, index: TestIndex): boolean {
+  const stem = sourceStem(path);
+  if (path.endsWith(".go")) return !index.goTestDirs.has(dirname(path));
+  if (path.endsWith(".rs") && /#\[cfg\(test\)\]|#\[test\]/.test(text)) return false;
+  if (stem.length < 4 || GENERIC_STEMS.has(stem)) return false; // too ambiguous to judge
+  if (index.stems.has(stem)) return false;
+  if (index.mentions.has(stem)) return false;
+  // Python modules are imported by dotted path; a mention of the module token covers it.
+  const camel = stem.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+  if (camel !== stem && index.mentions.has(camel.toLowerCase())) return false;
+  return true;
+}
+
+export interface SkippedTest {
+  path: string;
+  line: number;
+  text: string;
+  reason: string | undefined;
+}
+
+const SKIP_PATTERNS = [
+  /@pytest\.mark\.skip\b/, /@pytest\.mark\.xfail\b/, /@unittest\.skip\b/, /\bpytest\.skip\(/, /\bpytest\.xfail\(/,
+  /\b(it|test|describe)\.skip\(/, /\bx(it|describe|test)\(/, /\b(it|test)\.todo\(/,
+  /\bt\.Skip(f|Now)?\(/, /#\[ignore\b/, /\bskip:\s*true\b/, /\b(xit|xspecify|xcontext)\b/, /\bpending\(/,
+];
+const INTENTIONAL = /platform|win32|darwin|linux|windows|macos|\bCI\b|\bslow\b|network|internet|docker|requires?|not (installed|available)|optional|credentials?|api[_ ]?key|token|gpu|cuda|py(thon)?\s*[<>=]|version|only on|integration|manual|benchmark|external|hardware|display|headless/i;
+
+export function findSkippedTests(path: string, text: string): SkippedTest[] {
+  const out: SkippedTest[] = [];
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (!SKIP_PATTERNS.some((p) => p.test(line))) continue;
+    const window = [line, lines[i + 1] ?? "", lines[i - 1] ?? ""].join(" ");
+    const reason = /reason\s*=\s*["'`]([^"'`]+)["'`]/.exec(window)?.[1] ?? /skip(?:If|Unless|f)?\([^"'`]*["'`]([^"'`]+)["'`]/.exec(window)?.[1] ?? /\.skip\(\s*["'`]([^"'`]+)["'`]/.exec(window)?.[1];
+    if (/skipif|skipIf|skipUnless|\.skipIf\(|skip_if|xfail\(.*condition|\bif\b/.test(line) && !/TODO|FIXME|flaky|broken/i.test(window)) continue; // conditional skips are intentional
+    if (reason && INTENTIONAL.test(reason) && !/TODO|FIXME|flaky|broken|fails|temporar|until|#\d+/i.test(reason)) continue;
+    out.push({ path, line: i + 1, text: line.trim(), reason });
+  }
+  return out;
+}
+
+export const testGapsAnalyzer: Analyzer = {
+  name: "test-gaps",
+  async run(ctx: AnalysisContext, profile: RepositoryProfile): Promise<Finding[]> {
+    if (!["library", "cli", "framework", "application", "plugin", "unknown"].includes(profile.nature)) return [];
+    const files = ctx.inventory.files.filter((f) => !f.vendored);
+    const tests = files.filter((f) => f.category === "test" && f.language && CODE_LANGS.has(f.language));
+    const sources = files.filter((f) => f.category === "source" && f.language && CODE_LANGS.has(f.language) && !NOT_WORTH_TESTING.test(f.path));
+    const findings: Finding[] = [];
+    const testCommand = profile.ecosystems.find((e) => e.commands.test)?.commands.test;
+
+    if (tests.length === 0) {
+      if (sources.length >= 5 && ["library", "cli", "framework"].includes(profile.nature)) {
+        findings.push({
+          kind: "test_gap",
+          clusterKey: "no-tests",
+          title: "Add an initial automated test suite",
+          summary: `The repository has ${sources.length} source files and no test files, so every change is verified by hand.`,
+          evidence: [evidence(ctx, "computed", "file inventory", { note: `${sources.length} source files, 0 test files matched test naming conventions` })],
+          files: profile.hotFiles.slice(0, 5).map((h) => h.path),
+          effort: "large",
+          skills: [...new Set(sources.map((s) => s.language!.toLowerCase()))].slice(0, 2),
+          approach: ["Propose the test framework in an issue first and agree on scope.", "Start with the most frequently changed modules and the public entry points.", "Wire the suite into CI once it exists."],
+          acceptanceCriteria: ["A test command runs locally and in CI.", "Core public behaviour has at least smoke coverage."],
+          etiquette: ["Discuss before writing; maintainers often have strong views on test tooling."],
+          risks: ["Maintainers may prefer to design testing themselves, or may not want the maintenance burden."],
+          signals: { value: 0.6, valueReason: "a project with users and no tests regresses silently", feasibility: 0.5, feasibilityReason: "needs understanding of the whole codebase and a framework decision", confidence: 0.85, confidenceReason: "no file matched any common test naming convention", welcomenessFactor: 0.7, welcomenessReason: "large unsolicited additions need buy-in" },
+        });
+      }
+      return findings;
+    }
+
+    // Index tests (names and contents) to see which sources they mention.
+    const testTexts: { path: string; text: string | undefined }[] = [];
+    for (const t of tests.slice(0, 400)) testTexts.push({ path: t.path, text: await ctx.read(t.path, 200 * 1024) });
+    if (tests.length > 400) ctx.budget.cut("indexed the first 400 test files only");
+    const index = buildTestIndex(testTexts);
+
+    const churn = new Map<string, { commits: number; authors: Set<string> }>();
+    for (const c of ctx.commits) for (const f of c.files) {
+      const s = churn.get(f) ?? { commits: 0, authors: new Set<string>() };
+      s.commits++;
+      s.authors.add(c.authorEmail);
+      churn.set(f, s);
+    }
+    const candidates = sources
+      .filter((f) => f.sizeBytes >= 1500 && (churn.get(f.path)?.commits ?? 0) >= 3)
+      .sort((a, b) => (churn.get(b.path)!.commits * Math.log(b.sizeBytes)) - (churn.get(a.path)!.commits * Math.log(a.sizeBytes)))
+      .slice(0, 40);
+
+    const testPaths = profile.structure.testDirs.length ? profile.structure.testDirs : tests.map((t) => t.path).slice(0, 200);
+    let emitted = 0;
+    for (const file of candidates) {
+      if (emitted >= 5) break;
+      const text = await ctx.read(file.path);
+      if (!text || text.split("\n").length < 60) continue;
+      if (!looksUntested(file.path, text, index)) continue;
+      // The in-memory index covers at most 400 test files; git grep sees every tracked test file.
+      if (tests.length > 400 && (await mentionedInTests(ctx, sourceStem(file.path), testPaths))) continue;
+      const c = churn.get(file.path)!;
+      emitted++;
+      findings.push(untestedFinding(ctx, file, c.commits, c.authors.size, testCommand, profile));
+    }
+
+    const skipped: SkippedTest[] = [];
+    for await (const { path, text } of textFiles(ctx, (p) => tests.some((t) => t.path === p), 400)) skipped.push(...findSkippedTests(path, text));
+    for (const s of skipped.slice(0, 30)) {
+      findings.push({
+        kind: "test_gap",
+        clusterKey: "skipped-tests",
+        title: "Investigate and re-enable skipped or expected-failure tests",
+        summary: "Tests are skipped or marked as expected failures without a platform or environment reason, which usually means a known bug nobody has gone back to.",
+        evidence: [evidence(ctx, "file", `${s.path}:${s.line}`, { excerpt: s.text, note: s.reason ? `reason given: ${s.reason}` : "no reason given" })],
+        files: [s.path],
+        effort: "small",
+        skills: [ctx.inventory.byPath.get(s.path)?.language?.toLowerCase() ?? "testing"],
+        approach: ["Run the skipped test locally and read the failure.", "Fix the underlying bug or, if the test is obsolete, delete it with an explanation.", "Reference any issue the skip mentions."],
+        acceptanceCriteria: ["The test runs and passes in CI, or is removed with a justification maintainers accept."],
+        risks: ["The skip may hide a hard problem; time-box the investigation."],
+        signals: { value: 0.45, valueReason: "a disabled test often marks a real bug", feasibility: 0.6, feasibilityReason: "failure is reproducible by removing the skip", confidence: 0.8, confidenceReason: "skip marker verified in the test source; whether it is fixable is not", welcomenessFactor: 0.9 },
+      });
+    }
+    return findings;
+  },
+};
+
+/** True when any tracked test file mentions the stem as a whole word (case-insensitive). */
+async function mentionedInTests(ctx: AnalysisContext, stem: string, testPaths: string[]): Promise<boolean> {
+  try {
+    const out = await ctx.repo.grep(stem, testPaths);
+    return out.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function untestedFinding(ctx: AnalysisContext, file: FileEntry, commits: number, authors: number, testCommand: string | undefined, profile: RepositoryProfile): Finding {
+  const lang = file.language ?? extname(file.path);
+  return {
+    kind: "test_gap",
+    clusterKey: `untested:${file.path}`,
+    title: `Add tests for ${file.path}`,
+    summary: `${file.path} changed in ${commits} commits by ${authors} author${authors === 1 ? "" : "s"} over the last year, and no test file names or references it.`,
+    evidence: [
+      evidence(ctx, "computed", `git log --since=365d -- ${file.path}`, { note: `${commits} commits, ${authors} authors` }),
+      evidence(ctx, "computed", `test index (${profile.structure.testDirs.join(", ") || "test files"})`, { note: `no test file named after or mentioning "${sourceStem(file.path)}"` }),
+    ],
+    files: [file.path, ...profile.structure.testDirs.slice(0, 1)],
+    effort: "medium",
+    skills: [lang.toLowerCase(), "testing"],
+    approach: [
+      `Read ${file.path} and list its public functions and the branches that changed most recently (git log -p).`,
+      `Add a test module following the existing layout in ${profile.structure.testDirs[0] ?? "the test directory"}${profile.conventions.testFramework ? ` using ${profile.conventions.testFramework}` : ""}.`,
+      testCommand ? `Run ${testCommand} and keep the new tests fast and deterministic.` : "Run the project's test command and keep new tests fast and deterministic.",
+    ],
+    acceptanceCriteria: ["New tests exercise the main code paths of the module and pass in CI.", "No production code changes are needed except to enable testing."],
+    risks: ["The module may be covered indirectly by integration tests under a different name."],
+    signals: {
+      value: Math.min(0.75, 0.45 + commits * 0.02),
+      valueReason: `hot code (${commits} commits/year) with no direct tests is where regressions come from`,
+      feasibility: profile.conventions.testFramework ? 0.7 : 0.55,
+      feasibilityReason: profile.conventions.testFramework ? `test framework (${profile.conventions.testFramework}) and layout already exist` : "test framework not identified; follow the existing tests",
+      confidence: file.ext === ".rs" || file.language === "C" || file.language === "C++" ? 0.45 : 0.6,
+      confidenceReason: file.ext === ".rs" || file.language === "C" || file.language === "C++" ? "tests in this language often live in integration or data-driven suites that never name the module; naming heuristics are weak here" : "based on naming conventions and test-source mentions, not coverage data",
+      welcomenessFactor: 0.95,
+      welcomenessReason: "tests are rarely refused",
+    },
+  };
+}

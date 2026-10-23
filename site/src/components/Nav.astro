@@ -1,0 +1,189 @@
+---
+import GitHubIcon from "./GitHubIcon.astro";
+import lockup from "../../../brand/lockup.svg?raw";
+import { href, repo } from "../lib/site";
+
+const links = [
+  { label: "How it works", to: href("/#how") },
+  { label: "What it finds", to: href("/#finds") },
+  { label: "Safety", to: href("/#safety") },
+  { label: "Docs", to: href("/docs/") },
+];
+---
+
+<header class="nav">
+  <div class="wrap nav__row">
+    <a class="nav__brand" href={href("/")} aria-label="gitgoblin, home">
+      <Fragment set:html={lockup.replace("<svg ", '<svg height="32" aria-hidden="true" focusable="false" class="pixel" ')} />
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav__links">
+        {links.map((l) => <li><a href={l.to}>{l.label}</a></li>)}
+        <li>
+          <a class="nav__github" href={repo.url} data-stars>
+            <GitHubIcon />
+            <span>GitHub</span>
+          </a>
+        </li>
+        <li>
+          <button class="nav__theme" type="button" data-theme-toggle aria-label="Switch to dark theme">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle class="sun" cx="12" cy="12" r="4"></circle>
+              <path class="sun" d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+              <path class="moon" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path>
+            </svg>
+          </button>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .nav {
+    padding-block: 1rem;
+  }
+
+  .nav__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+  }
+
+  .nav__brand {
+    display: inline-flex;
+    align-items: center;
+    color: var(--fg);
+  }
+
+  .nav__brand :global(svg) {
+    height: 2rem;
+    width: auto;
+  }
+
+  .nav__links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem 1.1rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .nav__links a {
+    color: var(--fg);
+    text-decoration: none;
+    padding: 0.35rem 0;
+    border-bottom: 2px solid transparent;
+  }
+
+  .nav__links a:hover {
+    border-bottom-color: var(--goblin);
+  }
+
+  .nav__github {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .nav__github :global(svg) {
+    width: 1.1em;
+    height: 1.1em;
+  }
+
+  .nav__theme {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+
+  :global(html.js) .nav__theme {
+    display: inline-flex;
+  }
+
+  .nav__theme svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .nav__theme .moon {
+    display: none;
+  }
+
+  :global(:root[data-theme="dark"]) .nav__theme .sun {
+    display: none;
+  }
+
+  :global(:root[data-theme="dark"]) .nav__theme .moon {
+    display: block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme="light"])) .nav__theme .sun {
+      display: none;
+    }
+
+    :global(:root:not([data-theme="light"])) .nav__theme .moon {
+      display: block;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .nav__links {
+      gap: 0.2rem 0.9rem;
+      font-size: 0.9rem;
+    }
+  }
+</style>
+
+<script>
+  const root = document.documentElement;
+  const toggle = document.querySelector<HTMLButtonElement>("[data-theme-toggle]");
+
+  function current(): "light" | "dark" {
+    if (root.dataset.theme === "light" || root.dataset.theme === "dark") return root.dataset.theme;
+    return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function label() {
+    toggle?.setAttribute("aria-label", current() === "dark" ? "Switch to light theme" : "Switch to dark theme");
+  }
+
+  toggle?.addEventListener("click", () => {
+    const next = current() === "dark" ? "light" : "dark";
+    root.dataset.theme = next;
+    try {
+      localStorage.setItem("theme", next);
+    } catch {}
+    label();
+  });
+  label();
+
+  // Star count is a nicety: show it when the API answers, say nothing otherwise.
+  const star = document.querySelector<HTMLAnchorElement>("[data-stars]");
+  const match = star?.href.match(/github\.com\/([^/]+\/[^/]+)/);
+  if (star && match) {
+    fetch(`https://api.github.com/repos/${match[1]}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { stargazers_count?: number } | null) => {
+        if (!data?.stargazers_count) return;
+        const count = Intl.NumberFormat("en", { notation: "compact" }).format(data.stargazers_count);
+        star.querySelector("span")!.textContent = `GitHub ${count}`;
+        star.setAttribute("aria-label", `GitHub repository, ${data.stargazers_count} stars`);
+      })
+      .catch(() => {});
+  }
+</script>

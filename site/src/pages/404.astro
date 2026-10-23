@@ -1,0 +1,37 @@
+---
+import Base from "../layouts/Base.astro";
+import Mark from "../components/Mark.astro";
+import { href, repo } from "../lib/site";
+---
+
+<Base title="Page not found" description="That page is not in the hoard.">
+  <section class="wrap lost">
+    <div class="lost__cave">
+      <Mark size={96} variant="lurk" />
+    </div>
+    <h1>Nothing hoarded here.</h1>
+    <p class="lede">The goblin checked every tunnel. This page does not exist, or it moved.</p>
+    <p>
+      Try the <a href={href("/")}>front page</a> or the <a href={href("/docs/")}>docs</a>. If a link on this site brought you here,{" "}
+      <a href={`${repo.url}/issues/new`}>open an issue</a> and we will fix it.
+    </p>
+  </section>
+</Base>
+
+<style>
+  .lost {
+    padding-block: clamp(3rem, 10vw, 8rem);
+  }
+
+  .lost__cave {
+    display: inline-flex;
+    padding: 2rem;
+    background: var(--term);
+    border-radius: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .lost h1 {
+    margin-top: 1rem;
+  }
+</style>

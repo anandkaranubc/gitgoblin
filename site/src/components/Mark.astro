@@ -1,0 +1,24 @@
+---
+/**
+ * The goblin, inlined from brand/. Sizes should be whole multiples of 16 so the
+ * pixels stay square. `lurk` is for dark surfaces only (brand/README.md).
+ */
+import color from "../../../brand/mark.svg?raw";
+import mono from "../../../brand/mark-mono.svg?raw";
+import lurk from "../../../brand/mark-lurk.svg?raw";
+
+interface Props {
+  size?: number;
+  variant?: "color" | "mono" | "lurk";
+  class?: string;
+}
+
+const { size = 32, variant = "color", class: className = "" } = Astro.props;
+const source = { color, mono, lurk }[variant];
+const svg = source.replace(
+  "<svg ",
+  `<svg width="${size}" height="${size}" aria-hidden="true" focusable="false" class="pixel ${className}" `,
+);
+---
+
+<Fragment set:html={svg} />

@@ -1,0 +1,24 @@
+name: Documentation
+description: Something in the docs was wrong, missing, or confusing.
+labels: ["documentation"]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: The file or page, and the section or sentence if you can.
+      placeholder: README.md, "Try it"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What was unclear or wrong
+      description: Quote the text if it is short, and say what you expected it to tell you.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested wording
+      description: Optional. If you have a fix in mind, a pull request is even better.
