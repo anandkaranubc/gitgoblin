@@ -1,5 +1,5 @@
 import type { GitHubSamples, IssueSample, PrSample, RepoMeta, ReviewSample } from "../github/types.ts";
-import { type ForgeFetchOptions, actorOf, associationOf, commentOf, forgeJson, referencedIssues } from "./common.ts";
+import { type ForgeFetchOptions, actorOf, associationOf, commentOf, forgeJson, forgeList, referencedIssues } from "./common.ts";
 import type { ForgeResult } from "./gitlab.ts";
 
 interface GtUser { login: string; type?: string }
@@ -17,23 +17,35 @@ interface GtPull {
   created_at: string; updated_at: string; mergeable: boolean; user: GtUser; merged_by: GtUser | null; additions?: number; deletions?: number;
   changed_files?: number; head: { ref: string }; labels: { name: string }[]; comments: number; html_url: string;
 }
-interface GtComment { issue_url: string; user: GtUser; body: string; created_at: string }
+interface GtComment { issue_url?: string; pull_request_url?: string; user: GtUser; body: string; created_at: string }
 interface GtReview { state: string; submitted_at: string | null; user: GtUser | null }
 interface GtLabel { name: string }
+
+const REVIEW_STATE: Record<string, string> = { APPROVED: "APPROVED", REQUEST_CHANGES: "CHANGES_REQUESTED", COMMENT: "COMMENTED" };
 
 /** Gitea / Forgejo REST v1 (Codeberg among them), unauthenticated. */
 export async function fetchGitea(host: string, owner: string, name: string, options: ForgeFetchOptions): Promise<ForgeResult> {
   const base = `https://${host}/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
   const repo = await forgeJson<GtRepo>(base, options);
-  const since = new Date(Date.now() - 365 * 24 * 3_600_000).toISOString();
+  // The comments endpoint lists oldest first and ignores `limit` without `page` (Forgejo returned 13,529 comments,
+  // 25 MB, in one call). A recent window read in a few pages keeps it small and current.
+  const since = new Date(Date.now() - 90 * 24 * 3_600_000).toISOString();
+  const commentPages = async (): Promise<GtComment[]> => {
+    const all: GtComment[] = [];
+    for (let page = 1; page <= 4; page++) {
+      const batch = await forgeList<GtComment>(`${base}/issues/comments?since=${encodeURIComponent(since)}&page=${page}&limit=50`, options);
+      all.push(...batch);
+      if (batch.length < 50) break;
+    }
+    return all;
+  };
   const [openIssues, closedIssues, openPulls, closedPulls, labels, comments] = await Promise.all([
-    forgeJson<GtIssue[]>(`${base}/issues?state=open&type=issues&sort=recentupdate&limit=50`, options).catch(() => [] as GtIssue[]),
-    forgeJson<GtIssue[]>(`${base}/issues?state=closed&type=issues&sort=recentupdate&limit=30`, options).catch(() => [] as GtIssue[]),
-    forgeJson<GtPull[]>(`${base}/pulls?state=open&sort=recentupdate&limit=30`, options).catch(() => [] as GtPull[]),
-    forgeJson<GtPull[]>(`${base}/pulls?state=closed&sort=recentupdate&limit=50`, options).catch(() => [] as GtPull[]),
-    forgeJson<GtLabel[]>(`${base}/labels?limit=100`, options).catch(() => [] as GtLabel[]),
-    // One call returns recent comments across all issues and pull requests, oldest first.
-    forgeJson<GtComment[]>(`${base}/issues/comments?since=${encodeURIComponent(since)}&limit=100`, options).catch(() => [] as GtComment[]),
+    forgeList<GtIssue>(`${base}/issues?state=open&type=issues&sort=recentupdate&limit=50`, options),
+    forgeList<GtIssue>(`${base}/issues?state=closed&type=issues&sort=recentupdate&limit=30`, options),
+    forgeList<GtPull>(`${base}/pulls?state=open&sort=recentupdate&limit=30`, options),
+    forgeList<GtPull>(`${base}/pulls?state=closed&sort=recentupdate&limit=50`, options),
+    forgeList<GtLabel>(`${base}/labels?limit=100`, options),
+    commentPages(),
   ]);
 
   const maintainers = new Set<string>();
@@ -42,8 +54,16 @@ export async function fetchGitea(host: string, owner: string, name: string, opti
 
   const byIssue = new Map<number, GtComment[]>();
   for (const c of comments) {
-    const n = Number(c.issue_url.split("/").pop());
-    if (!Number.isNaN(n)) byIssue.set(n, [...(byIssue.get(n) ?? []), c]);
+    // Pull request comments carry pull_request_url and an empty issue_url.
+    const n = Number((c.issue_url || c.pull_request_url || "").split("/").pop());
+    if (Number.isInteger(n) && n > 0) byIssue.set(n, [...(byIssue.get(n) ?? []), c]);
+  }
+  // The window misses older threads; read the most recently active open items' comments individually (one call each).
+  const missing = [...openIssues.filter((i) => !i.pull_request).slice(0, 15), ...openPulls.slice(0, 10)]
+    .filter((i) => i.comments > 0 && (byIssue.get(i.number)?.length ?? 0) < i.comments);
+  for (const item of missing) {
+    const thread = await forgeList<GtComment>(`${base}/issues/${item.number}/comments?page=1&limit=50`, options);
+    if (thread.length) byIssue.set(item.number, thread);
   }
   const commentsFor = (n: number) => (byIssue.get(n) ?? []).map((c) => commentOf(c.user?.login, c.created_at, c.body, maintainers));
   // No cross-reference API here; pull request descriptions saying "fixes #N" are the link.
@@ -58,11 +78,13 @@ export async function fetchGitea(host: string, owner: string, name: string, opti
       closedAt: i.closed_at ?? undefined, locked: i.is_locked, author: actorOf(i.user?.login), association: associationOf(i.user?.login, maintainers),
       labels: i.labels.map((l) => l.name), assignees: (i.assignees ?? []).map((a) => a.login), reactions: 0, commentCount: i.comments,
       firstComments: all.slice(0, 3).map((c) => ({ ...c, body: undefined })), lastComments: all.slice(-6), linkedPrs: linkedFor(i.number),
+      commentsFetched: i.comments === 0 || all.length > 0,
     };
   };
   const reviewsFor = async (n: number): Promise<ReviewSample[]> =>
     forgeJson<GtReview[]>(`${base}/pulls/${n}/reviews?limit=10`, options)
-      .then((rs) => rs.filter((r) => r.user && r.submitted_at && /APPROVED|REQUEST_CHANGES|COMMENT/.test(r.state)).map((r) => ({ state: r.state, createdAt: r.submitted_at!, author: actorOf(r.user!.login), association: associationOf(r.user!.login, maintainers) })))
+      // Gitea names review states differently; analyzers read GitHub's names.
+      .then((rs) => rs.filter((r) => r.user && r.submitted_at && REVIEW_STATE[r.state]).map((r) => ({ state: REVIEW_STATE[r.state]!, createdAt: r.submitted_at!, author: actorOf(r.user!.login), association: associationOf(r.user!.login, maintainers) })))
       .catch(() => [] as ReviewSample[]);
   const reviews = new Map<number, ReviewSample[]>();
   for (const p of openPulls.slice(0, 10)) reviews.set(p.number, await reviewsFor(p.number));
@@ -76,6 +98,7 @@ export async function fetchGitea(host: string, owner: string, name: string, opti
       association: associationOf(p.user?.login, maintainers), additions: p.additions ?? 0, deletions: p.deletions ?? 0, changedFiles: p.changed_files ?? 0,
       headRefName: p.head?.ref ?? "", labels: p.labels.map((l) => l.name), closingIssues: referencedIssues(p.body), firstComments: all.slice(0, 3).map((c) => ({ ...c, body: undefined })),
       lastComments: all.slice(-5), reviews: reviews.get(p.number) ?? [],
+      commentsFetched: p.comments === 0 || all.length > 0 || reviews.has(p.number),
     };
   };
 

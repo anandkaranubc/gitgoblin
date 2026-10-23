@@ -163,7 +163,8 @@ export function assessIssue(issue: IssueSample, now: Date, repoResponsive: boole
   }
 
   const result = { ...base, claim, novelty, noveltyReason };
-  const triageEligible = nonAuthorComments.length === 0 && age >= 14 && !isMaintainer(issue.association) && repoResponsive && (labels.length === 0 || labels.some((l) => TRIAGE_LABEL.test(l)));
+  // "Nobody has replied" needs the replies: an issue whose comments could not be read is not a triage candidate.
+  const triageEligible = nonAuthorComments.length === 0 && issue.commentsFetched !== false && age >= 14 && !isMaintainer(issue.association) && repoResponsive && (labels.length === 0 || labels.some((l) => TRIAGE_LABEL.test(l)));
   if (isFeature && !isBug) {
     if (!endorsed && !confirmedLabel) {
       // An unanswered wish from an outsider is still worth a reply.
