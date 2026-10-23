@@ -113,6 +113,9 @@ Escalations and stops still write a full report so a human can pick up where the
 - The agent subprocess gets a scrubbed environment: only PATH/HOME/locale basics plus Anthropic
   auth. `GH_TOKEN`, cloud credentials and similar never reach it.
 - Publishing uses the operator's `gh` login from the engine process, never from an agent.
+- Text the model or a third party wrote is made inert before it reaches GitHub: `@mentions` and
+  closing keywords ("Closes #12") in the pull request title, body and commit message become inline
+  code, so opening the PR pings nobody and merging it closes only the issue the engine links itself.
 
 ## Interfaces
 

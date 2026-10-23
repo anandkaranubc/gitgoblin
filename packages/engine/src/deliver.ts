@@ -13,9 +13,33 @@ export interface DeliveryInput {
   template?: string;
 }
 
+const ISSUE_REF = String.raw`(?:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)?#\d+|https?:\/\/[^\s)]+\/(?:issues|pull)\/\d+`;
+const CLOSING = new RegExp(String.raw`\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)(:?\s+)((?:${ISSUE_REF})(?:(?:\s*,\s*|\s+and\s+|\s+)(?:${ISSUE_REF}))*)`, "gi");
+const REF = new RegExp(ISSUE_REF, "g");
+const MENTION = /(^|[^\w`/.@-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[A-Za-z0-9_.-]+)?)/g;
+
+/**
+ * Makes text that the model or a third party wrote inert on GitHub: an `@name` would notify someone
+ * who never asked to be involved, and a closing keyword such as "Closes #12" in a pull request body
+ * or commit message would close that issue when a maintainer merges. Both become inline code, which
+ * GitHub shows as written but does not act on. Existing code spans are left as they are. The
+ * engine's own "Fixes #N" line for the task's issue is added after this, so it still works.
+ */
+export function neutralizeForGitHub(text: string): string {
+  return text
+    .split(/(`+[^`]*`+)/)
+    .map((part, i) => {
+      if (i % 2 === 1) return part; // an existing code span
+      return part
+        .replace(CLOSING, (_m, keyword: string, sep: string, refs: string) => `${keyword}${sep}${refs.replace(REF, (ref) => `\`${ref}\``)}`)
+        .replace(MENTION, (_m, lead: string, name: string) => `${lead}\`@${name}\``);
+    })
+    .join("");
+}
+
 export function commitMessage(input: DeliveryInput): string {
-  const subject = subjectFor(input.task, input.plan.goal);
-  const body = [input.notes.summary.trim(), input.task.issue ? `Refs #${input.task.issue.number}` : ""].filter(Boolean).join("\n\n");
+  const subject = neutralizeForGitHub(subjectFor(input.task, input.plan.goal));
+  const body = [neutralizeForGitHub(input.notes.summary.trim()), input.task.issue ? `Refs #${input.task.issue.number}` : ""].filter(Boolean).join("\n\n");
   return `${subject}\n\n${body}\n`;
 }
 
@@ -29,19 +53,20 @@ function checklistFrom(template: string | undefined): string[] {
 }
 
 export function pullRequestTitle(input: DeliveryInput): string {
-  return subjectFor(input.task, input.plan.goal);
+  return neutralizeForGitHub(subjectFor(input.task, input.plan.goal));
 }
 
 export function pullRequestBody(input: DeliveryInput): string {
   const { task, plan, notes, verification, review } = input;
+  const n = neutralizeForGitHub;
   const closes = typeForKind(task.kind) === "fix" ? "Fixes" : "Refs";
-  const summaryLines = [task.summary || plan.goal, task.issue ? `${closes} #${task.issue.number}` : ""].filter(Boolean);
+  const summaryLines = [n(task.summary || plan.goal), task.issue ? `${closes} #${task.issue.number}` : ""].filter(Boolean);
   const checks = verification.checks.map((c) => `| \`${c.command}\` | ${c.status} |`);
   const reviewerNotes = [
-    ...notes.knownGaps.map((g) => `- ${g}`),
-    ...notes.deviationsFromPlan.map((d) => `- Deviation from plan: ${d}`),
-    ...review.findings.filter((f) => f.severity === "minor" || f.severity === "nit").map((f) => `- Reviewer note (${f.severity}): ${f.summary}`),
-    review.prNotes ? `- ${review.prNotes}` : "",
+    ...notes.knownGaps.map((g) => `- ${n(g)}`),
+    ...notes.deviationsFromPlan.map((d) => `- Deviation from plan: ${n(d)}`),
+    ...review.findings.filter((f) => f.severity === "minor" || f.severity === "nit").map((f) => `- Reviewer note (${f.severity}): ${n(f.summary)}`),
+    review.prNotes ? `- ${n(review.prNotes)}` : "",
   ].filter(Boolean);
   const checklist = checklistFrom(input.template);
 
@@ -50,7 +75,7 @@ export function pullRequestBody(input: DeliveryInput): string {
     summaryLines.join("\n\n"),
     "",
     "## Changes",
-    notes.summary.trim(),
+    n(notes.summary.trim()),
     "",
     "## Verification",
     "| Command | Result |",
