@@ -291,6 +291,7 @@ const ENV_PASS = [
   /^(HTTPS?_PROXY|NO_PROXY|https?_proxy|no_proxy)$/,
   /^ANTHROPIC_/,
   /^CLAUDE_CODE_USE_/,
+  /^CLAUDE_CODE_OAUTH_TOKEN$/,
   /^CLAUDE_CONFIG_DIR$/,
   /^(NVM_DIR|NVM_BIN|PYENV_ROOT|VOLTA_HOME|ASDF_DIR|GOPATH|GOROOT|CARGO_HOME|RUSTUP_HOME|JAVA_HOME)$/,
 ];
@@ -347,6 +348,7 @@ export function sandboxSettings(workspace: string, profile: ToolProfile, extraWr
       envVars: [
         { name: "ANTHROPIC_API_KEY", mode: "deny" },
         { name: "ANTHROPIC_AUTH_TOKEN", mode: "deny" },
+        { name: "CLAUDE_CODE_OAUTH_TOKEN", mode: "deny" },
       ],
     },
   };
