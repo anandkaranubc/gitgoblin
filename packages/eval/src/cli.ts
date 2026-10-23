@@ -79,7 +79,7 @@ if (command === "discovery" && sub === "fetch") {
     recompute: values.recompute,
     concurrency: Number(values.concurrency),
     checkpoint: async (partial) => {
-      await writeFile(out, JSON.stringify(partial, null, 1));
+      await writeFile(out, JSON.stringify(partial));
       console.error(`checkpoint: ${partial.rows.length} rows written to ${out}`);
     },
     asOf: values["as-of"],
@@ -90,7 +90,7 @@ if (command === "discovery" && sub === "fetch") {
     cachePath: values.cache ?? new URL("../.cache/http-cache.sqlite", import.meta.url).pathname,
     log: (m) => console.error(m),
   });
-  await writeFile(out, JSON.stringify(dataset, null, 1));
+  await writeFile(out, JSON.stringify(dataset));
   console.error(`wrote ${dataset.rows.length} rows to ${out}`);
 } else if (command === "discovery" && sub === "evaluate") {
   const stored = await readDataset(file);
@@ -123,14 +123,14 @@ if (command === "discovery" && sub === "fetch") {
     log: (m) => console.error(m),
   });
   await mkdir(dirname(values.out), { recursive: true });
-  await writeFile(values.out, JSON.stringify(dataset, null, 1));
+  await writeFile(values.out, JSON.stringify(dataset));
   console.error(`wrote ${dataset.rows.length} rows to ${values.out}`);
 } else if (command === "intel" && sub === "issues") {
   if (!file) fail("a dataset file is required");
   if (!values.out) fail("--out is required");
   const data = await gradeIssues(JSON.parse(await readFile(file, "utf8")) as IntelBacktestDataset, { cachePath: values.cache ?? new URL("../.cache/http-cache.sqlite", import.meta.url).pathname, log: (m) => console.error(m) });
   await mkdir(dirname(values.out), { recursive: true });
-  await writeFile(values.out, JSON.stringify(data, null, 1));
+  await writeFile(values.out, JSON.stringify(data));
   console.log(renderIssueGrading(data));
 } else if (command === "intel" && sub === "issues-report") {
   if (!file) fail("a dataset file is required");
@@ -139,7 +139,7 @@ if (command === "discovery" && sub === "fetch") {
   if (!file) fail("a dataset file is required");
   const cacheDir = new URL("../.cache/intel", import.meta.url).pathname;
   const data = await regradeDataset(JSON.parse(await readFile(file, "utf8")) as IntelBacktestDataset, { cacheDir, cachePath: values.cache ?? new URL("../.cache/http-cache.sqlite", import.meta.url).pathname, log: (m) => console.error(m) });
-  await writeFile(file, JSON.stringify(data, null, 1));
+  await writeFile(file, JSON.stringify(data));
   console.log(renderIntel(data));
 } else if (command === "intel" && sub === "report") {
   if (!file) fail("a dataset file is required");
@@ -148,7 +148,7 @@ if (command === "discovery" && sub === "fetch") {
   if (!values.out) fail("--out is required");
   const data = await fetchKinds(await readDataset(file), { cachePath: values.cache ?? new URL("../.cache/http-cache.sqlite", import.meta.url).pathname, log: (m) => console.error(m) });
   await mkdir(dirname(values.out), { recursive: true });
-  await writeFile(values.out, JSON.stringify(data, null, 1));
+  await writeFile(values.out, JSON.stringify(data));
   console.log(renderKinds(data));
 } else if (command === "tracker" && sub === "kinds-report") {
   if (!file) fail("a dataset file is required");
