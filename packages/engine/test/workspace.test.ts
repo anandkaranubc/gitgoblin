@@ -184,6 +184,31 @@ describe("stray tool caches", () => {
     expect(await git(["show", "--name-only", "--format=", sha], repo, env)).toBe("a.txt");
   });
 
+  it("never stages node_modules that the install created, even without a .gitignore", async () => {
+    const repo = await sampleRepo();
+    const base = await git(["rev-parse", "HEAD"], repo, env);
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(path.join(repo, "node_modules", "is-number"), { recursive: true });
+    writeFileSync(path.join(repo, "node_modules", "is-number", "package.json"), "{}");
+    writeFileSync(path.join(repo, "a.txt"), "changed\n");
+    expect((await diffStats(repo, base, env)).changedFiles).toEqual(["a.txt"]);
+  });
+
+  it("keeps vendored node_modules as they were at the base commit when the install rewrites them", async () => {
+    const repo = await sampleRepo();
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(path.join(repo, "node_modules", "dep"), { recursive: true });
+    writeFileSync(path.join(repo, "node_modules", "dep", "index.js"), "v1\n");
+    await git(["add", "."], repo, env);
+    await git(["commit", "-q", "-m", "vendor"], repo, env);
+    const base = await git(["rev-parse", "HEAD"], repo, env);
+    writeFileSync(path.join(repo, "node_modules", "dep", "index.js"), "v2 from install\n");
+    writeFileSync(path.join(repo, "a.txt"), "changed\n");
+    expect((await diffStats(repo, base, env)).changedFiles).toEqual(["a.txt"]);
+    const sha = await commitAll(repo, base, "fix: change", env);
+    expect(await git(["show", `${sha}:node_modules/dep/index.js`], repo, env)).toBe("v1");
+  });
+
   it("still commits a tracked .yarn/cache, which zero-install repositories keep in git", async () => {
     const repo = await sampleRepo();
     const { mkdirSync } = await import("node:fs");
