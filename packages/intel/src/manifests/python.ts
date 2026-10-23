@@ -25,6 +25,8 @@ export async function readPythonManifest(inventory: FileInventory, read: Reader)
     classifierVersions: [],
     dependencies: [],
     scripts: [],
+    extras: [],
+    dependencyGroups: [],
     packageManager: "pip",
     tooling: [],
     packageDirs: [],
@@ -103,8 +105,14 @@ function applyPyproject(m: PythonManifest, text: string): void {
   m.classifierVersions.push(...classifierVersions((arr(project?.classifiers) ?? arr(poetry?.classifiers) ?? []).map(String)));
 
   for (const dep of arr(project?.dependencies) ?? []) m.dependencies.push(parseRequirement(String(dep), false));
-  for (const group of Object.values(asRecord(project?.["optional-dependencies"]) ?? {})) {
+  for (const [extra, group] of Object.entries(asRecord(project?.["optional-dependencies"]) ?? {})) {
+    m.extras.push(extra);
     for (const dep of arr(group) ?? []) m.dependencies.push(parseRequirement(String(dep), true));
+  }
+  // PEP 735 dependency groups ([dependency-groups] dev = [...]) are not extras: `.[dev]` would install none of them.
+  for (const [group, deps] of Object.entries(asRecord(data["dependency-groups"]) ?? {})) {
+    m.dependencyGroups.push(group);
+    for (const dep of arr(deps) ?? []) if (typeof dep === "string") m.dependencies.push(parseRequirement(dep, true));
   }
   for (const [name, spec] of Object.entries(asRecord(poetry?.dependencies) ?? {})) {
     if (name !== "python") m.dependencies.push({ name: normalizeName(name), version: specVersion(spec), pinned: isPinnedSpec(spec), dev: false });
