@@ -31,13 +31,11 @@ a pull request a maintainer would want to merge.
   clone, gets an independent review, and prepares a pull request written for the maintainers who
   will read it. It asks before running the agent, before implementing the plan and before
   publishing; nothing is pushed or posted without that last yes.
-- The opportunity picker marks the ones the engine would refuse (`!`) and the ones intel doubts
-  (`?`), and Enter skips both. `runs`, `show` and `publish` come back to prepared changes later;
+- The opportunity picker marks the ones the engine would refuse (`!`, dependency bumps among them:
+  the agent works offline and cannot regenerate a lockfile, so it stops before spending anything)
+  and the ones intel doubts (`?`), and Enter skips both. `runs`, `show` and `publish` come back to prepared changes later;
   `publish` can be run again after a partial failure, and `clean` frees the disk a finished run's
   clone takes while keeping its report and diff.
-- `contribute` stops before spending anything on a dependency bump: the agent works offline and
-  cannot regenerate the lockfile, so it leaves the update to the repository's dependency bot or a
-  maintainer.
 
 **Safety**
 
