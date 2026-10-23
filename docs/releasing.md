@@ -24,7 +24,7 @@ To rehearse without a tag, run the workflow by hand: **Actions → Release → R
 ## Cutting a release
 
 1. **Prepare a pull request** titled `chore(release): gitgoblin 0.2.0` (or `@gitgoblin/mcp 0.2.0`). It should:
-   - Bump `version` in the package's `package.json`, plus the places that repeat it. For the CLI that is `.version()` in `packages/cli/src/index.ts`; a test fails if the two differ. For the MCP server it is `src/version.ts`, `bin/gitgoblin-mcp.mjs`, the two `.claude-plugin` manifests, and the install URLs in the docs: `git grep -n <old version>` finds them all.
+   - Bump `version` in the package's `package.json`, plus the places that repeat it. For the CLI that is `.version()` in `packages/cli/src/index.ts`; a test fails if the two differ. For the MCP server it is `src/version.ts` and `bin/gitgoblin-mcp.mjs`. Install URLs and the plugin manifests name a release tag that does not exist yet, so they move in step 7.
    - Turn the CHANGELOG section's heading from `## gitgoblin 0.2.0 - Unreleased` into `## gitgoblin 0.2.0 - <today>`. Write it for users: what they can do now, what changed, what to watch out for.
 2. **Merge it**, then tag the merge commit and push the tag:
 
@@ -48,7 +48,7 @@ To rehearse without a tag, run the workflow by hand: **Actions → Release → R
 6. **Publish the draft release.**
 7. **MCP server only.** Open a pull request that points everything at the new release:
    - `packages/mcp/server.json`: its version, the `.mcpb` URL, and the SHA-256 copied from the published release's `SHA256SUMS`. The `.mcpb` is a zip whose hash changes with every build, so never use a hash from a local rebuild.
-   - The install URLs that name the tag, until the npm package is the documented install: `.mcp.json`, `docs/agents.md` (including the base64 Cursor link and the URL-encoded VS Code link), `skills/gitgoblin/SKILL.md`, the README, and the site's front page and getting-started page. `git grep -n mcp-v<old version>` finds them.
+   - The version in the two `.claude-plugin` manifests, and the install URLs that name the tag, until the npm package is the documented install: `.mcp.json`, `docs/agents.md` (including the base64 Cursor link and the URL-encoded VS Code link), `skills/gitgoblin/SKILL.md`, the README, and the site's front page and getting-started page. `git grep -n mcp-v<old version>` finds them.
 
    Merge it, then run **Actions → MCP Registry → Run workflow**. Fill in `deprecate` with the previous version when it has a known defect.
 
