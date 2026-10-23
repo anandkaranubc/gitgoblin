@@ -20,9 +20,15 @@ export function fence(content: string, lang = ""): string {
   return `${ticks}${lang}\n${content}\n${ticks}`;
 }
 
-/** Issue text goes inside <issue_body> tags; a body cannot contain a tag of that name, open or close. */
+const MAX_ISSUE_BODY_CHARS = 20_000;
+
+/**
+ * Issue text goes inside <issue_body> tags; a body cannot contain a tag of that name, open or close.
+ * Intel caps the body it sends, but a task can also be written by hand, so the prompt caps it too.
+ */
 function issueBody(body: string): string {
-  return body.replace(/<(\/?)(issue_body)/gi, "&lt;$1$2");
+  const capped = body.length > MAX_ISSUE_BODY_CHARS ? `${body.slice(0, MAX_ISSUE_BODY_CHARS)}\n[issue text truncated]` : body;
+  return capped.replace(/<(\/?)(issue_body)/gi, "&lt;$1$2");
 }
 
 function section(title: string, body: string | undefined): string {
