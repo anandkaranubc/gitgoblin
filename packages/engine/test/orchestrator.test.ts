@@ -411,6 +411,18 @@ describe("runContribution", () => {
     expect(result.status).toBe("awaiting_approval");
   });
 
+  it("gives each model phase only the wall-clock time the run has left", async () => {
+    const repo = await createFixtureRepo();
+    const calls: PhaseSpec<unknown>[] = [];
+    const result = await run(happyPath, calls, { limits: { maxWallClockMs: 10 * 60_000 } })(repo, workdir());
+    expect(result.status).toBe("awaiting_approval");
+    for (const c of calls) {
+      expect(c.timeoutMs).toBeGreaterThan(0);
+      expect(c.timeoutMs).toBeLessThanOrEqual(10 * 60_000);
+    }
+    expect(calls[1]!.timeoutMs!).toBeLessThanOrEqual(calls[0]!.timeoutMs!);
+  });
+
   it("reports a failed phase instead of throwing", async () => {
     const repo = await createFixtureRepo();
     const result = await run({ orient: () => ({ not: "an investigation" }) })(repo, workdir());
