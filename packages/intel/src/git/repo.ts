@@ -118,7 +118,16 @@ export interface CloneResult {
   fresh: boolean;
 }
 
-/** Clone with `--filter=blob:none` (full history, HEAD blobs only), or update an existing clone. */
+/** A bare commit id (7 to 40 hex characters), as opposed to a branch or tag name. */
+export function looksLikeSha(ref: string | undefined): boolean {
+  return ref !== undefined && /^[0-9a-f]{7,40}$/i.test(ref);
+}
+
+/**
+ * Clone with `--filter=blob:none` (full history, HEAD blobs only), or update an existing clone.
+ * `ref.ref` may be a branch, a tag, or a commit id; commits are fetched after a default-branch clone,
+ * because `--branch` only accepts named refs.
+ */
 export async function ensureClone(ref: RepoRef, options: CloneOptions): Promise<CloneResult> {
   const started = Date.now();
   const dir = join(options.cacheDir, "repos", `${ref.owner}__${ref.name}`);
@@ -127,18 +136,36 @@ export async function ensureClone(ref: RepoRef, options: CloneOptions): Promise<
   const target = ref.ref ?? "HEAD";
 
   if (await pathExists(join(dir, ".git"))) {
-    await git(["fetch", "--quiet", "--filter=blob:none", "origin", target], dir, timeoutMs);
-    await git(["reset", "--quiet", "--hard", "FETCH_HEAD"], dir, timeoutMs);
+    if (looksLikeSha(ref.ref)) {
+      await git(["fetch", "--quiet", "--filter=blob:none", "origin", "HEAD"], dir, timeoutMs).catch(() => undefined);
+      await checkoutCommit(dir, ref.ref!, timeoutMs);
+    } else {
+      await git(["fetch", "--quiet", "--filter=blob:none", "origin", target], dir, timeoutMs);
+      await git(["reset", "--quiet", "--hard", "FETCH_HEAD"], dir, timeoutMs);
+    }
     return { repo: openRepo(dir), cloneMs: Date.now() - started, fresh: false };
   }
 
   await mkdir(join(options.cacheDir, "repos"), { recursive: true });
+  const sha = looksLikeSha(ref.ref);
   const args = ["clone", "--quiet", "--filter=blob:none", "--single-branch", "--tags"];
-  if (ref.ref) args.push("--branch", ref.ref);
+  if (ref.ref && !sha) args.push("--branch", ref.ref);
   if (options.depth) args.push("--depth", String(options.depth));
   args.push(url, dir);
   await git(args, options.cacheDir, timeoutMs);
+  if (sha) await checkoutCommit(dir, ref.ref!, timeoutMs);
   return { repo: openRepo(dir), cloneMs: Date.now() - started, fresh: true };
+}
+
+/** Reset to a commit: locally when the clone already has it, else fetched by full id (servers refuse abbreviated ids). */
+async function checkoutCommit(dir: string, sha: string, timeoutMs: number): Promise<void> {
+  try {
+    await git(["rev-parse", "--verify", "--quiet", `${sha}^{commit}`], dir, timeoutMs);
+  } catch {
+    if (sha.length < 40) throw new Error(`commit ${sha} is not in the clone; pass the full 40-character id to fetch it`);
+    await git(["fetch", "--quiet", "--filter=blob:none", "origin", sha], dir, timeoutMs);
+  }
+  await git(["reset", "--quiet", "--hard", sha], dir, timeoutMs);
 }
 
 async function pathExists(path: string): Promise<boolean> {
