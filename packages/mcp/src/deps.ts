@@ -1,6 +1,8 @@
+import { join } from "node:path";
 import type { DiscoveryQuery, DiscoveryResult, Goal, RepoRef } from "@gitgoblin/core";
 import { createDiscovery } from "@gitgoblin/discovery";
 import { type AnalysisOptions, type AnalysisReport, analyzeRepository } from "@gitgoblin/intel";
+import { defaultCacheDir } from "@gitgoblin/sources";
 
 /** One discovery session: a shared HTTP client and cache, closed when the call ends. */
 export interface DiscoverySession {
@@ -10,6 +12,14 @@ export interface DiscoverySession {
 }
 
 export type AnalyzeOptions = Pick<AnalysisOptions, "maxOpportunities" | "checkLinks" | "dependencyChecks" | "hints" | "log">;
+
+/**
+ * Clones made by the server live apart from the command line's, so every one of them was checked out
+ * with the hardened git settings in safety.ts; an older clone could still hold a real symlink.
+ */
+export function mcpCacheDir(env: NodeJS.ProcessEnv = process.env): string {
+  return join(defaultCacheDir(env), "mcp");
+}
 
 /** What the server needs from the rest of gitgoblin. Tests inject fakes. */
 export interface ServerDeps {
@@ -29,6 +39,6 @@ export function defaultDeps(): ServerDeps {
         close: () => sources.close(),
       };
     },
-    analyze: (ref, options) => analyzeRepository(ref, options),
+    analyze: (ref, options) => analyzeRepository(ref, { ...options, cacheDir: mcpCacheDir() }),
   };
 }

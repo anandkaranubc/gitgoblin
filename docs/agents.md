@@ -64,7 +64,7 @@ The agent will call `discover_repositories`, then `analyze_repository` on whiche
 
 ## The tools
 
-All four only read public data. Nothing is written anywhere except a local cache under `~/.cache/gitgoblin`.
+All four only read public data from github.com, gitlab.com and codeberg.org. Nothing is written anywhere except a local cache under `~/.cache/gitgoblin`. Because your agent picks the repository, the server treats every repository as hostile: committed symlinks are checked out as plain files, git only speaks HTTPS, external links are never fetched, and the agent is told that text quoted from a repository is data, not instructions.
 
 | Tool | What it does | Time |
 | --- | --- | --- |
@@ -178,6 +178,7 @@ The launcher runs the TypeScript source directly on Node 24; there is nothing to
 - **The first call times out**: a cold `discover_repositories` can take 40 seconds while it asks GitHub and ecosyste.ms about each candidate. The server reports progress, so clients that reset their timeout on progress keep waiting. Run it again; the second search is instant from the cache. Narrow filters (one language, a star cap) also speed it up.
 - **Rate limited**: the error says when the limit resets and how to add a token. See [GitHub token](#github-token-optional).
 - **A repository is "not found"**: check the spelling, whether it moved, and that it is public. Private repositories are out of scope.
+- **"not one of the forges gitgoblin reads"**: the tools accept github.com, gitlab.com and codeberg.org. For a self-hosted forge you trust, set `GITGOBLIN_MCP_HOSTS=git.example.org` in the server's environment (for example `claude mcp add gitgoblin -e GITGOBLIN_MCP_HOSTS=git.example.org -- npx -y ...`).
 - **Something printed on stdout broke the connection**: the server routes all its logging to stderr. If you see this, it is a bug; please report it with the client and the command.
 
 The cache lives at `~/.cache/gitgoblin` (`$XDG_CACHE_HOME/gitgoblin`, or `$GITGOBLIN_CACHE_DIR`). Deleting it is always safe.
