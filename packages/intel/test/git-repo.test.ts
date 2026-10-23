@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { openRepo, parseLog } from "../src/git/repo.ts";
+import { looksLikeSha, openRepo, parseLog } from "../src/git/repo.ts";
 import { FixtureRepo } from "./helpers/fixture-repo.ts";
 
 describe("LocalGitRepo", () => {
@@ -66,6 +66,14 @@ describe("LocalGitRepo", () => {
     const repo = openRepo(fixture.dir);
     expect(await repo.grep("TODO", ["src"])).toEqual(["src/a.py"]);
     expect(await repo.grep("nothing-here", ["src"])).toEqual([]);
+  });
+
+  it("tells commit ids from branch and tag names", () => {
+    expect(looksLikeSha("63448dfa1b2c")).toBe(true);
+    expect(looksLikeSha("main")).toBe(false);
+    expect(looksLikeSha("v1.2.3")).toBe(false);
+    expect(looksLikeSha("deadbeef")).toBe(true);
+    expect(looksLikeSha(undefined)).toBe(false);
   });
 
   it("parseLog tolerates empty input", () => {
