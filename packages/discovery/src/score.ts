@@ -70,7 +70,8 @@ export function scoreRepo(repo: EnrichedRepo, goal: Goal, options: ScoreOptions)
 }
 
 function round(value: number): number {
-  return Math.round(value * 1000) / 1000;
+  // `|| 0` turns -0 (an unweighted signal below neutral) into 0.
+  return Math.round(value * 1000) / 1000 || 0;
 }
 
 function describe(name: SignalName, repo: EnrichedRepo, _signals: Signals, evidence: Evidence, inverted: boolean): string {
@@ -89,6 +90,12 @@ function describe(name: SignalName, repo: EnrichedRepo, _signals: Signals, evide
       if (evidence.avgPrCloseDays !== undefined) parts.push(`pull requests in ~${formatSpan(evidence.avgPrCloseDays)}`);
       if (parts.length === 0 && evidence.mergedPullRequests !== undefined) parts.push(`${formatCount(evidence.mergedPullRequests)} merged pull requests`);
       return parts.join(", ") || "maintainer responsiveness";
+    }
+    case "acceptance": {
+      const year = evidence.pullRequestsLastYear ?? 0;
+      const merged = evidence.mergedPullRequestsLastYear ?? 0;
+      if (year >= 5) return `merged ${Math.round((merged / year) * 100)}% of pull requests in the past year (${formatCount(merged)} of ${formatCount(year)})`;
+      return "share of pull requests merged, all time";
     }
     case "busFactor": {
       const people = evidence.contributors ?? 0;
