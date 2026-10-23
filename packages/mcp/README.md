@@ -3,10 +3,10 @@
 gitgoblin as a [Model Context Protocol](https://modelcontextprotocol.io) server. It gives any MCP client (Claude Code, Codex, Cursor, Gemini CLI, Copilot in VS Code, and others) four read-only tools: discover repositories worth your time, explain why one scores the way it does, analyze what a repository actually needs, and get a full briefing on one piece of work.
 
 ```sh
-claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.3/gitgoblin-mcp-0.1.3.tgz
+claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.5/gitgoblin-mcp-0.1.5.tgz
 ```
 
-[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The server is listed in the official MCP Registry as `io.github.anandkaranubc/gitgoblin`. The command installs the tarball attached to [release `mcp-v0.1.3`](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.3). `@gitgoblin/mcp` is not published to npm yet, so do not use that name with `npx -y` until it is. You can also run the server from a clone with `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`; Claude Desktop users install the release's `gitgoblin.mcpb` directly.
+[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The server is listed in the official MCP Registry as `io.github.anandkaranubc/gitgoblin`. The command installs the tarball attached to [release `mcp-v0.1.5`](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.5). `@gitgoblin/mcp` is not published to npm yet, so do not use that name with `npx -y` until it is. You can also run the server from a clone with `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`; Claude Desktop users install the release's `gitgoblin.mcpb` directly.
 
 ## Tools
 
