@@ -120,7 +120,7 @@ function classifyFromManifests(manifests: Manifests, paths: string[]): NatureRes
     return { nature: "library", reason: rust.hasBin ? "Cargo package with a library and binaries" : "Cargo library crate" };
   }
   const other = others[0];
-  if (other?.ecosystem === "c_cpp" && paths.some((p) => /(^|\/)main\.(c|cc|cpp)$/.test(p))) return { nature: "cli", reason: "C/C++ project with a main.c" };
+  if (other?.ecosystem === "c_cpp" && paths.some((p) => /^(src\/)?main\.(c|cc|cpp)$/.test(p))) return { nature: "cli", reason: "C/C++ project with a top-level main.c" };
   if (other) return { nature: "library", reason: `${other.ecosystem} project with ${other.paths[0] ?? "a manifest"}` };
   return undefined;
 }
