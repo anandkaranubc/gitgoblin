@@ -1,5 +1,5 @@
 import type { FailedJob, GitHubSamples, IssueSample, PrSample, RepoMeta, WorkflowRun } from "../github/types.ts";
-import { type ForgeFetchOptions, actorOf, associationOf, commentOf, forgeJson, referencedIssues } from "./common.ts";
+import { type ForgeFetchOptions, actorOf, associationOf, commentOf, forgeJson, forgeList, referencedIssues, statusOf } from "./common.ts";
 
 interface GlUser { username: string }
 interface GlProject {
@@ -27,6 +27,8 @@ export interface ForgeResult {
   runs?: WorkflowRun[];
   /** Failed jobs of a run, when the forge exposes them. */
   failedJobs?: (runId: number) => Promise<FailedJob[]>;
+  /** What the forge would not tell an unauthenticated client, for the report's budget notes. */
+  notes?: string[];
 }
 
 interface GlPipeline { id: number; status: string; ref: string; sha: string; source: string; updated_at: string; web_url: string }
@@ -34,7 +36,7 @@ interface GlJob { id: number; name: string; stage: string; status: string; web_u
 
 /** GitLab pipelines on a branch mapped to the CI-run shape the health analyzer reads. */
 export async function fetchGitLabPipelines(base: string, ref: string, options: ForgeFetchOptions): Promise<WorkflowRun[]> {
-  const pipelines = await forgeJson<GlPipeline[]>(`${base}/pipelines?ref=${encodeURIComponent(ref)}&per_page=40&order_by=updated_at&sort=desc`, options).catch(() => [] as GlPipeline[]);
+  const pipelines = await forgeList<GlPipeline>(`${base}/pipelines?ref=${encodeURIComponent(ref)}&per_page=40&order_by=updated_at&sort=desc`, options);
   if (!Array.isArray(pipelines)) return [];
   return pipelines
     .filter((p) => ["push", "schedule", "web", "api", "trigger"].includes(p.source) && ["success", "failed", "canceled"].includes(p.status))
@@ -46,31 +48,53 @@ export async function fetchGitLab(host: string, owner: string, name: string, opt
   const base = `https://${host}/api/v4/projects/${encodeURIComponent(`${owner}/${name}`)}`;
   const project = await forgeJson<GlProject>(base, options);
   const [openIssues, closedIssues, openMrs, mergedMrs, closedMrs, labels] = await Promise.all([
-    forgeJson<GlIssue[]>(`${base}/issues?state=opened&order_by=updated_at&per_page=50`, options).catch(() => [] as GlIssue[]),
-    forgeJson<GlIssue[]>(`${base}/issues?state=closed&order_by=updated_at&per_page=30`, options).catch(() => [] as GlIssue[]),
-    forgeJson<GlMr[]>(`${base}/merge_requests?state=opened&order_by=updated_at&per_page=30`, options).catch(() => [] as GlMr[]),
-    forgeJson<GlMr[]>(`${base}/merge_requests?state=merged&order_by=updated_at&per_page=30`, options).catch(() => [] as GlMr[]),
-    forgeJson<GlMr[]>(`${base}/merge_requests?state=closed&order_by=updated_at&per_page=30`, options).catch(() => [] as GlMr[]),
-    forgeJson<GlLabel[]>(`${base}/labels?per_page=100`, options).catch(() => [] as GlLabel[]),
+    forgeList<GlIssue>(`${base}/issues?state=opened&order_by=updated_at&per_page=50`, options),
+    forgeList<GlIssue>(`${base}/issues?state=closed&order_by=updated_at&per_page=30`, options),
+    forgeList<GlMr>(`${base}/merge_requests?state=opened&order_by=updated_at&per_page=30`, options),
+    forgeList<GlMr>(`${base}/merge_requests?state=merged&order_by=updated_at&per_page=30`, options),
+    forgeList<GlMr>(`${base}/merge_requests?state=closed&order_by=updated_at&per_page=30`, options),
+    forgeList<GlLabel>(`${base}/labels?per_page=100`, options),
   ]);
 
   const maintainers = new Set<string>();
   for (const mr of mergedMrs) if (mr.merged_by?.username) maintainers.add(mr.merged_by.username);
-  for (const issue of closedIssues) if (issue.closed_by?.username) maintainers.add(issue.closed_by.username);
+  // Reporters close their own issues too; only someone closing another person's issue looks like a maintainer.
+  for (const issue of closedIssues) if (issue.closed_by?.username && issue.closed_by.username !== issue.author?.username) maintainers.add(issue.closed_by.username);
   if (project.namespace?.kind === "user" && project.namespace.path) maintainers.add(project.namespace.path);
 
-  // Notes cost one call each; take them for the most recently active open items only.
-  const notesFor = async (kind: "issues" | "merge_requests", iid: number) =>
-    forgeJson<GlNote[]>(`${base}/${kind}/${iid}/notes?sort=asc&order_by=created_at&per_page=20`, options).then((n) => n.filter((x) => !x.system)).catch(() => [] as GlNote[]);
+  // Notes cost one call each; take them for the most recently active open items only. gitlab.com and many
+  // self-hosted instances answer 401 to unauthenticated note requests: stop at the first refusal.
+  const notes: string[] = [];
+  let notesRefused = false;
+  const notesFor = async (kind: "issues" | "merge_requests", iid: number): Promise<GlNote[] | undefined> => {
+    if (notesRefused) return undefined;
+    try {
+      return (await forgeJson<GlNote[]>(`${base}/${kind}/${iid}/notes?sort=asc&order_by=created_at&per_page=20`, options)).filter((x) => !x.system);
+    } catch (error) {
+      if (statusOf(error) === 401 || statusOf(error) === 403) {
+        notesRefused = true;
+        notes.push(`${host} does not show issue and merge request comments without a token; replies, claims and response times there are unknown, not absent`);
+      }
+      return undefined;
+    }
+  };
   const issueNotes = new Map<number, GlNote[]>();
-  for (const issue of openIssues.slice(0, 15)) if (issue.user_notes_count > 0) issueNotes.set(issue.iid, await notesFor("issues", issue.iid));
+  for (const issue of openIssues.slice(0, 15)) {
+    if (issue.user_notes_count === 0) continue;
+    const n = await notesFor("issues", issue.iid);
+    if (n) issueNotes.set(issue.iid, n);
+  }
   // Merge requests that mention an issue tell us whether someone is already on it.
   const relatedMrs = new Map<number, GlMr[]>();
   for (const issue of openIssues.slice(0, 15)) {
-    if (issue.merge_requests_count > 0) relatedMrs.set(issue.iid, await forgeJson<GlMr[]>(`${base}/issues/${issue.iid}/related_merge_requests?per_page=10`, options).catch(() => [] as GlMr[]));
+    if (issue.merge_requests_count > 0) relatedMrs.set(issue.iid, await forgeList<GlMr>(`${base}/issues/${issue.iid}/related_merge_requests?per_page=10`, options));
   }
   const mrNotes = new Map<number, GlNote[]>();
-  for (const mr of openMrs.slice(0, 10)) if (mr.user_notes_count > 0) mrNotes.set(mr.iid, await notesFor("merge_requests", mr.iid));
+  for (const mr of openMrs.slice(0, 10)) {
+    if (mr.user_notes_count === 0) continue;
+    const n = await notesFor("merge_requests", mr.iid);
+    if (n) mrNotes.set(mr.iid, n);
+  }
 
   const mrsByIssue = new Map<number, GlMr[]>();
   for (const m of [...openMrs, ...mergedMrs, ...closedMrs]) for (const n of referencedIssues(m.description)) mrsByIssue.set(n, [...(mrsByIssue.get(n) ?? []), m]);
@@ -85,6 +109,7 @@ export async function fetchGitLab(host: string, owner: string, name: string, opt
       reactions: i.upvotes, commentCount: i.user_notes_count, firstComments: comments.slice(0, 3).map((c) => ({ ...c, body: undefined })),
       lastComments: comments.slice(-6),
       linkedPrs: [...new Map([...(relatedMrs.get(i.iid) ?? []), ...(mrsByIssue.get(i.iid) ?? [])].map((m) => [m.iid, toLinked(m)])).values()],
+      commentsFetched: i.user_notes_count === 0 || issueNotes.has(i.iid),
     };
   };
   const toPr = (m: GlMr): PrSample => {
@@ -97,6 +122,7 @@ export async function fetchGitLab(host: string, owner: string, name: string, opt
       author: actorOf(m.author?.username), association: associationOf(m.author?.username, maintainers), additions: 0, deletions: 0,
       changedFiles: Number(m.changes_count ?? 0) || 0, headRefName: m.source_branch, labels: m.labels, closingIssues: referencedIssues(m.description),
       firstComments: comments.slice(0, 3).map((c) => ({ ...c, body: undefined })), lastComments: comments.slice(-5), reviews: [],
+      commentsFetched: m.user_notes_count === 0 || mrNotes.has(m.iid),
     };
   };
 
@@ -118,10 +144,11 @@ export async function fetchGitLab(host: string, owner: string, name: string, opt
     openPrs: openMrs.map(toPr),
     closedPrs: [...mergedMrs, ...closedMrs].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map(toPr),
   };
+  if (project.archived === undefined) notes.push(`${host} does not say without a token whether the project is archived; treated as active`);
   const runs = await fetchGitLabPipelines(base, meta.defaultBranch, options);
   const failedJobs = async (runId: number): Promise<FailedJob[]> =>
     forgeJson<GlJob[]>(`${base}/pipelines/${runId}/jobs?scope[]=failed&per_page=20`, options)
       .then((jobs) => jobs.map((j) => ({ name: `${j.stage}: ${j.name}`, url: j.web_url, failedSteps: [] })))
       .catch(() => [] as FailedJob[]);
-  return { meta, samples, runs, failedJobs };
+  return { meta, samples, runs, failedJobs, notes };
 }

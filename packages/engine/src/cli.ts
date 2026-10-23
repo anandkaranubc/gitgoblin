@@ -5,7 +5,7 @@ import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { parseCheckIsolation, parseCloneDepth, parseCostLimit, parseEffort, unsandboxedAllowed } from "./flags.ts";
 import { RunJournal } from "./journal.ts";
-import { publishRun, runContribution } from "./orchestrator.ts";
+import { cleanRun, publishRun, runContribution } from "./orchestrator.ts";
 
 const USAGE = `gitgoblin-engine: turn one validated opportunity into a reviewable pull request.
 
@@ -14,6 +14,7 @@ Usage:
   gitgoblin-engine run --report analysis.json --opportunity <id> [options]
   gitgoblin-engine show <runId> [--workdir DIR]
   gitgoblin-engine publish <runId> [--workdir DIR] [--dry-run] [--ready]
+  gitgoblin-engine clean <runId> [--workdir DIR] [--force]
 
 Run options:
   --workdir DIR       where runs/<id>/ live (default: ./.gitgoblin)
@@ -151,6 +152,15 @@ async function main(argv: string[]): Promise<void> {
     });
     if (values["dry-run"]) process.stdout.write(`${published.commands.join("\n")}\n`);
     else process.stdout.write(`${published.url}\n`);
+    return;
+  }
+
+  if (command === "clean") {
+    const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { workdir: { type: "string" }, force: { type: "boolean" } } });
+    const runId = positionals[0];
+    if (!runId) fail("clean needs a run id");
+    const { removed } = await cleanRun(runId, { workdir: path.resolve(values.workdir ?? ".gitgoblin"), ...(values.force ? { force: true } : {}) });
+    process.stdout.write(removed.length ? `removed:\n${removed.map((r) => `  ${r}`).join("\n")}\n` : "nothing to remove\n");
     return;
   }
 
