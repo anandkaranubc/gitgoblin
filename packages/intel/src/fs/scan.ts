@@ -71,6 +71,19 @@ export function languageOf(path: string): string | undefined {
   return LANGUAGE_BY_EXT[extname(path).toLowerCase()];
 }
 
+/** Grammar and schema sources whose compiled output sits next to them (flex, bison, ANTLR, re2c, Ragel, protobuf). */
+const GRAMMAR_EXT = [".l", ".ll", ".lex", ".y", ".yy", ".g4", ".re", ".rl", ".proto"];
+const GENERATED_FROM_GRAMMAR = /\.(c|cc|cpp|cxx|h|hh|hpp|go|py|java|rs|ts|js)$/;
+
+/** `src/lexer.c` beside `src/lexer.l` is flex output: edits belong in the grammar, so analyzers treat it as vendored. */
+export function markGeneratedBySiblings(files: FileEntry[], all: Set<string>): void {
+  for (const f of files) {
+    if (f.vendored || !GENERATED_FROM_GRAMMAR.test(f.path)) continue;
+    const stem = f.path.replace(/(\.pb)?\.[^./]+$/, "").replace(/_pb2$/, "");
+    if (GRAMMAR_EXT.some((ext) => all.has(`${stem}${ext}`))) f.vendored = true;
+  }
+}
+
 export function isVendored(path: string): boolean {
   if (VENDORED_FILE.test(path)) return true;
   const parts = path.split("/");
@@ -147,6 +160,7 @@ export async function scanRepo(repo: GitRepo, maxFiles = MAX_INVENTORY): Promise
     };
   });
   const files = entries.filter((e): e is FileEntry => e !== undefined);
+  markGeneratedBySiblings(files, new Set(paths));
   return { files, totalCount: paths.length, truncated, byPath: new Map(files.map((f) => [f.path, f])) };
 }
 
