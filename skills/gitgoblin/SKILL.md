@@ -70,4 +70,6 @@ Cursor and other clients take the standard JSON block:
 { "mcpServers": { "gitgoblin": { "command": "npx", "args": ["-y", "@gitgoblin/mcp"] } } }
 ```
 
+While `@gitgoblin/mcp` is not yet on npm, use the tarball URL from the [latest GitHub release](https://github.com/anandkaranubc/gitgoblin/releases) in its place; the commands are otherwise identical.
+
 A GitHub token is optional. `GITHUB_TOKEN`, `GH_TOKEN`, or a GitHub CLI login (`gh auth login`) raises the limits and unlocks starter-issue data. The full install guide with every client is at https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md.
