@@ -38,7 +38,9 @@ export type HttpEvent =
   | { type: "revalidated"; url: string }
   | { type: "stale"; url: string; error: string }
   | { type: "retry"; url: string; attempt: number; delayMs: number; reason: string }
-  | { type: "rate-limit-wait"; url: string; delayMs: number };
+  | { type: "rate-limit-wait"; url: string; delayMs: number }
+  | { type: "cache-discarded"; url: string; reason: string }
+  | { type: "cache-fallback"; path: string; error: string };
 
 export interface HttpClientOptions {
   cache?: HttpCache | undefined;
@@ -49,6 +51,8 @@ export interface HttpClientOptions {
   /** Longest we will sleep for a rate-limit reset before giving up. */
   maxRateLimitWaitMs?: number | undefined;
   requestTimeoutMs?: number | undefined;
+  /** Largest response body accepted; bigger ones fail instead of being buffered and cached. */
+  maxBodyBytes?: number | undefined;
   onEvent?: ((event: HttpEvent) => void) | undefined;
   now?: (() => number) | undefined;
   sleep?: ((ms: number) => Promise<void>) | undefined;
@@ -66,6 +70,7 @@ export interface RequestOptions {
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [500, 2000];
+const DEFAULT_MAX_BODY_BYTES = 32 * 1024 * 1024;
 
 class Semaphore {
   #active = 0;
@@ -99,6 +104,7 @@ export class HttpClient {
   readonly #userAgent: string;
   readonly #maxRateLimitWaitMs: number;
   readonly #requestTimeoutMs: number;
+  readonly #maxBodyBytes: number;
   readonly #onEvent: (event: HttpEvent) => void;
   readonly #now: () => number;
   readonly #sleep: (ms: number) => Promise<void>;
@@ -113,6 +119,7 @@ export class HttpClient {
     this.#maxConcurrency = options.maxConcurrency ?? 4;
     this.#maxRateLimitWaitMs = options.maxRateLimitWaitMs ?? 30_000;
     this.#requestTimeoutMs = options.requestTimeoutMs ?? 20_000;
+    this.#maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
     this.#onEvent = options.onEvent ?? (() => {});
     this.#now = options.now ?? Date.now;
     this.#sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -123,22 +130,37 @@ export class HttpClient {
     return this.#rateLimits;
   }
 
-  /** Fetches JSON, serving from cache when fresh. Throws HttpError for non-2xx responses. */
+  /**
+   * Fetches JSON, serving from cache when fresh. Throws HttpError for non-2xx responses. A cached
+   * body that no longer parses is discarded and fetched again, so a damaged cache heals itself.
+   */
   async json<T = unknown>(url: string, options: RequestOptions = {}): Promise<T> {
-    const text = await this.text(url, options);
-    return JSON.parse(text) as T;
+    const first = await this.#request(url, options, false);
+    try {
+      return JSON.parse(first.body) as T;
+    } catch (error) {
+      if (!first.fromCache) throw error;
+      this.#onEvent({ type: "cache-discarded", url, reason: error instanceof Error ? error.message : String(error) });
+      this.cache.delete(first.key);
+      const second = await this.#request(url, options, true);
+      return JSON.parse(second.body) as T;
+    }
   }
 
   async text(url: string, options: RequestOptions = {}): Promise<string> {
+    return (await this.#request(url, options, false)).body;
+  }
+
+  async #request(url: string, options: RequestOptions, bypassCache: boolean): Promise<{ body: string; fromCache: boolean; key: string }> {
     const method = options.method ?? "GET";
     const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
     const key = cacheKey(method, url, options.body);
-    const cached = this.cache.get(key);
+    const cached = bypassCache ? undefined : this.cache.get(key);
     const now = this.#now();
 
     if (cached && isFresh(cached, now)) {
       this.#onEvent({ type: "hit", url });
-      return this.#unwrap(cached, url);
+      return { body: this.#unwrap(cached, url), fromCache: true, key };
     }
     this.#onEvent({ type: "miss", url });
 
@@ -154,13 +176,38 @@ export class HttpClient {
 
     const release = await this.#semaphore(new URL(url).host).acquire();
     try {
-      return await this.#fetchWithRetries(url, { method, headers, body: options.body }, key, cached, {
+      const result = await this.#fetchWithRetries(url, { method, headers, body: options.body }, key, cached, {
         ttlMs,
         notFoundTtlMs: options.notFoundTtlMs ?? ttlMs,
       });
+      return { ...result, key };
     } finally {
       release();
     }
+  }
+
+  /** Reads a body up to the limit; past it the connection is dropped and the response rejected. */
+  async #readBody(response: Response, url: string): Promise<string> {
+    const declared = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > this.#maxBodyBytes) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new HttpError(response.status, url, "", `Response from ${new URL(url).host} is larger than ${this.#maxBodyBytes} bytes`);
+    }
+    if (!response.body) return response.text();
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > this.#maxBodyBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new HttpError(response.status, url, "", `Response from ${new URL(url).host} is larger than ${this.#maxBodyBytes} bytes`);
+      }
+      chunks.push(value);
+    }
+    return new TextDecoder().decode(Buffer.concat(chunks));
   }
 
   #semaphore(host: string): Semaphore {
@@ -183,7 +230,7 @@ export class HttpClient {
     key: string,
     cached: CacheEntry | undefined,
     ttl: { ttlMs: number; notFoundTtlMs: number },
-  ): Promise<string> {
+  ): Promise<{ body: string; fromCache: boolean }> {
     let attempt = 0;
     let waitedForRateLimit = false;
     for (;;) {
@@ -202,7 +249,7 @@ export class HttpClient {
           await this.#sleep(retryDelay);
           continue;
         }
-        return this.#staleOrThrow(cached, url, error);
+        return { body: this.#staleOrThrow(cached, url, error), fromCache: true };
       }
 
       this.#recordRateLimit(url, response.headers);
@@ -211,10 +258,10 @@ export class HttpClient {
       if (response.status === 304 && cached) {
         this.#onEvent({ type: "revalidated", url });
         this.cache.set(key, { ...cached, fetchedAt: now });
-        return this.#unwrap(cached, url);
+        return { body: this.#unwrap(cached, url), fromCache: true };
       }
 
-      const body = await response.text();
+      const body = await this.#readBody(response, url);
 
       if (response.ok) {
         this.cache.set(key, {
@@ -224,7 +271,7 @@ export class HttpClient {
           fetchedAt: now,
           ttlMs: ttl.ttlMs,
         });
-        return body;
+        return { body, fromCache: false };
       }
 
       if (response.status === 404) {
@@ -241,7 +288,7 @@ export class HttpClient {
           await this.#sleep(delayMs);
           continue;
         }
-        if (cached) return this.#staleOrThrow(cached, url, new RateLimitError(url, body, resetAt));
+        if (cached) return { body: this.#staleOrThrow(cached, url, new RateLimitError(url, body, resetAt)), fromCache: true };
         throw new RateLimitError(url, body, resetAt);
       }
 
@@ -252,7 +299,7 @@ export class HttpClient {
           await this.#sleep(retryDelay);
           continue;
         }
-        return this.#staleOrThrow(cached, url, new HttpError(response.status, url, body));
+        return { body: this.#staleOrThrow(cached, url, new HttpError(response.status, url, body)), fromCache: true };
       }
 
       throw new HttpError(response.status, url, body);

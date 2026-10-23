@@ -13,6 +13,7 @@ export {
   isFresh,
   MemoryCache,
   SqliteCache,
+  type SqliteCacheOptions,
 } from "./http/cache.ts";
 export {
   HttpClient,
@@ -62,11 +63,22 @@ export interface Sources {
   close(): void;
 }
 
+/** The on-disk cache, or an in-memory one when the disk is not available (read-only home, broken file). */
+function openCache(options: SourcesOptions): HttpCache {
+  if (options.cache) return options.cache;
+  if (options.cachePath === ":memory:") return new MemoryCache();
+  const path = options.cachePath ?? defaultCachePath();
+  try {
+    return new SqliteCache(path);
+  } catch (error) {
+    options.onEvent?.({ type: "cache-fallback", path, error: error instanceof Error ? error.message : String(error) });
+    return new MemoryCache();
+  }
+}
+
 /** Wires one shared HTTP client, cache and token into ready-to-use API clients. */
 export async function createSources(options: SourcesOptions = {}): Promise<Sources> {
-  const cache =
-    options.cache ??
-    (options.cachePath === ":memory:" ? new MemoryCache() : new SqliteCache(options.cachePath ?? defaultCachePath()));
+  const cache = openCache(options);
   const http = new HttpClient({ cache, fetch: options.fetch, onEvent: options.onEvent, userAgent: options.userAgent });
   const token = options.token ?? (await resolveGitHubToken());
   return {
