@@ -146,7 +146,8 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
       log("sampling issues and pull requests");
       samples = await fetchSamples(github, ref.owner, ref.name);
     } catch (error) {
-      budget.note(`issue and PR samples unavailable: ${(error as Error).message.split("\n")[0]}`);
+      // A cut, not a note: the report is missing most of what it would otherwise contain, and says so.
+      budget.cut(`issue and PR samples unavailable: ${(error as Error).message.split("\n")[0]}; issues and pull requests were not analyzed, try again in a minute`);
     }
   }
   let runs: WorkflowRun[] = opts.skipSamples ? [] : forgeRuns;
