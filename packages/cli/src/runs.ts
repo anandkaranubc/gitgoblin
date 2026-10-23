@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { styleText } from "node:util";
 import type { RunResult } from "@gitgoblin/engine";
@@ -18,6 +18,8 @@ export interface RunSummary {
   costUsd: number;
   title: string | undefined;
   repo: string | undefined;
+  /** The run's workspace (a clone with its dependencies, often hundreds of megabytes) is still on disk. */
+  keepsWorkspace: boolean;
 }
 
 /** The repository's install step as the engine recorded it: an `install` event and `install-output.txt`. */
@@ -123,7 +125,9 @@ export function listRuns(workdir: string): RunSummary[] {
     if (!result) continue;
     const task = readJson<{ title?: string; repo?: { owner?: string; name?: string } }>(join(root, entry.name, "task.json"));
     const repo = task?.repo?.owner && task.repo.name ? `${task.repo.owner}/${task.repo.name}` : undefined;
-    runs.push({ runId: entry.name, status: result.status, reason: result.reason, costUsd: result.costUsd, title: task?.title, repo });
+    const workspace = readJson<{ path?: unknown }>(join(root, entry.name, "workspace.json"));
+    const keepsWorkspace = typeof workspace?.path === "string" && existsSync(workspace.path);
+    runs.push({ runId: entry.name, status: result.status, reason: result.reason, costUsd: result.costUsd, title: task?.title, repo, keepsWorkspace });
   }
   return runs.sort((a, b) => b.runId.localeCompare(a.runId));
 }
@@ -131,11 +135,48 @@ export function listRuns(workdir: string): RunSummary[] {
 export function formatRuns(runs: RunSummary[], style: Style, workdirFlag = ""): string {
   if (runs.length === 0) return "No runs yet. `gitgoblin contribute <repo>` starts one.";
   const dim = (text: string) => (style.color ? styleText("dim", text) : text);
+  const finished = runs.filter((run) => run.keepsWorkspace && run.status !== "awaiting_approval").length;
+  const hint = finished
+    ? `\n\n${dim(`${finished} finished run${finished === 1 ? " still keeps its" : "s still keep their"} workspace; \`gitgoblin clean --finished${workdirFlag}\` removes ${finished === 1 ? "it" : "them"} (reports and diffs stay).`)}`
+    : "";
   return runs
     .map((run) => {
       const head = [run.runId, run.status.padEnd(17), `$${run.costUsd.toFixed(2)}`, run.repo, run.title === undefined ? undefined : plain(run.title)].filter((part) => part !== undefined).join("  ");
       const detail = run.status === "awaiting_approval" ? `publish with: gitgoblin publish ${run.runId}${workdirFlag}` : plain(run.reason);
       return `${head}\n    ${dim(detail)}`;
     })
-    .join("\n");
+    .join("\n") + hint;
+}
+
+/** Bytes under `path`, counting files and symlinks themselves, never following a link. */
+export function directorySize(path: string): number {
+  let total = 0;
+  const stack = [path];
+  while (stack.length) {
+    const current = stack.pop()!;
+    let stat;
+    try {
+      stat = lstatSync(current);
+    } catch {
+      continue;
+    }
+    if (stat.isDirectory()) {
+      for (const name of readdirSync(current)) stack.push(join(current, name));
+    } else {
+      total += stat.size;
+    }
+  }
+  return total;
+}
+
+export function formatBytes(bytes: number): string {
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = unit === 0 || value >= 100 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unit]}`;
 }
