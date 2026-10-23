@@ -8,6 +8,7 @@ import { MemoryCache, RateLimitError } from "@gitgoblin/sources";
 import { describe, expect, it } from "vitest";
 import { formatExplanation, formatResults, highlightReasons } from "../src/format.ts";
 import { type Engine, type Runtime, run } from "../src/index.ts";
+import { AGENT_SDK_HINT } from "../src/siblings.ts";
 import { toQuery } from "../src/options.ts";
 import { sampleOpportunity, sampleReport, writeInstall, writeRun } from "./fixtures.ts";
 
@@ -654,6 +655,86 @@ describe("a failed install is explained where the person is looking", () => {
   });
 });
 
+describe("contribute --check-isolation", () => {
+  it("leaves the engine's default alone when the flag is not given", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect((siblings.calls[1]?.args[1] as RunOptions).checkIsolation).toBeUndefined();
+    expect(asked[0]).not.toMatch(/isolation|sandbox/);
+  });
+
+  it("passes strict through and says so in the question the person answers", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--check-isolation", "strict", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect((siblings.calls[1]?.args[1] as RunOptions).checkIsolation).toBe("strict");
+    expect(asked[0]).toContain("the repository's own commands in a strict sandbox that hides your home directory");
+  });
+
+  it("warns plainly when the repository's commands will run without a sandbox", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--check-isolation", "none", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(asked[0]).toContain("the repository's own install and test commands run on this machine WITHOUT a sandbox");
+  });
+
+  it("rejects an unknown mode as a usage error before doing anything", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules, answers: ["y"] });
+    expect(await run(["contribute", "acme/widget", "--check-isolation", "paranoid", "--workdir", siblings.workdir], runtime)).toBe(2);
+    expect(err.join("\n")).toMatch(/auto, sandbox, strict, none/);
+    expect(siblings.calls).toHaveLength(0);
+  });
+});
+
+describe("an install without the Agent SDK", () => {
+  // The npm package does not carry the SDK, so loading the engine throws the install hint there.
+  function withoutSdk(modules: Record<string, Record<string, unknown>>, answers: string[] = []) {
+    const fake = fakeRuntime({}, { modules, answers });
+    const engineLoads: string[] = [];
+    fake.runtime.loadModule = async (name) => {
+      if (name === "@gitgoblin/engine") {
+        engineLoads.push(name);
+        throw new Error(AGENT_SDK_HINT);
+      }
+      return modules[name];
+    };
+    return { ...fake, engineLoads };
+  }
+
+  it("still discovers, explains, analyzes, lists runs and shows them, without loading the engine", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261022-093000-bbbb");
+    const commands = [
+      ["discover", "contribute"],
+      ["explain", "acme/widget"],
+      ["goals"],
+      ["analyze", "acme/widget"],
+      ["runs", "--workdir", siblings.workdir],
+      ["show", "20261022-093000-bbbb", "--workdir", siblings.workdir],
+    ];
+    for (const args of commands) {
+      const { runtime, err, engineLoads } = withoutSdk(siblings.modules);
+      expect(await run(args, runtime), `${args.join(" ")}: ${err.join("\n")}`).toBe(0);
+      expect(engineLoads, args.join(" ")).toEqual([]);
+    }
+  });
+
+  it("stops contribute and publish with the one-line install hint", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261022-093000-bbbb");
+    const contribute = withoutSdk(siblings.modules, ["y"]);
+    expect(await run(["contribute", "acme/widget", "--workdir", siblings.workdir], contribute.runtime)).toBe(1);
+    expect(contribute.err.join("\n")).toContain(AGENT_SDK_HINT);
+
+    const publish = withoutSdk(siblings.modules, ["y"]);
+    expect(await run(["publish", "20261022-093000-bbbb", "--workdir", siblings.workdir], publish.runtime)).toBe(1);
+    expect(publish.err.join("\n")).toContain(AGENT_SDK_HINT);
+    expect(siblings.calls.filter((c) => c.fn !== "analyzeRepository")).toEqual([]);
+  });
+});
+
 describe("errors a first-time user meets", () => {
   const fetchFailed = (cause?: unknown) => Object.assign(new TypeError("fetch failed"), cause === undefined ? {} : { cause });
 
@@ -713,5 +794,25 @@ describe("errors a first-time user meets", () => {
     const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
     expect(await run(["analyze", "acme/widget"], runtime)).toBe(1);
     expect(err.join("\n")).toBe("error: HTTP 404 for https://api.github.com/repos/acme/widget/actions/runs");
+  });
+});
+
+describe("analyze and contribute say when issues were not read", () => {
+  it("analyze ends with the warning on stderr", async () => {
+    const report = sampleReport();
+    report.budget.notes = ["issue and PR samples unavailable: The GitHub GraphQL API needs a token"];
+    const siblings = fakeSiblings({ report });
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["analyze", "acme/widget"], runtime)).toBe(0);
+    expect(err.join("\n")).toContain("Issues and pull requests were not analyzed (The GitHub GraphQL API needs a token)");
+  });
+
+  it("contribute explains an empty result instead of only saying nothing was found", async () => {
+    const report = sampleReport([]);
+    report.budget.notes = ["issue and PR samples unavailable: fetch failed"];
+    const siblings = fakeSiblings({ report });
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["contribute", "acme/widget", "--workdir", siblings.workdir], runtime)).toBe(1);
+    expect(err.join("\n")).toMatch(/No contribution opportunities found in acme\/widget\. Issues and pull requests were not analyzed \(fetch failed\)/);
   });
 });

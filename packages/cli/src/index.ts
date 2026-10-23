@@ -5,17 +5,17 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { DiscoveryQuery, DiscoveryResult, Goal, RepoRef } from "@gitgoblin/core";
 import { GOAL_DESCRIPTIONS, GOALS, parseRepoRef, sameRepo } from "@gitgoblin/core";
-import type { Effort, Reporter } from "@gitgoblin/engine";
+import type { CheckIsolation, Effort, Reporter } from "@gitgoblin/engine";
 import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/intel";
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
 import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
-import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "./contribute.ts";
+import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { explainMissingRepository, explainNetworkFailure } from "./errors.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
 import { formatRuns, installSummary, listRuns, readInstall, readRun } from "./runs.ts";
-import { type IntelModule, type ModuleLoader, isNotInstalled, loadEngine, loadIntel } from "./siblings.ts";
+import { type IntelModule, type ModuleLoader, importSibling, loadEngine, loadIntel } from "./siblings.ts";
 import { plain } from "./text.ts";
 
 /** What the CLI needs from the engine; tests inject a fake. */
@@ -42,6 +42,16 @@ export interface Runtime {
   env: NodeJS.ProcessEnv;
 }
 
+/**
+ * The siblings the default runtime can load. The specifiers are literal so the npm bundle can see
+ * them: intel is inlined, and the engine becomes a chunk of its own that loads only for `contribute`
+ * and `publish`, since it is the one that needs the Agent SDK.
+ */
+const SIBLINGS: Record<string, () => Promise<unknown>> = {
+  "@gitgoblin/intel": () => import("@gitgoblin/intel"),
+  "@gitgoblin/engine": () => import("@gitgoblin/engine"),
+};
+
 const defaultRuntime: Runtime = {
   async createEngine({ onProgress }) {
     const { engine, sources } = await createDiscovery({ onProgress });
@@ -57,13 +67,8 @@ const defaultRuntime: Runtime = {
   openCache: () => new SqliteCache(defaultCachePath()),
   cachePath: defaultCachePath,
   async loadModule(name) {
-    try {
-      return (await import(name)) as Record<string, unknown>;
-    } catch (error) {
-      if (isNotInstalled(error, name)) return undefined;
-      const detail = (error instanceof Error ? error.message : String(error)).split("\n")[0];
-      throw new Error(`${name} is installed but failed to load: ${detail}`);
-    }
+    const load = SIBLINGS[name];
+    return load ? importSibling(name, load) : undefined;
   },
   async ask(question) {
     const rl = createInterface({ input: process.stdin, output: process.stderr });
@@ -82,6 +87,15 @@ const defaultRuntime: Runtime = {
 };
 
 const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
+const ISOLATIONS: readonly CheckIsolation[] = ["auto", "sandbox", "strict", "none"];
+
+/** What each isolation means for the repository's own commands, in the words of the question the person answers. */
+const ISOLATION_WORDS: Record<CheckIsolation, string | undefined> = {
+  auto: undefined,
+  sandbox: "the repository's own commands in a required OS sandbox",
+  strict: "the repository's own commands in a strict sandbox that hides your home directory",
+  none: "the repository's own install and test commands run on this machine WITHOUT a sandbox",
+};
 
 async function confirm(runtime: Runtime, question: string): Promise<boolean> {
   const answer = (await runtime.ask(`${question} [y/N] `)).trim().toLowerCase();
@@ -123,6 +137,11 @@ function repoArgument(value: string): RepoRef {
   const ref = parseRepoRef(value);
   if (!ref) throw new InvalidArgumentError(`Expected owner/name or a repository URL, got "${value}"`);
   return ref;
+}
+
+function isolationArgument(value: string): CheckIsolation {
+  if ((ISOLATIONS as readonly string[]).includes(value)) return value as CheckIsolation;
+  throw new InvalidArgumentError(`Expected one of ${ISOLATIONS.join(", ")}, got "${value}"`);
 }
 
 function effortArgument(value: string): Effort {
@@ -362,6 +381,8 @@ export function buildProgram(runtime: Runtime): Command {
       } else {
         runtime.stdout(text);
       }
+      const gap = issueGap(report);
+      if (gap) runtime.stderr(gap);
       const next = nextStepAfterAnalyze(report, ref, options.out && options.json ? options.out : undefined);
       if (next) runtime.stderr(next);
     });
@@ -377,8 +398,13 @@ export function buildProgram(runtime: Runtime): Command {
     .option("--workdir <dir>", "where the engine keeps runs and clones (default: $GITGOBLIN_WORKDIR or ~/.gitgoblin)")
     .option("--model <id>", "model for the engine")
     .option("--effort <level>", `effort for the engine, one of ${EFFORTS.join(", ")}`, effortArgument)
+    .option(
+      "--check-isolation <mode>",
+      `how the repository's own install and test commands run here, one of ${ISOLATIONS.join(", ")} (default auto: an OS sandbox when available; strict also hides your home directory, for repositories you do not trust)`,
+      isolationArgument,
+    )
     .option("-g, --goal <goal>", "discovery goal used for hints", goalArgument, "contribute")
-    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: string; workdir?: string; model?: string; effort?: Effort; goal: Goal }) => {
+    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: string; workdir?: string; model?: string; effort?: Effort; checkIsolation?: CheckIsolation; goal: Goal }) => {
       if (!runtime.canPrompt) {
         throw new Error("contribute needs an interactive terminal: it asks before running an agent and again before publishing anything.");
       }
@@ -399,7 +425,10 @@ export function buildProgram(runtime: Runtime): Command {
         const hints = await discoveryHints(runtime, ref, options.goal);
         report = await intel.analyzeRepository(ref, { hints, log: runtime.isInteractive ? (message: string) => runtime.stderr(message) : undefined });
       }
-      if (report.opportunities.length === 0) throw new Error(`No contribution opportunities found in ${slug(ref)}.`);
+      if (report.opportunities.length === 0) {
+        const gap = issueGap(report);
+        throw new Error(`No contribution opportunities found in ${slug(ref)}.${gap ? ` ${gap}` : ""}`);
+      }
 
       let opportunity = selectOpportunity(report, { issue: options.issue, opportunity: options.opportunity });
       if (!opportunity) {
@@ -423,9 +452,10 @@ export function buildProgram(runtime: Runtime): Command {
       // attaches a git worktree to that checkout. The person approves what will actually happen.
       const localPath = report.profile.repo.localPath;
       const where = localPath ? `a git worktree of ${localPath}` : "a local clone";
+      const isolationWords = options.checkIsolation ? ISOLATION_WORDS[options.checkIsolation] : undefined;
       const proceed = await confirm(
         runtime,
-        `${refusal ? "Run it anyway" : "Run an AI agent"} against ${slug(ref)} in ${where}, spending up to $${maxCostUsd.toFixed(2)}? Nothing is published without another explicit yes.`,
+        `${refusal ? "Run it anyway" : "Run an AI agent"} against ${slug(ref)} in ${where}${isolationWords ? `, with ${isolationWords}` : ""}, spending up to $${maxCostUsd.toFixed(2)}? Nothing is published without another explicit yes.`,
       );
       if (!proceed) {
         runtime.stdout("Stopped before running the engine.");
@@ -439,6 +469,7 @@ export function buildProgram(runtime: Runtime): Command {
           limits: { maxCostUsd },
           ...(options.model ? { model: options.model } : {}),
           ...(options.effort ? { effort: options.effort } : {}),
+          ...(options.checkIsolation ? { checkIsolation: options.checkIsolation } : {}),
           // Newer engines pass what they know about the install and the baseline as a second argument.
           approvePlan: async (plan, context?: PlanContextLike) => {
             const warning = describeEnvironment(context);

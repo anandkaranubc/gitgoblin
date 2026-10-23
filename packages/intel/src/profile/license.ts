@@ -18,7 +18,7 @@ export function licenseFromText(text: string): string | undefined {
     [/Creative Commons Attribution 4\.0|CC BY 4\.0/i, "CC-BY-4.0"],
     [/CC0 1\.0 Universal/i, "CC0-1.0"],
     [/European Union Public Licence\s+V\.?\s*1\.2/i, "EUPL-1.2"],
-    [/Eclipse Public License\s*-?\s*v?\s*2\.0/i, "EPL-2.0"],
+    [/Eclipse Public License[\s-]{0,6}v?[ \t]{0,3}2\.0/i, "EPL-2.0"],
     [/zlib License|This software is provided 'as-is', without any express or implied warranty/i, "Zlib"],
   ];
   for (const [re, id] of rules) if (re.test(head)) return id;

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 // @ts-expect-error: a plain .mjs build helper without type declarations
-import { collectPackages, writeNotices } from "../scripts/notices.mjs";
+import { collectPackages, writeNotices } from "../../../scripts/notices.mjs";
 
 const root = mkdtempSync(join(tmpdir(), "gitgoblin-notices-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));

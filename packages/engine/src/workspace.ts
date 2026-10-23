@@ -140,11 +140,13 @@ export async function removeWorkspace(ws: Workspace, env: Record<string, string>
 }
 
 /**
- * Package-manager stores that land in the workspace when the tool cannot reach its usual location.
- * They are never source, so the engine never stages them. `.yarn/cache` is not here: zero-install
- * repositories commit it.
+ * What the install step writes into the workspace: installed packages and package-manager stores
+ * that land there when the tool cannot reach its usual location. They are the install's output, not
+ * the contribution, so the engine never stages changes to them, even in a repository without a
+ * .gitignore or one that vendors node_modules (a GitHub Action, say), where they stay as they were at
+ * the base commit. `.yarn/cache` is not here: zero-install repositories commit it on purpose.
  */
-const STRAY_CACHES = [":(glob)**/.pnpm-store/**", ":(glob)**/.yarn-cache/**"];
+const STRAY_CACHES = [":(glob)**/node_modules/**", ":(glob)**/.pnpm-store/**", ":(glob)**/.yarn-cache/**"];
 
 /**
  * Stages every change, including new files, so diffs and commits see the same content. Stray tool
