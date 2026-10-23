@@ -1,7 +1,9 @@
 import type { Task } from "./types.ts";
 
 export function slugify(text: string, maxLength = 40): string {
+  // Titles come from issues; a bounded prefix keeps every pattern below linear and is all a slug needs.
   const slug = text
+    .slice(0, 400)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
@@ -37,6 +39,7 @@ export function typeForKind(kind: string): string {
  * the number is carried separately, so repeating it in a subject or branch only adds noise.
  */
 export function stripIssuePrefix(title: string): string {
+  title = title.slice(0, 400);
   return title.replace(/^\s*(?:(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?)\s+)?\[?#\d+\]?\s*[:\-\u2013\u2014]?\s*/i, "").trim() || title.trim();
 }
 
