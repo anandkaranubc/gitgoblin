@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { mcpCacheDir } from "../src/deps.ts";
-import { allowedHosts, hardenGitEnvironment, stripControl, stripControlDeep } from "../src/safety.ts";
+import { ANALYSIS_HOSTS, DISCOVERY_HOSTS, hardenGitEnvironment, stripControl, stripControlDeep } from "../src/safety.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "gitgoblin-mcp-safety-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
@@ -51,14 +51,10 @@ describe("hardenGitEnvironment", () => {
   });
 });
 
-describe("allowedHosts", () => {
-  it("reads GitHub alone, whatever the environment says", () => {
-    process.env.GITGOBLIN_MCP_HOSTS = "gitlab.com";
-    try {
-      expect([...allowedHosts()]).toEqual(["github.com"]);
-    } finally {
-      delete process.env.GITGOBLIN_MCP_HOSTS;
-    }
+describe("hosts", () => {
+  it("discovers on GitHub and analyzes on a fixed set of public forges", () => {
+    expect([...DISCOVERY_HOSTS]).toEqual(["github.com"]);
+    expect([...ANALYSIS_HOSTS]).toEqual(["github.com", "gitlab.com", "codeberg.org"]);
   });
 });
 
