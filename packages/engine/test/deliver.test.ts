@@ -251,3 +251,57 @@ describe("pull request text, run 5 findings", () => {
     expect(body).not.toContain("Deviation from plan");
   });
 });
+
+describe("pull request text, run 6 findings", () => {
+  const task = TaskSchema.parse({
+    id: "opp-6fa0e219",
+    repo: { owner: "testing-library", name: "eslint-plugin-testing-library" },
+    kind: "issue",
+    title: "Fix #1401: `no-wait-for-side-effects`: autofix breaks code when the `waitFor` callback is on one line",
+    issue: { number: 1401 },
+    conventions: { commitStyle: "conventional" },
+  });
+  const run6 = (commitSubject?: string): DeliveryInput => {
+    const i = input(task);
+    return {
+      ...i,
+      plan: { ...i.plan, goal: "Make the no-wait-for-side-effects autofix produce valid code when the waitFor callback is on one line", ...(commitSubject ? { commitSubject } : {}) },
+      notes: {
+        ...i.notes,
+        knownGaps: [
+          "A comment between the side effect and the next token on the same line is deleted by the fix.",
+          "The moved side effect is separated from the rest of the line by a single space, which Prettier may reformat.",
+        ],
+      },
+      verification: { ...i.verification, diff: { ...i.verification.diff, changedFiles: ["src/rules/no-wait-for-side-effects.ts"] } },
+      review: {
+        verdict: "approve",
+        checks: [],
+        findings: [
+          { severity: "nit", file: "src/rules/no-wait-for-side-effects.ts", line: 40, summary: "A comment between the side effect and the next token on that line gets deleted by the fix.", failureScenario: "", suggestion: "" },
+          { severity: "nit", file: "src/rules/no-wait-for-side-effects.ts", line: 52, summary: "Name the token helper after what it checks.", failureScenario: "", suggestion: "" },
+        ],
+        prNotes: "The moved side effect is joined to the rest of the line with a single space; Prettier may reformat it.",
+      },
+    };
+  };
+
+  it("drops the scope from a proposed subject that is too long rather than discarding it", () => {
+    expect(pullRequestTitle(run6("fix(no-wait-for-side-effects): handle single-line waitFor callbacks in autofix"))).toBe("fix: handle single-line waitFor callbacks in autofix");
+  });
+
+  it("falls back to the goal's words, not the bug report's, and never clips mid-phrase when it can avoid it", () => {
+    const title = pullRequestTitle(run6());
+    expect(title).not.toContain("breaks code");
+    expect(title.endsWith("…")).toBe(false);
+    expect(title.length).toBeLessThanOrEqual(72);
+    expect(title).toMatch(/^fix: make the no-wait-for-side-effects autofix produce valid code/);
+  });
+
+  it("does not repeat a known gap as a reviewer note or in the reviewer's notes", () => {
+    const body = pullRequestBody(run6());
+    expect(body.match(/comment between the side effect/gi)?.length).toBe(1);
+    expect(body.match(/single space/gi)?.length).toBe(1);
+    expect(body).toContain("Name the token helper");
+  });
+});
