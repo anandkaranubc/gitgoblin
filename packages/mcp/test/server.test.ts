@@ -260,23 +260,50 @@ describe("server", () => {
 });
 
 describe("untrusted repositories", () => {
-  it("refuses hosts outside the allowed forges before doing any work", async () => {
+  it("refuses private and unknown hosts before doing any work", async () => {
     const { deps, recorded } = fakeDeps();
     const { client } = await connect(deps);
-    for (const repository of ["https://10.0.0.5/team/app", "169.254.169.254/latest/meta", "git.internal.example/a/b", "https://gitlab.com/gitlab-org/gitlab", "codeberg.org/forgejo/forgejo"]) {
-      const result = await client.callTool({ name: "analyze_repository", arguments: { repository } });
-      expect(result.isError, repository).toBe(true);
-      expect(textOf(result)).toMatch(/not one of the forges gitgoblin reads/);
+    for (const repository of ["https://10.0.0.5/team/app", "169.254.169.254/latest/meta", "git.internal.example/a/b"]) {
+      for (const name of ["analyze_repository", "explain_repository"]) {
+        const result = await client.callTool({ name, arguments: { repository } });
+        expect(result.isError, `${name} ${repository}`).toBe(true);
+        expect(textOf(result)).toMatch(/is not one of the forges this tool reads/);
+      }
     }
     const seeded = await client.callTool({ name: "discover_repositories", arguments: { like: "https://192.168.1.10/a/b" } });
     expect(seeded.isError).toBe(true);
     expect(recorded.analyzed).toHaveLength(0);
+    expect(recorded.explained).toHaveLength(0);
     expect(recorded.queries).toHaveLength(0);
   });
 
-  it("accepts other hosts only when embedding code passes them", async () => {
+  it("analyzes GitLab and Codeberg repositories without asking GitHub-based discovery for hints", async () => {
     const { deps, recorded } = fakeDeps();
-    const server = createServer(deps, { hosts: ["github.com", "git.example.org"] });
+    const { client } = await connect(deps);
+    for (const repository of ["https://gitlab.com/gitlab-org/cli", "codeberg.org/dnkl/foot"]) {
+      const result = await client.callTool({ name: "analyze_repository", arguments: { repository } });
+      expect(result.isError, repository).toBeFalsy();
+    }
+    expect(recorded.analyzed.map((a) => a.ref.host)).toEqual(["gitlab.com", "codeberg.org"]);
+    expect(recorded.analyzed.every((a) => a.options.hints === undefined)).toBe(true);
+    expect(recorded.explained).toHaveLength(0);
+  });
+
+  it("keeps discovery and explain on GitHub, which they read by owner and name", async () => {
+    const { deps, recorded } = fakeDeps();
+    const { client } = await connect(deps);
+    const result = await client.callTool({ name: "explain_repository", arguments: { repository: "https://gitlab.com/gitlab-org/cli" } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/through GitHub's API; analyze_repository and get_opportunity also read gitlab.com and codeberg.org/);
+    const seeded = await client.callTool({ name: "discover_repositories", arguments: { like: "codeberg.org/dnkl/foot" } });
+    expect(seeded.isError).toBe(true);
+    expect(recorded.explained).toHaveLength(0);
+    expect(recorded.queries).toHaveLength(0);
+  });
+
+  it("accepts other analysis hosts only when embedding code passes them", async () => {
+    const { deps, recorded } = fakeDeps();
+    const server = createServer(deps, { analysisHosts: ["github.com", "git.example.org"] });
     const client = new Client({ name: "test", version: "0" });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);

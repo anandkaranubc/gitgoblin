@@ -2,7 +2,7 @@
 name: gitgoblin
 description: Find open-source projects worth contributing to, learning from, adopting or reviving, understand what a repository actually needs, and pick an evidence-backed piece of work. Use when someone asks where to contribute, wants a good first issue or a project to learn from, asks whether a library is healthy or maintained, or wants to help a specific repository and does not know what to do there. Uses the gitgoblin MCP tools when connected and explains how to connect them otherwise.
 license: MIT
-compatibility: Works best with the gitgoblin MCP server connected (installed from a gitgoblin GitHub release). Needs Node.js 24 and git on the machine; a GitHub token is optional. Reads github.com repositories only.
+compatibility: Works best with the gitgoblin MCP server connected (installed from a gitgoblin GitHub release). Needs Node.js 24 and git on the machine; a GitHub token is optional. Discovers on GitHub; analyzes GitHub, GitLab and Codeberg repositories.
 metadata:
   author: gitgoblin
   homepage: https://github.com/anandkaranubc/gitgoblin
@@ -27,7 +27,7 @@ All four are read-only MCP tools from the `gitgoblin` server.
 
 1. `discover_repositories` — goal plus filters. Goals: `contribute` (active, welcoming, newcomer can land a change), `learn` (well documented, mature), `adopt` (maintained, widely used), `revive` (valuable but quiet), `explore` (interesting, little known). Start with a goal and one language; add `topics`, `max_stars` (to escape the famous projects), `like` (more like a repository the person already likes). A cold search takes up to 40 seconds.
 2. `explain_repository` — every signal for one repository under a goal, with evidence. Use it to answer "is X healthy" or to compare candidates.
-3. `analyze_repository` — profile plus ranked opportunities for one repository. Clones it (blob-less) and reads manifests, CI, docs, issues and pull requests. Takes a few seconds to a minute.
+3. `analyze_repository` — profile plus ranked opportunities for one repository on GitHub, GitLab or Codeberg. Clones it (blob-less) and reads manifests, CI, docs, issues and pull requests. Takes a few seconds to a minute.
 4. `get_opportunity` — the full briefing for one item: evidence with excerpts, approach, acceptance criteria, files to read, the project's install and test commands, conventions, rules and etiquette.
 
 If the tools are not available, say so and offer the one-line setup for the person's agent (below) rather than guessing at repositories.
