@@ -167,6 +167,11 @@ const BOT_LOGINS = new Set([
   "mergify", "netlify", "vercel", "sonarcloud", "imgbot", "pyup-bot", "copilot",
 ]);
 
+/** Comment text without quoted lines ("> ..."), which repeat someone else's words. */
+export function unquoted(body: string | undefined): string {
+  return (body ?? "").split("\n").filter((l) => !l.trimStart().startsWith(">")).join("\n");
+}
+
 export function isBotLogin(login: string): boolean {
   const lower = login.toLowerCase();
   return lower.endsWith("[bot]") || BOT_LOGINS.has(lower) || lower.endsWith("-bot");

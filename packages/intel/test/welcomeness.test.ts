@@ -42,6 +42,9 @@ describe("welcomeness", () => {
     expect(findRefusal("This project is not accepting pull requests at this time.")).toBeDefined();
     expect(findRefusal("We do not accept pull requests that only fix typos.")).toBeUndefined();
     expect(findRefusal("Please don't open PRs for new features without an issue first.")).toBeUndefined();
+    expect(findRefusal("Passing Tests: Based on how much time we have, we may not review pull requests which aren't passing our tests.")).toBeUndefined();
+    expect(findRefusal("We are no longer accepting pull requests for this repository.")).toBeDefined();
+    expect(findRefusal("This repository is not accepting contributions.")).toBeDefined();
     const w = assessWelcomeness({ meta, samples: samples(), activity, inventory: inventoryOf(["README.md"]), docs: { readme: "Hi.\n\nWe are not accepting external contributions." }, now });
     expect(w.level).toBe("closed");
   });
