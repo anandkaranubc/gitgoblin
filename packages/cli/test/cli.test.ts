@@ -124,7 +124,9 @@ function fakeSiblings(options: { status?: RunStatus; report?: AnalysisReport; in
         reporter.phase("run", "20261022-abcd for Fix #42");
         reporter.info("orient Read src/main.rs");
         reporter.warn("baseline lint: fail");
-        const approved = await runOptions.approvePlan!(PLAN);
+        // Engines that report the install and the baseline pass them as a second argument; older ones do not.
+        const approve = runOptions.approvePlan as unknown as (plan: ChangePlan, context?: unknown) => Promise<boolean>;
+        const approved = await approve(PLAN, { baseline: [] });
         const runId = "20261022-abcd";
         const runDir = join(runOptions.workdir!, "runs", runId);
         mkdirSync(runDir, { recursive: true });
