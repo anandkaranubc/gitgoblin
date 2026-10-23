@@ -46,6 +46,9 @@ The first release of the `gitgoblin` command.
 - Prepared pull requests are written for the maintainers who will read them: the title describes
   the fix, the summary says what changed and why, checks that already failed before the change are
   marked as such, and notes about gitgoblin's own environment stay in your run report.
+- Files the repository's own install rewrites (a lockfile npm trims, say) are put back as
+  committed before anything else runs, so a prepared change never carries that churn; the run report
+  names them.
 - `publish` can be run again after a partial failure: if a pull request for the branch is already
   open (the push worked but the answer to creating it was lost), it is found and returned instead of
   failing.
