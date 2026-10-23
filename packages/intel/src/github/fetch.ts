@@ -210,6 +210,11 @@ function toComment(c: GqlComment): CommentSample {
   return { createdAt: c.createdAt, author: toActor(c.author), association: c.authorAssociation, body: c.body };
 }
 
+/** Public for the backtest script, which maps closed issues fetched with the full fragment. */
+export function mapIssueNode(node: unknown): IssueSample {
+  return toIssue(node as GqlIssue);
+}
+
 function toIssue(i: GqlIssue): IssueSample {
   const linked = new Map<number, LinkedPr>();
   for (const item of present(i.timelineItems?.nodes)) {

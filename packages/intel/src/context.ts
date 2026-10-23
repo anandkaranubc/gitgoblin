@@ -21,6 +21,10 @@ export interface AnalysisOptions {
   hints?: AnalysisHints | undefined;
   /** Clock, for reproducible tests. */
   now?: Date | undefined;
+  /** Skip issue, PR and CI sampling; only clone-based analysis runs. Useful for historical code backtests. */
+  skipSamples?: boolean | undefined;
+  /** Report every cluster instead of capping repetitive kinds (test gaps, TODOs, triage). For evaluation runs. */
+  noKindCaps?: boolean | undefined;
   log?: ((message: string) => void) | undefined;
   /** Override the fetch used for link checks and OSV. */
   fetchImpl?: typeof fetch | undefined;
@@ -43,6 +47,8 @@ export interface ResolvedOptions {
   hints: AnalysisHints | undefined;
   fetchImpl: typeof fetch | undefined;
   llm: AnalysisOptions["llm"];
+  skipSamples: boolean;
+  noKindCaps: boolean;
 }
 
 export function resolveOptions(options: AnalysisOptions, cacheDir: string): ResolvedOptions {
@@ -58,6 +64,8 @@ export function resolveOptions(options: AnalysisOptions, cacheDir: string): Reso
     hints: options.hints,
     fetchImpl: options.fetchImpl,
     llm: options.llm,
+    skipSamples: options.skipSamples ?? false,
+    noKindCaps: options.noKindCaps ?? false,
   };
 }
 
