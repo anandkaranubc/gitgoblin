@@ -6,35 +6,34 @@ order: 5
 
 # Status
 
-gitgoblin is in early development, built in the open. Discovery and repository analysis work from a clone today and from any MCP client through the server released on GitHub. The whole flow runs through one command, `gitgoblin`: `discover`, `analyze`, `contribute`, then `publish` once you have read the change. Preparing a contribution is experimental and costs money per run. Nothing is published to npm. This page is kept honest by hand; when it disagrees with the [README's status table](https://github.com/anandkaranubc/gitgoblin#what-works-today), the README wins.
+gitgoblin is in preview, built in the open. Discovery and repository analysis work today, from the `gitgoblin` command in a clone and from any agent that runs local MCP servers. `gitgoblin contribute` carries one opportunity on to a prepared pull request; it is experimental and costs money per run. Nothing is on npm yet. This page is kept honest by hand; when it disagrees with the [README](https://github.com/anandkaranubc/gitgoblin#what-works-today), the README wins.
 
 Last updated 2026-10-23.
 
-## What exists
+## What works
 
-| Part | Package | Status |
+| What | Commands | Status |
 | --- | --- | --- |
-| Shared types: repository identity, discovery goals and signals | `packages/core` | Working |
-| Clients for GitHub and package registries, with a local cache | `packages/sources` | Working |
-| Ranking repositories for a goal, with reasons | `packages/discovery` | Working |
-| The `gitgoblin` command: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish` | `packages/cli` | Working from a clone; not published to npm |
-| Repository profiling and opportunity discovery (`analyze`) | `packages/intel` | Working from a clone; scores still being calibrated |
-| Plan, implement, review, verify, prepare a pull request | `packages/engine` | Runs end to end on a test repository; experimental. See [its README](https://github.com/anandkaranubc/gitgoblin/blob/main/packages/engine/README.md) |
-| MCP server for Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents, plus an agent skill | `packages/mcp` | Released on GitHub (`mcp-v0.1.5`) and listed in the MCP Registry; npm publish pending. See [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) |
-| Brand, documentation and this website | `brand/`, `docs/`, `site/` | Live |
+| Rank repositories for a goal and explain each ranking | `discover`, `explain`, `goals` | Works |
+| Profile a repository and find evidence-backed work | `analyze` | Works; scores are still being calibrated |
+| Prepare a contribution with an AI agent, then publish it after you approve | `contribute`, `runs`, `show`, `publish` | Experimental; needs an Anthropic API key or Claude Code login, and each run costs money |
+| MCP server and agent skill for Claude Code, Codex, Cursor, Gemini CLI, VS Code and others | | Released on GitHub and listed in the MCP Registry; [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) says which clients were checked |
+
+`analyze` reads GitHub, GitLab and Gitea or Forgejo repositories (Codeberg among them); discovery and publishing are GitHub-only. Developed on macOS and tested on Linux in CI; Windows is untested.
 
 ## Being built now
 
-- Calibrating the scores behind `analyze`, so rankings across repositories mean the same thing.
-- Precision of `analyze`: issues that are still open but already fixed on the default branch, and files that merely quote a deprecated API, still show up as opportunities. The engine catches these during its first phase, but that costs a run.
-- The engine's install step for Python projects, which needs a per-run virtual environment to work inside the sandbox.
+- Publishing `gitgoblin` and `@gitgoblin/mcp` to npm, so neither needs a clone or a release URL.
+- Calibrating the scores behind `analyze`, so rankings across repositories mean the same thing, and cutting the false positives that audits and backtests find.
 - The maintainer opt-out list in [docs/excluded-projects.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/excluded-projects.md), enforced in discovery and the engine rather than only by people.
-- Real examples. The walkthrough on the front page is scripted from the design and the engine's command line; a recording of a real run will replace it.
+- Detecting a project's policy on AI-generated contributions. Until then, the person approving a contribution checks it by hand.
+- Real examples. The walkthrough on the front page is scripted; a recording of a real run will replace it.
 
 ## Deliberately later
 
+- Discovery and publishing on GitLab, Codeberg and self-hosted forges. Analysis already reads them; ranking and pull requests still go through GitHub.
 - Running many tasks in parallel, or on a schedule.
-- Container or VM isolation for the engine. Version 0.1 uses the Agent SDK sandbox plus hooks; the interface allows stronger isolation later.
+- Container or VM isolation for the engine. Today the model runs in the Agent SDK sandbox with hooks, and the repository's own commands run in an OS sandbox (`sandbox-exec` on macOS, `bwrap` on Linux); the interface allows stronger isolation later.
 - Reacting to CI results or maintainer review after a pull request is open.
 
 If you want to help with any of this, start with [CONTRIBUTING.md](https://github.com/anandkaranubc/gitgoblin/blob/main/CONTRIBUTING.md).
