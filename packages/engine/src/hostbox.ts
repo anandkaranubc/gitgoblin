@@ -116,7 +116,7 @@ export const CREDENTIAL_PATHS = [
 
 /** Tool caches under the home directory that package managers and compilers write to. */
 const CACHE_DIRS = [
-  ".npm", ".cache", ".pnpm-store", ".pnpm-state", ".local/share/pnpm", "Library/pnpm", "Library/Caches/Yarn", ".yarn/berry/cache", ".yarn/cache", ".yarn", ".bun/install/cache", ".deno",
+  ".npm", ".cache", ".pnpm-store", ".pnpm-state", ".local/share/pnpm", ".local/state/pnpm", "Library/pnpm", "Library/Preferences/pnpm", "Library/Caches/Yarn", ".yarn/berry/cache", ".yarn/cache", ".yarn", ".bun/install/cache", ".deno",
   ".cargo/registry", ".cargo/git", ".cargo/.package-cache", ".rustup/tmp", ".rustup/downloads", "go/pkg", ".m2/repository", ".gradle",
   ".local/share/uv", ".local/share/virtualenvs", ".gem", ".bundle/cache", ".nuget/packages", ".dotnet", ".composer/cache", ".mix", ".hex",
   ".julia", ".swiftpm", ".ivy2", ".sbt", "Library/Caches",
@@ -198,9 +198,13 @@ export function sandboxExecProfile(spec: HostSandboxSpec): string {
   // credential paths again so an allowed parent cannot expose them.
   const home = spec.allowRead ? spec.denyRead[0] : undefined;
   const credentials = spec.allowRead ? spec.denyRead.slice(1) : spec.denyRead;
-  if (home) lines.push(`(deny file-read* (subpath ${sbpl(home)}))`);
-  for (const p of spec.allowRead ?? []) lines.push(`(allow file-read* (subpath ${sbpl(p)}))`);
-  for (const p of credentials) lines.push(`(deny file-read* (subpath ${sbpl(p)}))`);
+  // Contents and listings under the home directory are denied; metadata is not, because tools look up
+  // every folder above their own files (pnpm resolves its store lock that way) and would fail otherwise.
+  if (home) lines.push(`(deny file-read-data (subpath ${sbpl(home)}))`);
+  // A rule on file-read-data is not overridden by a later one on file-read*, so carve-outs and the
+  // credential denies name both operations.
+  for (const p of spec.allowRead ?? []) lines.push(`(allow file-read* file-read-data (subpath ${sbpl(p)}))`);
+  for (const p of credentials) lines.push(`(deny file-read* file-read-data (subpath ${sbpl(p)}))`);
   return lines.join("\n") + "\n";
 }
 
