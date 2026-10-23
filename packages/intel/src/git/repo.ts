@@ -45,6 +45,15 @@ export interface GitRepo {
   revisionCount(path: string): Promise<number>;
   /** Tracked files under `paths` containing `word` as a whole word, case-insensitive. */
   grep(word: string, paths: string[]): Promise<string[]>;
+  /**
+   * Files containing `text` exactly (case-sensitive), at HEAD or at `rev`. Searching a past
+   * revision fetches the blobs of `paths` in a blob:none clone, so callers keep `paths` short.
+   */
+  grepExact(text: string, options?: { paths?: string[]; rev?: string }): Promise<string[]>;
+  /** The newest commit on the current branch at or before an ISO date. */
+  revBefore(dateIso: string): Promise<string | undefined>;
+  /** A file's text at a revision, or undefined when missing, binary or over `maxBytes`. One blob fetch in a blob:none clone. */
+  showFile(rev: string, path: string, maxBytes?: number): Promise<string | undefined>;
   /** Name of the branch origin/HEAD points at, or the current branch. */
   defaultBranch(): Promise<string>;
   /** Author date of the oldest reachable commit (bounded by clone depth). */
@@ -255,6 +264,40 @@ class LocalGitRepo implements GitRepo {
       return out.split("\n").filter((l) => l.length > 0);
     } catch {
       return []; // git grep exits 1 when nothing matches
+    }
+  }
+
+  async grepExact(text: string, options: { paths?: string[]; rev?: string } = {}): Promise<string[]> {
+    const args = ["grep", "-l", "-I", "-F", "-e", text];
+    if (options.rev) args.push(options.rev);
+    args.push("--", ...(options.paths ?? []));
+    try {
+      const out = await git(args, this.dir, 30_000);
+      return out
+        .split("\n")
+        .filter((l) => l.length > 0)
+        .map((l) => (options.rev && l.startsWith(`${options.rev}:`) ? l.slice(options.rev.length + 1) : l));
+    } catch {
+      return [];
+    }
+  }
+
+  async showFile(rev: string, path: string, maxBytes = 512 * 1024): Promise<string | undefined> {
+    try {
+      const { stdout } = await execFileAsync("git", ["show", `${rev}:${path}`], { cwd: this.dir, env: GIT_ENV, timeout: 60_000, maxBuffer: maxBytes, encoding: "buffer" });
+      if (looksBinary(stdout)) return undefined;
+      return stdout.toString("utf8");
+    } catch {
+      return undefined; // missing path, unknown revision, or larger than maxBytes
+    }
+  }
+
+  async revBefore(dateIso: string): Promise<string | undefined> {
+    try {
+      const sha = (await git(["rev-list", "-1", `--before=${dateIso}`, "HEAD"], this.dir, 30_000)).trim();
+      return sha || undefined;
+    } catch {
+      return undefined;
     }
   }
 
