@@ -136,6 +136,7 @@ export async function ensureClone(ref: RepoRef, options: CloneOptions): Promise<
   const target = ref.ref ?? "HEAD";
 
   if (await pathExists(join(dir, ".git"))) {
+    await git(["config", "core.autocrlf", "false"], dir, timeoutMs).catch(() => undefined); // clones made before this setting
     if (looksLikeSha(ref.ref)) {
       await git(["fetch", "--quiet", "--filter=blob:none", "origin", "HEAD"], dir, timeoutMs).catch(() => undefined);
       await checkoutCommit(dir, ref.ref!, timeoutMs);
@@ -148,7 +149,8 @@ export async function ensureClone(ref: RepoRef, options: CloneOptions): Promise<
 
   await mkdir(join(options.cacheDir, "repos"), { recursive: true });
   const sha = looksLikeSha(ref.ref);
-  const args = ["clone", "--quiet", "--filter=blob:none", "--single-branch", "--tags"];
+  // Files as committed: Windows' default core.autocrlf would add \r to every line the analyzers read.
+  const args = ["clone", "--quiet", "-c", "core.autocrlf=false", "-c", "core.eol=lf", "--filter=blob:none", "--single-branch", "--tags"];
   if (ref.ref && !sha) args.push("--branch", ref.ref);
   if (options.depth) args.push("--depth", String(options.depth));
   args.push(url, dir);
