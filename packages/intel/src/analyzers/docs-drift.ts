@@ -34,7 +34,7 @@ export function pythonImports(code: string): { module: string; name: string | un
     const from = /^\s*from\s+([\w.]+)\s+import\s+(.+)$/.exec(line);
     if (from) {
       for (const part of from[2]!.replace(/[()]/g, "").split(",")) {
-        const name = part.trim().split(/\s+as\s+/)[0]!.trim();
+        const name = part.trim().split(/[ \t]{1,20}as[ \t]{1,20}/)[0]!.trim();
         if (name && name !== "*") out.push({ module: from[1]!, name, line: i + 1 });
       }
       return;
