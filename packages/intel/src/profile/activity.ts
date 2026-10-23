@@ -15,6 +15,10 @@ export interface ActivityInput {
   now: Date;
 }
 
+function externalPrsAll(samples: ActivityInput["samples"]) {
+  return [...(samples?.closedPrs ?? []), ...(samples?.openPrs ?? [])].filter((p) => isExternal(p) && !p.author?.isBot);
+}
+
 export function computeActivity(input: ActivityInput): Activity {
   const { commits, samples, releases, now } = input;
   const since90 = isoDaysBefore(now, 90);
@@ -26,12 +30,16 @@ export function computeActivity(input: ActivityInput): Activity {
 
   // Items known to have comments whose text was not fetched (forge APIs cost one call per item) are unknown, not silent.
   const fetched = (commentCount: number, comments: unknown[]) => commentCount === 0 || comments.length > 0;
-  const prResponses = [...(samples?.closedPrs ?? []), ...(samples?.openPrs ?? [])]
-    .filter((p) => isExternal(p) && !p.author?.isBot && fetched(p.firstComments.length + p.reviews.length === 0 ? 0 : 1, [...p.firstComments, ...p.reviews]))
+  // When many items' comments could not be read (GitLab without a token), the readable rest is mostly the unanswered
+  // ones, and their median would describe only those: report the response time as unknown instead.
+  const mostlyUnread = <T extends { commentsFetched?: boolean | undefined }>(items: T[]) => items.length > 0 && items.filter((x) => x.commentsFetched === false).length > items.length * 0.2;
+  const externalIssues = [...(samples?.openIssues ?? []), ...(samples?.closedIssues ?? [])].filter((i) => isExternal(i) && !i.author?.isBot);
+  const prResponses = (mostlyUnread(externalPrsAll(samples)) ? [] : [...(samples?.closedPrs ?? []), ...(samples?.openPrs ?? [])])
+    .filter((p) => isExternal(p) && !p.author?.isBot && p.commentsFetched !== false)
     .map((p) => firstResponseHours(p.createdAt, p.author?.login, [...p.firstComments, ...p.reviews], now))
     .filter((h): h is number => h !== undefined);
-  const issueResponses = [...(samples?.openIssues ?? []), ...(samples?.closedIssues ?? [])]
-    .filter((i) => isExternal(i) && !i.author?.isBot && fetched(i.commentCount, i.firstComments))
+  const issueResponses = (mostlyUnread(externalIssues) ? [] : [...(samples?.openIssues ?? []), ...(samples?.closedIssues ?? [])])
+    .filter((i) => isExternal(i) && !i.author?.isBot && i.commentsFetched !== false && fetched(i.commentCount, i.firstComments))
     .map((i) => firstResponseHours(i.createdAt, i.author?.login, i.firstComments, now))
     .filter((h): h is number => h !== undefined);
 
