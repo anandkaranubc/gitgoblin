@@ -1,16 +1,16 @@
 ---
 title: Getting started
-description: Run the code that exists today, find your way around the repository, and work on the website.
+description: Try gitgoblin from the command line or from your AI agent, find your way around the repository, and work on the website.
 order: 1
 ---
 
 # Getting started
 
-gitgoblin is in early development. Discovery and repository analysis work from a clone today, and the `gitgoblin` command carries the whole flow from `discover` to `contribute`; preparing a contribution is experimental, runs a model, and costs money per run.
+gitgoblin is in preview. Discovery and repository analysis work today, and the `gitgoblin` command carries the whole flow from `discover` to `contribute`; preparing a contribution is experimental, runs a model, and costs money per run.
 
 ## Discover a repository
 
-You need [Node.js](https://nodejs.org) 24 or newer and git. Node 24 runs TypeScript directly, so there is no build step and nothing is published to npm yet.
+You need [Node.js](https://nodejs.org) 24 or newer and git. The command is not on npm yet, so run it from a clone:
 
 ```sh
 git clone https://github.com/anandkaranubc/gitgoblin.git
