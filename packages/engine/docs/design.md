@@ -94,10 +94,14 @@ Escalations and stops still write a full report so a human can pick up where the
   land there instead of in the operator's interpreter. `checkIsolation: "sandbox"` fails the run
   when no OS sandbox exists; `"strict"` also hides the home directory from repository commands
   except toolchain and cache directories, the temp directory and the run's prefix (credential
-  paths stay denied even inside those); `"none"` runs bare. The report says which happened. Commands the model discovers during orientation are
+  paths stay denied even inside those; folder metadata stays visible because tools resolve their
+  own paths) and, with `sandbox-exec`, limits the install to package registries through an
+  allowlisting CONNECT proxy on 127.0.0.1 (`egress.ts`; refused hosts are recorded; bubblewrap's
+  network namespace cannot reach a host-side proxy, so there the install network stays open);
+  `"none"` runs bare. The report says which happened. Commands the model discovers during orientation are
   accepted only as plain invocations of known tool runners: no shell operators, no inline code or
-  preload flags, no paths outside the checkout, no installs or download-and-run forms. The install
-  phase still runs the repository's own scripts with network access: use a container for
+  preload flags, no paths outside the checkout, no installs or download-and-run forms. Outside strict mode the install
+  phase still runs the repository's own scripts with open network access: use strict, or a container, for
   repositories you do not trust.
 - The agent edits the tree before verification runs on the host, so an edit to the files that decide
   what the check commands execute (package.json scripts, Makefiles, test-runner and linter config

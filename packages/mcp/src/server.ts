@@ -6,7 +6,7 @@ import { type CallToolResult, McpServer, type ServerContext } from "@modelcontex
 import { z } from "zod";
 import type { ServerDeps } from "./deps.ts";
 import { compactExplanation, compactReport, compactResult, formatDiscovery, formatExplanation, formatOpportunity, formatReport } from "./format.ts";
-import { DEFAULT_HOSTS, allowedHosts, stripControl, stripControlDeep } from "./safety.ts";
+import { ANALYSIS_HOSTS, DISCOVERY_HOSTS, stripControl, stripControlDeep } from "./safety.ts";
 import { VERSION } from "./version.ts";
 
 const MAX_RESULTS = 25;
@@ -41,12 +41,13 @@ export function explainFailure(error: unknown, env: NodeJS.ProcessEnv = process.
   return error instanceof Error ? error.message : String(error);
 }
 
-function parseRepository(input: string, hosts: ReadonlySet<string>): RepoRef | string {
+const DISCOVERY_REFUSAL = "Discovery and explain_repository look repositories up through GitHub's API; analyze_repository and get_opportunity also read gitlab.com and codeberg.org.";
+const ANALYSIS_REFUSAL = "Other hosts are refused so the server is never pointed at a private network.";
+
+function parseRepository(input: string, hosts: ReadonlySet<string>, refusal: string): RepoRef | string {
   const ref = parseRepoRef(input);
   if (!ref) return `"${input}" is not a repository. Use owner/name (for example BurntSushi/ripgrep) or a repository URL.`;
-  if (!hosts.has(ref.host)) {
-    return `${ref.host} is not one of the forges gitgoblin reads (${[...hosts].join(", ")}). Discovery and analysis use GitHub's API, so other forges are refused rather than answered about the wrong repository.`;
-  }
+  if (!hosts.has(ref.host)) return `${ref.host} is not one of the forges this tool reads (${[...hosts].join(", ")}). ${refusal}`;
   return ref;
 }
 
@@ -91,14 +92,14 @@ const discoverInput = z.object({
 type DiscoverArgs = z.infer<typeof discoverInput>;
 
 /** Pure mapping from tool arguments to the discovery query, so it can be tested without a server. */
-export function toQuery(args: DiscoverArgs, hosts: ReadonlySet<string> = allowedHosts()): DiscoveryQuery | string {
+export function toQuery(args: DiscoverArgs, hosts: ReadonlySet<string> = new Set(DISCOVERY_HOSTS)): DiscoveryQuery | string {
   const list = (values: string[] | undefined) => {
     const items = (values ?? []).map((v) => v.trim()).filter(Boolean);
     return items.length > 0 ? items : undefined;
   };
   let seed: RepoRef | undefined;
   if (args.like !== undefined) {
-    const parsed = parseRepository(args.like, hosts);
+    const parsed = parseRepository(args.like, hosts, DISCOVERY_REFUSAL);
     if (typeof parsed === "string") return `like: ${parsed}`;
     seed = parsed;
   }
@@ -124,14 +125,15 @@ interface CachedReport {
 }
 
 export interface ServerOptions {
-  /** Forges the tools accept; defaults to DEFAULT_HOSTS. For embedding code whose own clients read other forges. */
-  hosts?: Iterable<string> | undefined;
+  /** Forges the analysis tools accept; defaults to ANALYSIS_HOSTS. For embedding code that trusts other forges. */
+  analysisHosts?: Iterable<string> | undefined;
 }
 
 /** Builds the gitgoblin MCP server. Pass fakes in `deps` to test it without the network. */
 export function createServer(deps: ServerDeps, options: ServerOptions = {}): McpServer {
   const now = deps.now ?? Date.now;
-  const hosts: ReadonlySet<string> = options.hosts ? new Set(options.hosts) : allowedHosts();
+  const discoveryHosts: ReadonlySet<string> = new Set(DISCOVERY_HOSTS);
+  const analysisHosts: ReadonlySet<string> = new Set(options.analysisHosts ?? ANALYSIS_HOSTS);
   const reports = new Map<string, CachedReport>();
   const server = new McpServer({ name: "gitgoblin", version: VERSION }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS });
 
@@ -146,6 +148,8 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
 
   /** Discovery's view of the repository, handed to intel as hints. Optional: analysis works without it. */
   async function hintsFor(ref: RepoRef, goal: Goal, ctx: ServerContext): Promise<AnalysisHints | undefined> {
+    // Discovery reads GitHub by owner and name; for another forge it would describe a different repository.
+    if (!discoveryHosts.has(ref.host)) return undefined;
     try {
       const result = await withDiscovery(ctx, (session) => session.explain(ref, goal));
       return result ? { goal: result.goal, score: result.score, reasons: result.reasons, issues: result.issues } : undefined;
@@ -185,7 +189,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
       annotations: { readOnlyHint: true, openWorldHint: true, idempotentHint: true },
     },
     async (args, ctx) => {
-      const query = toQuery(args, hosts);
+      const query = toQuery(args, discoveryHosts);
       if (typeof query === "string") return failure(query);
       try {
         const results = await withDiscovery(ctx, (session) => session.discover(query));
@@ -200,7 +204,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
     "explain_repository",
     {
       title: "Explain a repository's ranking",
-      description: "Show every discovery signal for one repository under a goal: activity, responsiveness, bus factor, newcomer friendliness, docs, maturity, popularity, usage, momentum and license, each with its value, its weight for the goal and the evidence behind it. Use it to understand or compare specific repositories. Takes a few seconds.",
+      description: "Show every discovery signal for one GitHub repository under a goal: activity, responsiveness, bus factor, newcomer friendliness, docs, maturity, popularity, usage, momentum and license, each with its value, its weight for the goal and the evidence behind it. Use it to understand or compare specific repositories. Takes a few seconds.",
       inputSchema: z.object({
         repository: repositorySchema,
         goal: goalSchema.optional().describe(`Goal to weigh the signals for (default contribute): ${GOAL_TEXT}.`),
@@ -208,7 +212,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
       annotations: { readOnlyHint: true, openWorldHint: true, idempotentHint: true },
     },
     async (args, ctx) => {
-      const ref = parseRepository(args.repository, hosts);
+      const ref = parseRepository(args.repository, discoveryHosts, DISCOVERY_REFUSAL);
       if (typeof ref === "string") return failure(ref);
       const goal = args.goal ?? "contribute";
       try {
@@ -225,7 +229,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
     "analyze_repository",
     {
       title: "Analyze a repository",
-      description: `Profile one repository and rank what an outside contributor could do there, with evidence for every item. The profile covers what the project is, how alive it is, how it treats outsiders, its contribution rules, the commands to install and test it, and its conventions. Opportunities include open issues nobody is working on, endorsed feature requests, stale pull requests worth reviving, CI about to break, deprecated APIs, vulnerable dependencies, docs that contradict the code, dead links, missing tests and admitted tech debt. Use it after discover_repositories, or on any repository the person names. It clones the repository (blob-less, symlinks checked out as plain files) from ${DEFAULT_HOSTS.join(", ")} and takes from a few seconds to a minute; follow up with get_opportunity for the full briefing on one item.`,
+      description: `Profile one repository and rank what an outside contributor could do there, with evidence for every item. The profile covers what the project is, how alive it is, how it treats outsiders, its contribution rules, the commands to install and test it, and its conventions. Opportunities include open issues nobody is working on, endorsed feature requests, stale pull requests worth reviving, CI about to break, deprecated APIs, vulnerable dependencies, docs that contradict the code, dead links, missing tests and admitted tech debt. Use it after discover_repositories, or on any repository the person names. It reads repositories on ${ANALYSIS_HOSTS.join(", ")}, clones the repository (blob-less, symlinks checked out as plain files) and takes from a few seconds to a minute; follow up with get_opportunity for the full briefing on one item.`,
       inputSchema: z.object({
         repository: repositorySchema,
         max_opportunities: z.number().int().min(1).max(MAX_OPPORTUNITIES).optional().describe(`How many opportunities to return, 1 to ${MAX_OPPORTUNITIES} (default 10).`),
@@ -235,7 +239,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
       annotations: { readOnlyHint: true, openWorldHint: true, idempotentHint: true },
     },
     async (args, ctx) => {
-      const ref = parseRepository(args.repository, hosts);
+      const ref = parseRepository(args.repository, analysisHosts, ANALYSIS_REFUSAL);
       if (typeof ref === "string") return failure(ref);
       const max = args.max_opportunities ?? 10;
       try {
@@ -267,7 +271,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
       annotations: { readOnlyHint: true, openWorldHint: true, idempotentHint: true },
     },
     async (args, ctx) => {
-      const ref = parseRepository(args.repository, hosts);
+      const ref = parseRepository(args.repository, analysisHosts, ANALYSIS_REFUSAL);
       if (typeof ref === "string") return failure(ref);
       if (args.opportunity_id === undefined && args.issue_number === undefined) return failure("Give opportunity_id or issue_number.");
       const find = (report: AnalysisReport): ContributionOpportunity | undefined =>
