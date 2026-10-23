@@ -1,0 +1,40 @@
+# @gitgoblin/mcp
+
+gitgoblin as a [Model Context Protocol](https://modelcontextprotocol.io) server. It gives any MCP client (Claude Code, Codex, Cursor, Gemini CLI, Copilot in VS Code, and others) four read-only tools: discover repositories worth your time, explain why one scores the way it does, analyze what a repository actually needs, and get a full briefing on one piece of work.
+
+```sh
+claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
+```
+
+[docs/agents.md](../../docs/agents.md) has the one-liner for every client, the skill that teaches agents when to use the tools, and what has been verified. The package is not on npm yet; until it is, run it from a clone: `node packages/mcp/bin/gitgoblin-mcp.mjs` after `npm install`.
+
+## Tools
+
+| Tool | Input | Output |
+| --- | --- | --- |
+| `discover_repositories` | `goal` (default `contribute`), `languages`, `topics`, `keywords`, `min_stars`, `max_stars`, `pushed_within_days`, `created_within_days`, `license`, `like`, `exclude_owners`, `include_archived`, `include_forks`, `limit` (default 10, max 25) | Ranked repositories: stars, language, license, score, the three strongest reasons for and one against, starter issues for `contribute`. `structuredContent.results[]` carries the same fields. |
+| `explain_repository` | `repository`, `goal` | All ten discovery signals with value, weight for the goal and evidence. Unknown signals say so. |
+| `analyze_repository` | `repository`, `max_opportunities` (default 10, max 30), `check_links` (default false), `check_dependencies` (default true), `goal` | The profile (nature, activity, responsiveness, welcomeness with signals, rules, commands, conventions) and the ranked opportunities with their primary evidence. |
+| `get_opportunity` | `repository`, `opportunity_id` or `issue_number` | One opportunity in full plus how to work on the project: clone, commands, conventions, rules, etiquette. |
+
+`repository` accepts `owner/name` or a URL. Errors come back as tool results with advice (how to get a token, how to spell a repository), never as protocol failures. Long calls send progress notifications when the client provides a progress token.
+
+The server's `instructions` tell the agent the typical flow and the one rule that matters: it never opens issues, pull requests or comments on the person's behalf unless asked.
+
+## Environment
+
+| Variable | Effect |
+| --- | --- |
+| `GITHUB_TOKEN`, `GH_TOKEN` | Optional. Raises GitHub's limits and unlocks starter issues. Falls back to `gh auth token`. |
+| `GITGOBLIN_CACHE_DIR` | Where the HTTP cache and blob-less clones live (default `~/.cache/gitgoblin`). |
+
+## Development
+
+```sh
+npm test -w @gitgoblin/mcp                                       # protocol tests with fakes, offline
+npm run typecheck -w @gitgoblin/mcp
+GITGOBLIN_E2E=1 npx vitest run --root packages/mcp test/e2e      # the real server over stdio, against GitHub
+npm run bundle -w @gitgoblin/mcp                                 # what `npm pack` ships: dist/gitgoblin-mcp.mjs
+```
+
+`src/server.ts` builds the server from an injectable `ServerDeps` (discovery and intel); `src/format.ts` renders results for a model; `src/deps.ts` wires the real packages; `bin/gitgoblin-mcp.mjs` is the launcher. Development runs the TypeScript source on Node 24. Publishing bundles the source and the sibling packages into one file with no runtime dependencies, because Node will not strip types under `node_modules`. [docs/design.md](docs/design.md) explains the decisions; `server.json` is the manifest for the MCP Registry.

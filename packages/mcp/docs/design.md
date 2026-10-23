@@ -1,0 +1,62 @@
+# @gitgoblin/mcp design
+
+gitgoblin inside an AI coding agent. This page records what the server does, the decisions behind it, and what it deliberately leaves out.
+
+## The idea
+
+People already have an agent: Claude Code, Codex, Cursor, Gemini CLI, Copilot in VS Code. The agent can clone, read, edit, test and open pull requests. What it cannot do is find the right project, or tell which of a project's hundred open issues is real, unclaimed and wanted. That is gitgoblin's discovery and intel work, and the Model Context Protocol (MCP) is how every one of those agents takes in outside tools.
+
+So the server exposes gitgoblin's read-only half and stops there. It does not wrap the contribution engine: inside an agent, the agent is the engine. The hand-off is a briefing (`get_opportunity`) with everything the agent needs to start: evidence, approach, acceptance criteria, the project's own install and test commands, its conventions and its rules.
+
+## Tools
+
+Four tools, named as `verb_noun`, each annotated `readOnlyHint` and `openWorldHint` (they read public APIs and never write anywhere but the local cache).
+
+| Tool | Does | Typical time |
+| --- | --- | --- |
+| `discover_repositories` | Ranks GitHub repositories for a goal with filters; every result explains its ranking | 5 to 40 s cold, instant when cached |
+| `explain_repository` | Every signal, with evidence, for one repository under a goal | about 2 s |
+| `analyze_repository` | Profile plus ranked, evidence-backed opportunities for one repository | 1 to 60 s depending on repository size |
+| `get_opportunity` | One opportunity in full, plus how to work on the project | instant after an analysis |
+
+Design rules for the tools, in order of importance:
+
+1. **Small, readable results.** The raw `DiscoveryResult` list for ten repositories is 33 KB of JSON and an `AnalysisReport` is 25 KB. The tools return a compact text rendering written for a model (one block per result, strongest reasons only) and a compact `structuredContent` object for programs. The full opportunity is available on demand through `get_opportunity`.
+2. **Zero configuration.** Everything works without a token. `GITHUB_TOKEN`, `GH_TOKEN` or a GitHub CLI login raise the rate limits and unlock starter issues, exactly as in the command line. The token is read from the environment and never stored.
+3. **Progress, not silence.** Long calls send MCP progress notifications when the client provides a progress token, and logging notifications otherwise, so clients that reset their timeout on progress keep waiting and people see what is happening.
+4. **Errors are advice.** A rate limit says when it resets and how to get a token. An unknown repository says how to spell one. Tool errors are returned as `isError` results, never thrown, so the agent can recover.
+5. **Nothing on stdout.** The stdio transport owns stdout. The launcher redirects `console.log` to stderr before any library loads, because one stray print corrupts the protocol stream.
+
+Goals and their descriptions live in the tool descriptions rather than in a fifth tool. Resources and prompts are not used: tool support is universal across clients, resource and prompt support is not, and nothing here needs them.
+
+## Caching
+
+The discovery and intel packages already cache HTTP responses and clones under `~/.cache/gitgoblin`. The server adds one in-memory map of the last `AnalysisReport` per repository, kept for an hour, so `get_opportunity` is instant after `analyze_repository`. When the report is missing (a new server process, or the hour passed) the tool re-runs the analysis, which is fast on a warm cache.
+
+## Packaging
+
+The monorepo runs TypeScript from source on Node 24 and has no build step. That does not survive publishing: Node refuses to strip types for files under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so `npx @gitgoblin/mcp` cannot run `.ts` files, and the sibling packages are not published on their own.
+
+The answer is a single bundled file, produced only when packing:
+
+- `bin/gitgoblin-mcp.mjs` is the one entry point. It checks the Node version, guards stdout, then imports `dist/gitgoblin-mcp.mjs` when it exists (an installed package) and `src/main.ts` otherwise (a clone of the repository). Development stays build-free.
+- `npm pack` runs `scripts/bundle.mjs`, which uses esbuild to bundle `src/main.ts` with the workspace packages and every npm dependency into `dist/`. Node built-ins stay external. The published package therefore has no runtime dependencies, which makes `npx -y @gitgoblin/mcp` one download and a fast cold start.
+- The sibling packages and the libraries they use are `devDependencies` of this package: they are inputs to the bundle, not dependencies of the published artifact. esbuild is the one new development dependency, added for this reason.
+
+`server.json` next to the package is the manifest for the official MCP Registry. It can only be submitted after the npm package exists, and the registry verifies ownership through the `mcpName` field in `package.json`.
+
+## Distribution
+
+One package, several doors:
+
+- **Any MCP client**: the stdio server, `npx -y @gitgoblin/mcp`. The README has the exact command or config for each client, verified against the installed client where that was possible.
+- **Claude Code plugin**: `.claude-plugin/plugin.json` at the repository root bundles the MCP server with the agent skill, so one `/plugin install` gives both.
+- **Agent skill**: `skills/gitgoblin/SKILL.md` follows the Agent Skills format that Claude Code, Codex, Cursor, Gemini CLI and others read. It teaches the agent when to reach for gitgoblin, how to read scores and evidence, and how to behave in someone else's repository, which is the part a tool list cannot carry.
+- **Registries**: the official MCP Registry manifest is ready; directory submissions follow the npm release.
+
+## Non-goals
+
+- Running the contribution engine from the server. The host agent is better placed to do the work with the person watching, and the engine's approval prompts are built for a terminal.
+- Any tool that writes to GitHub. gitgoblin's etiquette puts a person between the tool and every external action; an MCP tool call is not that person.
+- A remote (HTTP) server. Everything runs locally against public APIs; a hosted version would need its own authentication and rate-limit story.
+- Client-specific features beyond tools. Revisit when resources or prompts are surfaced by more than one or two clients.

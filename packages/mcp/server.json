@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.anandkaranubc/gitgoblin",
+  "title": "gitgoblin",
+  "description": "Discover open-source repositories worth your time and evidence-backed contribution opportunities.",
+  "version": "0.1.0",
+  "websiteUrl": "https://anandkaranubc.github.io/gitgoblin/",
+  "repository": {
+    "url": "https://github.com/anandkaranubc/gitgoblin",
+    "source": "github",
+    "subfolder": "packages/mcp"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@gitgoblin/mcp",
+      "version": "0.1.0",
+      "runtimeHint": "npx",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "GITHUB_TOKEN",
+          "description": "Optional GitHub token that can read public repositories. Raises rate limits from 60 to 5000 requests per hour and unlocks starter-issue data. A GitHub CLI login works too.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
