@@ -305,7 +305,11 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     if (hostBox.kind === "none") {
       reporter.warn("repository commands run on this machine without an OS sandbox (none available or disabled); use a container for repositories you do not trust");
     } else {
-      reporter.info(`repository commands run under ${hostBox.kind}: writes limited to the workspace and tool caches, credential paths hidden, network only during install`);
+      reporter.info(
+        strict
+          ? `repository commands run under ${hostBox.kind} (strict): home directory hidden except toolchains and caches, credential paths hidden, install limited to package registries`
+          : `repository commands run under ${hostBox.kind}: writes limited to the workspace and tool caches, credential paths hidden, network only during install`,
+      );
     }
     // A per-run prefix for what the toolchain installs, so `pip install -e .` lands in a virtualenv
     // under the run directory rather than in the operator's interpreter (which the sandbox refuses).
