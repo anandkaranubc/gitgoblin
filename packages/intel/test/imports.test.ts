@@ -7,7 +7,10 @@ describe("import graph", () => {
 
   it("resolves python absolute and relative imports to files", () => {
     const text = "from pkg.core import run\nimport pkg.util.text\nfrom .util import text\nfrom . import core\n";
-    expect(pythonTargets("pkg/cli.py", text, paths).sort()).toEqual(["pkg/__init__.py", "pkg/core.py", "pkg/util/__init__.py", "pkg/util/text.py"]);
+    // `from . import core` and `from .util import text` import submodules: the edges go to those files, not to __init__.py.
+    expect(pythonTargets("pkg/cli.py", text, paths).sort()).toEqual(["pkg/core.py", "pkg/util/text.py"]);
+    // A name that is not a module links the module it comes from.
+    expect(pythonTargets("pkg/cli.py", "from .util import helper\nfrom pkg.core import (\n", paths).sort()).toEqual(["pkg/core.py", "pkg/util/__init__.py"]);
   });
 
   it("resolves relative JS/TS imports with extensions and index files", () => {
@@ -26,5 +29,14 @@ describe("import graph", () => {
       "pkg/a.py": "from pkg.core import x\n", "pkg/b.py": "from pkg.core import y\nfrom pkg.a import z\n", "pkg/c.py": "from pkg.core import w\n", "pkg/core.py": "", "pkg/__init__.py": "",
     }), undefined);
     expect(result.files).toEqual([{ path: "pkg/core.py", importedBy: 3 }]);
+  });
+});
+
+describe("import edges that should not count", () => {
+  it("ignores stylesheet and JSON imports, and expands Rust brace imports and child modules", () => {
+    const files = new Set(["src/app/button.tsx", "src/app/button.css", "src/app/data.json", "src/net.rs", "src/net/tcp.rs", "src/tcp.rs", "src/a.rs", "src/b.rs", "src/lib.rs"]);
+    expect(jsTargets("src/app/page.tsx", 'import "./button.css";\nimport data from "./data.json";\nimport { Button } from "./button";\n', files)).toEqual(["src/app/button.tsx"]);
+    expect(rustTargets("src/lib.rs", "use crate::{a, b::Thing};\n", files).sort()).toEqual(["src/a.rs", "src/b.rs"]);
+    expect(rustTargets("src/net.rs", "mod tcp;\n", files)).toEqual(["src/net/tcp.rs"]);
   });
 });
