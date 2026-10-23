@@ -59,7 +59,8 @@ export function compareWithBaseline(now: Check[], baseline: Check[] | undefined,
   const baselineStatus = new Map((baseline ?? []).map((c) => [c.name, c.status]));
   const regressions = now.filter((c) => failed(c) && baselineStatus.get(c.name) === "pass").map((c) => c.name);
   const blocking = now.filter((c) => failed(c) && baselineStatus.get(c.name) !== "fail");
-  return { checks: now, regressions, ok: blocking.length === 0, diff };
+  const preexisting = now.filter((c) => failed(c) && baselineStatus.get(c.name) === "fail").map((c) => c.name);
+  return { checks: now, regressions, ok: blocking.length === 0, diff, ...(preexisting.length ? { preexisting } : {}) };
 }
 
 export function describeChecks(checks: Check[]): string {
