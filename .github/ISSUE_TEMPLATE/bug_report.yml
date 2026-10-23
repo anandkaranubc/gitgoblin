@@ -28,8 +28,8 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Operating system and the output of `node --version`.
-      placeholder: macOS 15, Node v24.10.0
+      description: Operating system, `node --version`, the gitgoblin version (`gitgoblin --version`, or the MCP release you installed) and how you installed it. For the MCP server, also the agent you use.
+      placeholder: macOS 15, Node v24.10.0, gitgoblin 0.1.0 from a clone
   - type: textarea
     id: extra
     attributes:
