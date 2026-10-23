@@ -96,3 +96,34 @@ describe("createSdkRunner transient failures", () => {
     expect(result.costUsd).toBeCloseTo(0.6, 5);
   });
 });
+
+describe("createSdkRunner deadlines", () => {
+  it("aborts a phase that outlives its deadline and reports it as timed out", async () => {
+    const calls: { options: Record<string, unknown> }[] = [];
+    const hanging = ((args: { options: Record<string, unknown> }) => {
+      calls.push(args);
+      const signal = (args.options["abortController"] as AbortController).signal;
+      return (async function* () {
+        yield init("s9");
+        await new Promise<void>((resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted by caller")));
+          setTimeout(resolve, 10_000);
+        });
+      })();
+    }) as never;
+    const started = Date.now();
+    const result = await createSdkRunner({ workspace: "/ws", task: { kind: "issue" }, isolation: "none", env: {}, query: hanging }).run({ ...spec, timeoutMs: 100 });
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/timed out after/);
+    // A deadline is not a transient failure: no resume.
+    expect(calls).toHaveLength(1);
+  });
+
+  it("passes no deadline when none is set", async () => {
+    const { query, calls } = scriptedQuery([[init("s1"), success("s1", 0.1, 1)]]);
+    const result = await createSdkRunner({ workspace: "/ws", task: { kind: "issue" }, isolation: "none", env: {}, query }).run(spec);
+    expect(result.ok).toBe(true);
+    expect((calls[0]?.options["abortController"] as AbortController).signal.aborted).toBe(false);
+  });
+});

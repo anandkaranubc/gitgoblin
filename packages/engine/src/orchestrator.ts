@@ -261,7 +261,10 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   const phase = async <T>(runner: AgentRunner, spec: PhaseSpec<T>): Promise<PhaseResult<T> & { output: T }> => {
     reporter.phase(spec.name);
     journal.event(spec.name, "start", { resume: spec.resume ?? null });
-    const result = await runner.run({ ...spec, maxBudgetUsd: Math.max(0.5, limits.maxCostUsd - costUsd) });
+    // The remaining wall-clock budget bounds the phase itself, not just the gate after it, so a
+    // stalled session cannot hold the run past its limit.
+    const remainingMs = Math.max(30_000, limits.maxWallClockMs - (Date.now() - started));
+    const result = await runner.run({ ...spec, maxBudgetUsd: Math.max(0.5, limits.maxCostUsd - costUsd), timeoutMs: remainingMs });
     costUsd += result.costUsd;
     phases.push({ name: spec.name, costUsd: result.costUsd, turns: result.turns, durationMs: result.durationMs, ok: result.ok, denials: result.denials.length });
     journal.event(spec.name, "end", { ok: result.ok, costUsd: result.costUsd, turns: result.turns, errors: result.errors, denials: result.denials });
