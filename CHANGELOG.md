@@ -24,6 +24,9 @@ a pull request a maintainer would want to merge.
   is marked as possibly fixed; a dependency update an open pull request already makes is skipped;
   generated files and code that only quotes a pattern are not reported. `--llm` adds a second
   opinion from Claude on issue triage; it is off by default, needs an API key and costs money.
+- The install command `analyze` reports installs what the project declares for development (PEP 735
+  dependency groups or real extras, not an assumed `.[dev]`) and installs from a committed lockfile
+  without rewriting it (`npm ci`, `pnpm install --frozen-lockfile`, and the yarn and bun equivalents).
 
 **Contribute (experimental)**
 
