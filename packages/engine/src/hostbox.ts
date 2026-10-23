@@ -92,6 +92,21 @@ export function hostSandboxFor(isolation: CheckIsolation, detect: () => HostSand
   return { kind: "none" };
 }
 
+/**
+ * Environment for commands that run with the network cut. Package managers otherwise spend minutes
+ * retrying a registry they cannot reach (npm's retry backoff alone took over two minutes per check
+ * under bubblewrap); told they are offline, they use what is installed or fail at once.
+ */
+export const OFFLINE_ENV: Readonly<Record<string, string>> = {
+  npm_config_offline: "true",
+  npm_config_update_notifier: "false",
+  YARN_ENABLE_NETWORK: "0",
+  PIP_NO_INDEX: "1",
+  UV_OFFLINE: "1",
+  CARGO_NET_OFFLINE: "true",
+  GOPROXY: "off",
+};
+
 /** Credential locations under the home directory that repository commands never need to read. */
 export const CREDENTIAL_PATHS = [
   ".ssh", ".aws", ".azure", ".gnupg", ".netrc", ".npmrc", ".pypirc", ".git-credentials", ".docker", ".kube", ".terraform.d",
