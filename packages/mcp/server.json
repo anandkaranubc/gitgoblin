@@ -3,7 +3,7 @@
   "name": "io.github.anandkaranubc/gitgoblin",
   "title": "gitgoblin",
   "description": "Discover open-source repositories worth your time and evidence-backed contribution opportunities.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "websiteUrl": "https://anandkaranubc.github.io/gitgoblin/",
   "repository": {
     "url": "https://github.com/anandkaranubc/gitgoblin",
@@ -13,9 +13,11 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.0/gitgoblin.mcpb",
-      "fileSha256": "96e929801863a329220eb6d9eb49965b5d2261738dae4d6c81a78ae8a5474d5d",
-      "transport": { "type": "stdio" },
+      "identifier": "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.1/gitgoblin.mcpb",
+      "fileSha256": "1f652811f383f6608dcb5ea214c94f01c668c61760e68df93f3bec029069a049",
+      "transport": {
+        "type": "stdio"
+      },
       "environmentVariables": [
         {
           "name": "GITHUB_TOKEN",
