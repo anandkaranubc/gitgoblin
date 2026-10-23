@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { DiscoveryQuery, DiscoveryResult } from "@gitgoblin/core";
 import type { ChangePlan, RunOptions, RunResult, RunStatus } from "@gitgoblin/engine";
 import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/intel";
@@ -305,7 +305,8 @@ describe("analyze", () => {
     const siblings = fakeSiblings();
     const { runtime } = fakeRuntime({}, { modules: siblings.modules });
     expect(await run(["analyze", "acme/widget", "--local", "/work/widget"], runtime)).toBe(0);
-    expect(siblings.calls[0]?.args[0]).toEqual({ host: "github.com", owner: "acme", name: "widget", localPath: "/work/widget" });
+    // The CLI resolves the path, which on Windows also adds the current drive.
+    expect(siblings.calls[0]?.args[0]).toEqual({ host: "github.com", owner: "acme", name: "widget", localPath: resolve("/work/widget") });
   });
 
   it("ends by saying how to continue, with the best opportunity's id, or the saved report", async () => {

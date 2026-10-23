@@ -31,7 +31,23 @@ node packages/eval/src/cli.ts tracker packages/eval/data/discovery-backtest-2026
 node packages/eval/src/cli.ts tracker kinds packages/eval/data/discovery-backtest-2026-06-20.json --out packages/eval/data/tracker-kinds-2026-06-20.json
 ```
 
-`fetch` needs a GitHub token (`gh auth login` or `GITHUB_TOKEN`) and caches
+## Changing discovery's ranking
+
+The datasets keep discovery's input as it was on each date, so a change to
+`packages/discovery` can be measured on the same past without fetching again:
+
+```sh
+node packages/eval/src/cli.ts discovery compare packages/eval/data/discovery-backtest-2026-02-15.json
+node packages/eval/src/cli.ts discovery evaluate packages/eval/data/discovery-backtest-2025-10-15.json --rescore
+```
+
+`compare` scores every repository with the code checked out now and reports
+the paired change in both outcomes: graded newcomer success (nDCG@10) and a
+newcomer's odds (correlation with the share of their pull requests merged).
+Design a change on one date and test it on the others; `docs/design.md`
+records the rule used so far, and why the last candidate was retired.
+
+ (`gh auth login` or `GITHUB_TOKEN`) and caches
 every response under `packages/eval/.cache/`, so a snapshot can be re-derived
 without the network. `evaluate`, `learn`, `tracker` and `report` are offline
 and run on the committed files under `data/`.
