@@ -1,6 +1,6 @@
 # Getting started
 
-This takes you from a fresh clone to a ranked list of repositories, then to a report on one repository with concrete work to do. It takes about ten minutes. Preparing a pull request from that report is described at the end.
+This takes you from a fresh clone to a ranked list of repositories, then to a report on one repository with concrete work to do. It takes about ten minutes. Step 8 turns one item of that report into a pull request you approve.
 
 ## 1. Install
 
@@ -141,8 +141,45 @@ Etiquette: Never open a competing PR without asking first; credit the original a
 
 The top half is the **profile**: what the repository is, how alive it is, how it treats outsiders (each judgment with its evidence), the exact commands to install and test it, and the conventions your change should follow. The bottom half is the **opportunities**, best first. Each one names its kind (an open issue, a stale pull request, CI about to break, docs that contradict the code, and so on), the factors behind its score, evidence you can click, the steps a contributor would take, and the etiquette the project expects. Scores are still being calibrated against real repositories, so trust the evidence more than the number.
 
-Useful flags: `--json` prints the full report as data (the input the contribution engine takes), `--out report.md` writes it to a file, `--max 5` caps the number of opportunities, and `--no-links` and `--no-deps` skip the slower external link and dependency checks. To analyze a checkout you already have, use the intel package's own command: `npx gitgoblin-intel analyze --local ./path`. Issue and pull request analysis needs a GitHub token (step 5); without one the report still covers the code and says what it skipped.
+Useful flags: `--json --out report.json` saves the full report as data (what step 8 can reuse, so the repository is not analyzed twice), `--out report.md` writes the Markdown to a file, `--max 5` caps the number of opportunities, `--local ./path` analyzes a checkout you already have, and `--no-links` and `--no-deps` skip the slower external link and dependency checks. Issue and pull request analysis needs a GitHub token (step 5); without one the report still covers the code and says what it skipped. When it finds opportunities, the command ends by printing the `contribute` command for the best one.
 
-## What comes next
+## 8. Prepare a contribution
 
-**Prepare a contribution.** The engine that investigates, implements, verifies, reviews, and prepares a pull request runs from its own package today and has completed an end-to-end run on a test repository with a real model. It takes the JSON report from step 7 and one opportunity id. It is experimental, costs money per run, and needs an Anthropic API key or Claude Code login, a git identity, and the GitHub CLI for publishing. [packages/engine/README.md](../packages/engine/README.md) has the commands. Read [etiquette.md](etiquette.md) before publishing anything to someone else's project.
+This is the experimental part. It runs an AI agent against a local clone, costs money per run, and needs an Anthropic API key or Claude Code login, a git identity, and the [GitHub CLI](https://cli.github.com) logged in for publishing. Read [etiquette.md](etiquette.md) first: you are about to prepare a change for someone else's project.
+
+```sh
+npx gitgoblin contribute jd/tenacity --report report.json
+```
+
+Without `--report` it analyzes the repository again. Without `--opportunity <id>` or `--issue <n>` it lists the opportunities and asks which one, marking any the engine would refuse (someone is already on the issue, or the item needs a reply rather than a patch):
+
+```
+Opportunities in jd/tenacity, best first:
+
+ 1. Fix #511: Unreachable code in `before_log` reached
+    issue · score 0.59 · small effort · id opp-d6b43e61
+    Hello, I've reached code that is marked as unreachable in before_log…
+    evidence: https://github.com/jd/tenacity/issues/511 and 1 more
+ 2. Fix #507: Statistics can be incorrectly initialized inside Temporal contexts
+    issue · score 0.56 · small effort · id opp-917f92c3
+    …
+    ! someone is already working on #507 (an assignee or an open pull request)
+
+Which opportunity? [1-2, or an id; Enter for 1]
+```
+
+Then it asks three questions, and there is no flag to skip any of them:
+
+1. **Run the agent?** It names the repository and the spending cap (`--max-cost`, default $2). Saying no costs nothing.
+2. **Implement this plan?** After investigating, the agent proposes a plan: goal, steps, files, tests. You see it in plain words before any code changes.
+3. **Open a draft pull request?** Only after the change passed the project's own checks against a baseline and an independent review. You see the run's report, the proposed pull request title and description, and the path of the diff. Read the diff. If you say no, nothing is pushed or posted anywhere; the change stays in the run directory. (The repository's code and the issue text have already been sent to the model provider you configured, from your machine, during the run.)
+
+Every run lives under `~/.gitgoblin/runs/<id>/` (or `$GITGOBLIN_WORKDIR`). To come back later:
+
+```sh
+npx gitgoblin runs                       # every run, newest first, with its status
+npx gitgoblin show <runId>               # the report; --diff for the patch, --pr for the PR text
+npx gitgoblin publish <runId>            # asks, then pushes with your gh login and opens a draft PR
+```
+
+[packages/cli/README.md](../packages/cli/README.md) documents every option. The engine's own command, `gitgoblin-engine`, can drive the same runs directly when given the same directory (`--workdir ~/.gitgoblin`); [packages/engine/README.md](../packages/engine/README.md) covers that and the design behind the pipeline.

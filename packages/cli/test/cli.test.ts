@@ -1,9 +1,15 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { DiscoveryQuery, DiscoveryResult } from "@gitgoblin/core";
+import type { ChangePlan, RunOptions, RunResult, RunStatus } from "@gitgoblin/engine";
+import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/intel";
 import { MemoryCache, RateLimitError } from "@gitgoblin/sources";
 import { describe, expect, it } from "vitest";
 import { formatExplanation, formatResults, highlightReasons } from "../src/format.ts";
 import { type Engine, type Runtime, run } from "../src/index.ts";
 import { toQuery } from "../src/options.ts";
+import { sampleOpportunity, sampleReport, writeRun } from "./fixtures.ts";
 
 function sampleResult(overrides: Partial<DiscoveryResult> = {}): DiscoveryResult {
   return {
@@ -38,7 +44,7 @@ function sampleResult(overrides: Partial<DiscoveryResult> = {}): DiscoveryResult
   };
 }
 
-function fakeRuntime(engine: Partial<Engine> = {}, extra: { modules?: Record<string, Record<string, unknown>>; answers?: string[]; canPrompt?: boolean } = {}) {
+function fakeRuntime(engine: Partial<Engine> = {}, extra: { modules?: Record<string, Record<string, unknown>>; answers?: string[]; canPrompt?: boolean; isInteractive?: boolean } = {}) {
   const out: string[] = [];
   const err: string[] = [];
   const asked: string[] = [];
@@ -66,35 +72,77 @@ function fakeRuntime(engine: Partial<Engine> = {}, extra: { modules?: Record<str
     stdout: (t) => out.push(t),
     stderr: (t) => err.push(t),
     color: false,
-    isInteractive: false,
+    isInteractive: extra.isInteractive ?? false,
     env: {},
   };
   return { runtime, out, err, cache, asked };
 }
 
-function fakeSiblings(status = "awaiting_approval") {
+const PLAN: ChangePlan = {
+  goal: "Thread --color through to the renderer",
+  steps: ["Pass the flag from main to render()", "Add a regression test"],
+  filesToModify: ["src/main.rs"],
+  filesToCreate: [],
+  testsToAdd: ["color flag disables escapes"],
+  outOfScope: [],
+  risks: [],
+  needsNewDependency: false,
+};
+
+/**
+ * Stand-ins for @gitgoblin/intel and @gitgoblin/engine that behave like the real ones at the
+ * boundary: intel returns a schema-shaped report; the engine reports progress through the Reporter
+ * object, asks for plan approval, and leaves a run directory with the files a person reads.
+ */
+function fakeSiblings(options: { status?: RunStatus; report?: AnalysisReport } = {}) {
   const calls: Array<{ fn: string; args: unknown[] }> = [];
+  const report = options.report ?? sampleReport();
+  const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-cli-"));
   const modules = {
     "@gitgoblin/intel": {
-      analyzeRepository: async (...args: unknown[]) => {
-        calls.push({ fn: "analyzeRepository", args });
-        return { profile: { languages: ["Rust"] }, opportunities: [{ issue: { number: 42, title: "Add --color flag" }, summary: "Add a flag" }] };
+      analyzeRepository: async (ref: RepoRefInput, analysisOptions: AnalysisOptions) => {
+        calls.push({ fn: "analyzeRepository", args: [ref, analysisOptions] });
+        return report;
       },
-      renderMarkdown: (report: { profile: { languages: string[] } }) => `# Report\n\nLanguages: ${report.profile.languages.join(", ")}`,
+      renderMarkdown: (r: AnalysisReport) => `# ${r.profile.repo.owner}/${r.profile.repo.name}\n\n## Opportunities (${r.opportunities.length})`,
+      AnalysisReport: {
+        parse: (value: unknown) => {
+          // Shaped like a zod error: a message that starts with the JSON issue list, and an `issues` array.
+          if (!value || typeof value !== "object" || (value as { version?: string }).version !== "1") {
+            const issues = [{ path: ["version"], message: 'Invalid input: expected "1"' }];
+            throw Object.assign(new Error(JSON.stringify(issues, null, 2)), { issues });
+          }
+          return value as AnalysisReport;
+        },
+      },
     },
     "@gitgoblin/engine": {
-      runContribution: async (input: unknown, options: { approvePlan: (plan: string) => Promise<boolean> }) => {
-        calls.push({ fn: "runContribution", args: [input] });
-        const approved = await options.approvePlan("1. edit main.rs");
-        return { runId: "run-1", runDir: "/nonexistent/run-1", status: approved ? status : "stopped", costUsd: 0.42, questions: [] };
+      runContribution: async (input: unknown, runOptions: RunOptions): Promise<RunResult> => {
+        calls.push({ fn: "runContribution", args: [input, runOptions] });
+        const reporter = runOptions.reporter!;
+        reporter.phase("run", "20261022-abcd for Fix #42");
+        reporter.info("orient Read src/main.rs");
+        reporter.warn("baseline lint: fail");
+        const approved = await runOptions.approvePlan!(PLAN);
+        const runId = "20261022-abcd";
+        const runDir = join(runOptions.workdir!, "runs", runId);
+        mkdirSync(runDir, { recursive: true });
+        const status = approved ? (options.status ?? "awaiting_approval") : "stopped";
+        writeFileSync(join(runDir, "report.md"), `# gitgoblin run ${runId}\n\n- Status: **${status}**\n\n## Verification\n- test: pass (cargo test, 12s)\n\n## Review: approve\n`);
+        if (status === "awaiting_approval") {
+          writeFileSync(join(runDir, "pr-title.txt"), "fix: honour --color on Windows\n");
+          writeFileSync(join(runDir, "pr.md"), "## Summary\n\nFixes #42\n");
+          writeFileSync(join(runDir, "diff.patch"), "diff --git a/src/main.rs b/src/main.rs\n");
+        }
+        return { runId, runDir, status, reason: approved ? "ready for human review" : "plan rejected by the operator", questions: [], workspace: join(runDir, "workspace"), branch: "gitgoblin/fix-42", costUsd: 0.42, durationMs: 61_000 };
       },
       publishRun: async (...args: unknown[]) => {
         calls.push({ fn: "publishRun", args });
-        return { url: "https://github.com/acme/widget/pull/7" };
+        return { url: "https://github.com/acme/widget/pull/7", head: "me:gitgoblin/fix-42", pushedTo: "https://github.com/me/widget.git", commands: [] };
       },
     },
   };
-  return { modules, calls };
+  return { modules, calls, workdir };
 }
 
 describe("toQuery", () => {
@@ -169,6 +217,15 @@ describe("run", () => {
     expect(err.join("\n")).toMatch(/pass --seed \d+/);
   });
 
+  it("points an interactive discover at the next command", async () => {
+    const { runtime, err } = fakeRuntime({}, { isInteractive: true });
+    expect(await run(["discover", "contribute"], runtime)).toBe(0);
+    expect(err.join("\n")).toContain("gitgoblin analyze acme/widget");
+    const quiet = fakeRuntime({}, { isInteractive: false });
+    expect(await run(["discover", "contribute"], quiet.runtime)).toBe(0);
+    expect(quiet.err.join("\n")).not.toContain("gitgoblin analyze");
+  });
+
   it("explains a repository and fails cleanly when it does not exist", async () => {
     const { runtime, out } = fakeRuntime();
     expect(await run(["explain", "acme/widget", "--goal", "adopt"], runtime)).toBe(0);
@@ -215,22 +272,180 @@ describe("run", () => {
   });
 });
 
+describe("analyze", () => {
+  it("runs through intel: Markdown by default, JSON on --json, options passed through", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, out } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["analyze", "acme/widget", "--max", "3", "--no-links"], runtime)).toBe(0);
+    const [, options] = siblings.calls[0]?.args as [unknown, AnalysisOptions];
+    expect(options).toMatchObject({ maxOpportunities: 3, checkLinks: false, dependencyChecks: true });
+    expect(options.hints?.goal).toBe("contribute");
+    expect(out.join("\n")).toContain("# acme/widget\n\n## Opportunities (3)");
+
+    const asJson = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["analyze", "acme/widget", "--json"], asJson.runtime)).toBe(0);
+    expect(JSON.parse(asJson.out.join("\n"))).toMatchObject({ version: "1", profile: { repo: { name: "widget" } } });
+  });
+
+  it("analyzes an existing checkout with --local", async () => {
+    const siblings = fakeSiblings();
+    const { runtime } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["analyze", "acme/widget", "--local", "/work/widget"], runtime)).toBe(0);
+    expect(siblings.calls[0]?.args[0]).toEqual({ host: "github.com", owner: "acme", name: "widget", localPath: "/work/widget" });
+  });
+
+  it("ends by saying how to continue, with the best opportunity's id, or the saved report", async () => {
+    const siblings = fakeSiblings();
+    const text = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["analyze", "acme/widget"], text.runtime)).toBe(0);
+    expect(text.err.join("\n")).toContain("gitgoblin contribute acme/widget --opportunity opp-aaaa1111");
+
+    const file = join(siblings.workdir, "report.json");
+    const saved = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["analyze", "acme/widget", "--json", "--out", file], saved.runtime)).toBe(0);
+    expect(JSON.parse(readFileSync(file, "utf8"))).toMatchObject({ version: "1" });
+    expect(saved.err.join("\n")).toContain(`gitgoblin contribute acme/widget --report ${file}`);
+
+    const empty = fakeRuntime({}, { modules: fakeSiblings({ report: sampleReport([]) }).modules });
+    expect(await run(["analyze", "acme/widget"], empty.runtime)).toBe(0);
+    expect(empty.err.join("\n")).not.toContain("gitgoblin contribute");
+  });
+});
+
 describe("contribute", () => {
   it("publishes only after the person says yes twice, then confirms publishing", async () => {
     const siblings = fakeSiblings();
     const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "y"] });
-    expect(await run(["contribute", "acme/widget", "--issue", "42"], runtime)).toBe(0);
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
     expect(siblings.calls.map((c) => c.fn)).toEqual(["analyzeRepository", "runContribution", "publishRun"]);
-    expect(siblings.calls[2]?.args).toEqual(["run-1", expect.objectContaining({ approved: true, draft: true })]);
+    expect(siblings.calls[2]?.args).toEqual(["20261022-abcd", expect.objectContaining({ approved: true, draft: true, workdir: siblings.workdir })]);
     expect(asked).toHaveLength(3);
     expect(asked[2]).toMatch(/draft pull request/);
     expect(out.join("\n")).toContain("Draft pull request: https://github.com/acme/widget/pull/7");
   });
 
+  it("hands the engine a real Reporter and relays its progress", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    const [input, options] = siblings.calls[1]?.args as [{ profile: unknown; opportunity: { id: string } }, RunOptions];
+    expect(input.opportunity.id).toBe("opp-aaaa1111");
+    expect(options.limits).toEqual({ maxCostUsd: 2 });
+    expect(err.join("\n")).toContain("==> run: 20261022-abcd for Fix #42");
+    expect(err.join("\n")).toContain("    orient Read src/main.rs");
+    expect(err.join("\n")).toContain(" !! baseline lint: fail");
+  });
+
+  it("shows the plan in plain words before asking to implement it", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(asked[1]).toContain("Plan: Thread --color through to the renderer");
+    expect(asked[1]).toContain("  1. Pass the flag from main to render()");
+    expect(asked[1]).toContain("Files: src/main.rs");
+    expect(asked[1]).not.toContain("{");
+  });
+
+  it("lists the opportunities with their evidence and lets the person pick by number or id", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["opp-cccc3333", "n"] });
+    expect(await run(["contribute", "acme/widget", "--workdir", siblings.workdir], runtime)).toBe(0);
+    const printed = out.join("\n");
+    expect(printed).toContain("1. Fix #42: --color flag is ignored on Windows");
+    expect(printed).toContain("https://github.com/acme/widget/issues/42");
+    expect(printed).toContain("someone is already working on #57");
+    expect(asked[0]).toMatch(/\[1-3, or an id; Enter for 1\]/);
+    expect(printed).toContain("Opportunity: Triage #61: unclear feature request");
+
+    const byFlag = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/widget", "--opportunity", "2", "--workdir", siblings.workdir], byFlag.runtime)).toBe(0);
+    expect(byFlag.out.join("\n")).toContain("Opportunity: Fix #57: panic on empty config");
+    expect(byFlag.out.join("\n")).toContain("The engine will refuse this one at intake: someone is already working on #57");
+    expect(byFlag.asked[0]).toMatch(/^Run it anyway against acme\/widget/);
+  });
+
+  it("asks again when the answer matches nothing, and gives up after three tries", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["9", "opp-nope", "3", "n"] });
+    expect(await run(["contribute", "acme/widget", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(asked.filter((q) => q.startsWith("Which opportunity?"))).toHaveLength(3);
+    expect(out.join("\n")).toContain("There is no opportunity 9");
+    expect(out.join("\n")).toContain("Opportunity: Triage #61: unclear feature request");
+
+    const hopeless = fakeRuntime({}, { modules: siblings.modules, answers: ["x", "y", "z"] });
+    expect(await run(["contribute", "acme/widget", "--workdir", siblings.workdir], hopeless.runtime)).toBe(1);
+    expect(hopeless.err.join("\n")).toMatch(/No opportunity "z"/);
+  });
+
+  it("refuses --issue together with --opportunity instead of silently preferring one", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--opportunity", "2", "--workdir", siblings.workdir], runtime)).toBe(1);
+    expect(err.join("\n")).toMatch(/either --issue or --opportunity/);
+    expect(siblings.calls).toHaveLength(0);
+  });
+
+  it("streams analysis progress in a terminal, since the analysis takes a while", async () => {
+    const siblings = fakeSiblings();
+    const { runtime } = fakeRuntime({}, { modules: siblings.modules, answers: ["n"], isInteractive: true });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    const [, options] = siblings.calls[0]?.args as [unknown, AnalysisOptions];
+    expect(options.log).toBeTypeOf("function");
+    const quiet = fakeRuntime({}, { modules: siblings.modules, answers: ["n"], isInteractive: false });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], quiet.runtime)).toBe(0);
+    expect((siblings.calls[1]?.args[1] as AnalysisOptions).log).toBeUndefined();
+  });
+
+  it("says that a report from --local leads to a worktree of that checkout, not a clone", async () => {
+    const siblings = fakeSiblings();
+    const report = sampleReport();
+    report.profile.repo = { host: "github.com", owner: "acme", name: "widget", localPath: "/work/widget" };
+    const file = join(siblings.workdir, "local-report.json");
+    writeFileSync(file, JSON.stringify(report));
+    const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/widget", "--report", file, "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(asked[0]).toContain("in a git worktree of /work/widget");
+    expect(asked[0]).not.toContain("local clone");
+  });
+
+  it("reuses a saved report instead of analyzing again, and refuses one for another repository", async () => {
+    const siblings = fakeSiblings();
+    const file = join(siblings.workdir, "report.json");
+    writeFileSync(file, JSON.stringify(sampleReport()));
+    const { runtime } = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/widget", "--report", file, "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(siblings.calls.map((c) => c.fn)).toEqual([]);
+
+    const other = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/other", "--report", file, "--workdir", siblings.workdir], other.runtime)).toBe(1);
+    expect(other.err.join("\n")).toMatch(/report .* is for acme\/widget, not acme\/other/);
+
+    writeFileSync(file, JSON.stringify({ hello: "world" }));
+    const broken = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/widget", "--report", file, "--workdir", siblings.workdir], broken.runtime)).toBe(1);
+    expect(broken.err.join("\n")).toMatch(/not an analysis report.*version: Invalid input: expected "1"/);
+    expect(broken.err.join("\n")).not.toContain("[");
+  });
+
+  it("shows what the engine did and where the diff is before asking to publish", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    const printed = out.join("\n");
+    expect(printed).toContain("## Verification\n- test: pass (cargo test, 12s)");
+    expect(printed).toContain("## Review: approve");
+    expect(printed).toContain("fix: honour --color on Windows");
+    expect(printed).toContain("Fixes #42");
+    expect(printed).toContain(`Diff: ${join(siblings.workdir, "runs", "20261022-abcd", "diff.patch")}`);
+    expect(printed).toMatch(/\$0\.42/);
+    expect(asked[2]).toMatch(/draft pull request/);
+    expect(printed).toContain(`gitgoblin publish 20261022-abcd`);
+  });
+
   it("never publishes when the final answer is no", async () => {
     const siblings = fakeSiblings();
     const { runtime, out } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "n"] });
-    expect(await run(["contribute", "acme/widget"], runtime)).toBe(0);
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
     expect(siblings.calls.map((c) => c.fn)).toEqual(["analyzeRepository", "runContribution"]);
     expect(out.join("\n")).toMatch(/Not published/);
   });
@@ -238,15 +453,28 @@ describe("contribute", () => {
   it("stops before the engine when the first answer is no, or when the plan is rejected", async () => {
     const first = fakeSiblings();
     const a = fakeRuntime({}, { modules: first.modules, answers: ["n"] });
-    expect(await run(["contribute", "acme/widget"], a.runtime)).toBe(0);
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", first.workdir], a.runtime)).toBe(0);
     expect(first.calls.map((c) => c.fn)).toEqual(["analyzeRepository"]);
 
     const second = fakeSiblings();
     const b = fakeRuntime({}, { modules: second.modules, answers: ["y", "n"] });
-    expect(await run(["contribute", "acme/widget"], b.runtime)).toBe(0);
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", second.workdir], b.runtime)).toBe(0);
     expect(second.calls.map((c) => c.fn)).toEqual(["analyzeRepository", "runContribution"]);
-    expect(b.out.join("\n")).toMatch(/status: stopped/);
+    expect(b.out.join("\n")).toMatch(/stopped: plan rejected by the operator/);
     expect(b.out.join("\n")).toMatch(/Nothing to publish/);
+  });
+
+  it("exits non-zero when the run failed, and prints the questions when it escalated", async () => {
+    const failed = fakeSiblings({ status: "failed" });
+    const a = fakeRuntime({}, { modules: failed.modules, answers: ["y", "y"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", failed.workdir], a.runtime)).toBe(1);
+    expect(a.err.join("\n")).toMatch(/error: .*failed/);
+
+    const escalated = fakeSiblings({ status: "escalated" });
+    const b = fakeRuntime({}, { modules: escalated.modules, answers: ["y", "y"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", escalated.workdir], b.runtime)).toBe(0);
+    expect(b.out.join("\n")).toMatch(/escalated/);
+    expect(existsSync(join(escalated.workdir, "runs", "20261022-abcd", "report.md"))).toBe(true);
   });
 
   it("refuses to run without a terminal or without the sibling packages", async () => {
@@ -261,17 +489,86 @@ describe("contribute", () => {
     expect(siblings.calls).toHaveLength(0);
   });
 
-  it("runs analyze through intel: Markdown by default, JSON on --json, options passed through", async () => {
-    const siblings = fakeSiblings();
-    const { runtime, out } = fakeRuntime({}, { modules: siblings.modules });
-    expect(await run(["analyze", "acme/widget", "--max", "3", "--no-links"], runtime)).toBe(0);
-    const [, options] = siblings.calls[0]?.args as [unknown, { hints?: { goal: string }; maxOpportunities: number; checkLinks: boolean; dependencyChecks: boolean }];
-    expect(options).toMatchObject({ maxOpportunities: 3, checkLinks: false, dependencyChecks: true });
-    expect(options.hints?.goal).toBe("contribute");
-    expect(out.join("\n")).toBe("# Report\n\nLanguages: Rust");
+  it("stops with advice when the only opportunity is one the engine will refuse", async () => {
+    const siblings = fakeSiblings({ report: sampleReport([sampleOpportunity({ kind: "triage", files: [] })]) });
+    const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/widget", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(out.join("\n")).toContain("The engine will refuse this one at intake: needs a reply on the issue, not a patch");
+    expect(asked[0]).toMatch(/^Run it anyway against acme\/widget/);
+  });
+});
 
-    const asJson = fakeRuntime({}, { modules: siblings.modules });
-    expect(await run(["analyze", "acme/widget", "--json"], asJson.runtime)).toBe(0);
-    expect(JSON.parse(asJson.out.join("\n"))).toMatchObject({ profile: { languages: ["Rust"] } });
+describe("runs, show and publish", () => {
+  it("lists the runs under the workdir, newest first", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261021-120000-aaaa", { status: "stopped", reason: "plan rejected by the operator" });
+    writeRun(siblings.workdir, "20261022-093000-bbbb");
+    const { runtime, out } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["runs", "--workdir", siblings.workdir], runtime)).toBe(0);
+    const lines = out.join("\n").split("\n");
+    expect(lines.findIndex((l) => l.includes("20261022-093000-bbbb"))).toBeLessThan(lines.findIndex((l) => l.includes("20261021-120000-aaaa")));
+    expect(out.join("\n")).toContain("awaiting_approval");
+    expect(out.join("\n")).toContain("gitgoblin publish 20261022-093000-bbbb");
+
+    const empty = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["runs", "--workdir", join(siblings.workdir, "elsewhere")], empty.runtime)).toBe(0);
+    expect(empty.out.join("\n")).toMatch(/No runs yet/);
+  });
+
+  it("shows a run's report, or its diff or pull request text on request", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261022-093000-bbbb");
+    const report = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["show", "20261022-093000-bbbb", "--workdir", siblings.workdir], report.runtime)).toBe(0);
+    expect(report.out.join("\n")).toContain("# gitgoblin run 20261022-093000-bbbb");
+
+    const diff = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["show", "20261022-093000-bbbb", "--diff", "--workdir", siblings.workdir], diff.runtime)).toBe(0);
+    expect(diff.out.join("\n")).toContain("diff --git a/src/main.rs");
+
+    const pr = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["show", "20261022-093000-bbbb", "--pr", "--workdir", siblings.workdir], pr.runtime)).toBe(0);
+    expect(pr.out.join("\n")).toContain("fix: honour --color on Windows");
+    expect(pr.out.join("\n")).toContain("Fixes #42");
+
+    const missing = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["show", "nope", "--workdir", siblings.workdir], missing.runtime)).toBe(1);
+    expect(missing.err.join("\n")).toMatch(/no run "nope".*gitgoblin runs/s);
+  });
+
+  it("publishes a prepared run only after showing it and hearing yes", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261022-093000-bbbb");
+    const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y"] });
+    expect(await run(["publish", "20261022-093000-bbbb", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(out.join("\n")).toContain("fix: honour --color on Windows");
+    expect(out.join("\n")).toContain(join(siblings.workdir, "runs", "20261022-093000-bbbb", "diff.patch"));
+    expect(asked[0]).toMatch(/draft pull request/);
+    expect(siblings.calls.map((c) => c.fn)).toEqual(["publishRun"]);
+    expect(siblings.calls[0]?.args).toEqual(["20261022-093000-bbbb", expect.objectContaining({ approved: true, draft: true, workdir: siblings.workdir })]);
+    expect(out.join("\n")).toContain("Draft pull request: https://github.com/acme/widget/pull/7");
+
+    const ready = fakeRuntime({}, { modules: siblings.modules, answers: ["y"] });
+    expect(await run(["publish", "20261022-093000-bbbb", "--ready", "--workdir", siblings.workdir], ready.runtime)).toBe(0);
+    expect(siblings.calls[1]?.args).toEqual(["20261022-093000-bbbb", expect.objectContaining({ draft: false })]);
+    expect(ready.asked[0]).toMatch(/ready-for-review pull request/);
+  });
+
+  it("does not publish on no, without a terminal, or when the run has nothing prepared", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261022-093000-bbbb");
+    writeRun(siblings.workdir, "20261021-120000-aaaa", { status: "stopped", reason: "plan rejected by the operator" });
+    const no = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["publish", "20261022-093000-bbbb", "--workdir", siblings.workdir], no.runtime)).toBe(0);
+    expect(no.out.join("\n")).toMatch(/Not published/);
+
+    const noTty = fakeRuntime({}, { modules: siblings.modules, canPrompt: false });
+    expect(await run(["publish", "20261022-093000-bbbb", "--workdir", siblings.workdir], noTty.runtime)).toBe(1);
+    expect(noTty.err.join("\n")).toMatch(/interactive terminal/);
+
+    const stopped = fakeRuntime({}, { modules: siblings.modules, answers: ["y"] });
+    expect(await run(["publish", "20261021-120000-aaaa", "--workdir", siblings.workdir], stopped.runtime)).toBe(1);
+    expect(stopped.err.join("\n")).toMatch(/is stopped \(plan rejected by the operator\), so there is nothing to publish/);
+    expect(siblings.calls).toHaveLength(0);
   });
 });

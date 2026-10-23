@@ -25,7 +25,7 @@ gitgoblin is a set of small TypeScript packages that hand each other plain data.
 | `@gitgoblin/core` | Repository identity, discovery goals and signals | `RepoRef`, `parseRepoRef`, `Goal`, `DiscoveryQuery`, `DiscoveryResult`, `Discoverer` | Working |
 | `@gitgoblin/sources` | Talking to GitHub (REST and GraphQL) and the [ecosyste.ms](https://ecosyste.ms) open APIs, with a local SQLite cache and token discovery | HTTP clients | Working |
 | `@gitgoblin/discovery` | Ranking repositories for a goal: candidate strategies, signals, scoring with human-readable reasons | `Discoverer` implementation | Working |
-| `gitgoblin` (`packages/cli`) | The command line: `discover`, `explain`, `goals`, `cache`, `analyze` | | Working from a clone |
+| `gitgoblin` (`packages/cli`) | The command line: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish` | | Working from a clone |
 | `@gitgoblin/intel` | Profiling a repository and finding opportunities | `RepositoryProfile`, `ContributionOpportunity`, `AnalysisReport` | Working; scores being calibrated |
 | `@gitgoblin/engine` | Turning one opportunity into a reviewable pull request | `Task`, `runContribution`, `publishRun` | Runs end to end on a test repository; see its [README](../packages/engine/README.md) |
 | `@gitgoblin/mcp` | gitgoblin as an MCP server: discovery and intel for any AI coding agent | `createServer`, the tools `discover_repositories`, `explain_repository`, `analyze_repository`, `get_opportunity` | Working from a clone; npm release pending |
