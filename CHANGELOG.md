@@ -31,7 +31,8 @@ The first release of the `gitgoblin` command.
 - `contribute` (experimental) has an AI agent investigate, plan, implement and verify one
   opportunity in a local clone, gets an independent review, and prepares a pull request. It asks
   before running the agent, before implementing the plan, and before publishing; nothing is pushed
-  or posted without that last yes. `runs`, `show` and `publish` come back to prepared changes later.
+  or posted without that last yes. `runs`, `show` and `publish` come back to prepared changes later,
+  and `clean` frees the disk a finished run's clone takes while keeping its report and diff.
 - When choosing what to work on, `contribute` marks opportunities the engine would refuse (`!`) and
   those intel doubts (`?`, for example an issue whose quoted code is gone, so it may already be
   fixed), and pressing Enter skips both.

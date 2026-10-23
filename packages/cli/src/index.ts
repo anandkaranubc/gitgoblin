@@ -14,7 +14,7 @@ import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefus
 import { formatExplanation, formatResults } from "./format.ts";
 import { explainMissingRepository, explainNetworkFailure } from "./errors.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
-import { formatRuns, installSummary, listRuns, readInstall, readRun } from "./runs.ts";
+import { directorySize, formatBytes, formatRuns, installSummary, isRunId, listRuns, readInstall, readRun } from "./runs.ts";
 import { type IntelModule, type ModuleLoader, importSibling, loadEngine, loadIntel } from "./siblings.ts";
 import { plain } from "./text.ts";
 
@@ -516,6 +516,60 @@ export function buildProgram(runtime: Runtime): Command {
     .action((options: { workdir?: string }) => {
       const workdir = resolveWorkdir(runtime, options.workdir);
       runtime.stdout(formatRuns(listRuns(workdir), { color: runtime.color }, options.workdir ? ` --workdir ${workdir}` : ""));
+    });
+
+  program
+    .command("clean")
+    .description("Free the disk space finished runs hold (their workspaces); reports, diffs and pull request text stay")
+    .argument("[runIds...]", "run ids from `gitgoblin runs`")
+    .option("--finished", "clean every run that is not awaiting approval and still keeps its workspace")
+    .option("--force", "also discard a prepared change that is awaiting approval")
+    .option("--workdir <dir>", "where the engine keeps runs (default: $GITGOBLIN_WORKDIR or ~/.gitgoblin)")
+    .action(async (runIds: string[], options: { finished?: boolean; force?: boolean; workdir?: string }) => {
+      const workdir = resolveWorkdir(runtime, options.workdir);
+      const targets = options.finished
+        ? listRuns(workdir).filter((r) => r.keepsWorkspace && r.status !== "awaiting_approval").map((r) => r.runId)
+        : runIds;
+      if (!options.finished && runIds.length === 0) {
+        // A usage error: say it here, then exit 2 the way commander's own usage errors do.
+        runtime.stderr("error: clean needs a run id (from `gitgoblin runs`) or --finished");
+        throw Object.assign(new Error("usage"), { exitCode: 2, code: "commander.usage" });
+      }
+      if (targets.length === 0) {
+        runtime.stdout("Nothing to clean: no finished run keeps a workspace.");
+        return;
+      }
+      const engine = await loadEngine(runtime.loadModule);
+      if (!engine?.cleanRun) throw new Error("this install's @gitgoblin/engine cannot clean runs; update gitgoblin");
+      let freed = 0;
+      let cleaned = 0;
+      let failed = 0;
+      for (const runId of targets) {
+        const run = isRunId(runId) ? readRun(workdir, runId) : undefined;
+        if (!run) {
+          const missing = `no run "${runId}" under ${workdir}; \`gitgoblin runs\` lists them.`;
+          if (targets.length === 1) throw new Error(missing);
+          runtime.stderr(`error: ${missing}`);
+          failed += 1;
+          continue;
+        }
+        const before = directorySize(run.dir);
+        try {
+          await engine.cleanRun(runId, { workdir, ...(options.force ? { force: true } : {}) });
+        } catch (error) {
+          // One run: its own message is the whole story. Several: report each and carry on.
+          if (targets.length === 1) throw error;
+          runtime.stderr(`error: ${error instanceof Error ? error.message : String(error)}`);
+          failed += 1;
+          continue;
+        }
+        const bytes = Math.max(0, before - directorySize(run.dir));
+        freed += bytes;
+        cleaned += 1;
+        runtime.stdout(`Cleaned ${runId} (${run.result.status}): freed ${formatBytes(bytes)}`);
+      }
+      if (cleaned > 1) runtime.stdout(`Freed ${formatBytes(freed)} from ${cleaned} runs.`);
+      if (failed > 0) throw new Error(`${failed} of ${targets.length} run${targets.length === 1 ? "" : "s"} could not be cleaned`);
     });
 
   program
