@@ -36,6 +36,8 @@ a pull request a maintainer would want to merge.
   and the ones intel doubts (`?`), and Enter skips both. `runs`, `show` and `publish` come back to prepared changes later;
   `publish` can be run again after a partial failure, and `clean` frees the disk a finished run's
   clone takes while keeping its report and diff.
+- Files the repository's own install rewrites (a lockfile npm trims, say) are put back as committed
+  before anything else runs, so a prepared change never carries that churn; the run report names them.
 
 **Safety**
 
