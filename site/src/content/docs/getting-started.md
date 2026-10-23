@@ -29,7 +29,7 @@ gitgoblin also runs as an MCP server, so the agent you already use can discover 
 claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
 ```
 
-Until the npm package is published, use the tarball URL from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.1) in place of `@gitgoblin/mcp`. [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) has the one-liner for Codex, Cursor, Gemini CLI, VS Code and every other client, plus the skill that teaches agents when to use the tools.
+Until the npm package is published, use the tarball URL from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.2) in place of `@gitgoblin/mcp`. [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) has the one-liner for Codex, Cursor, Gemini CLI, VS Code and every other client, plus the skill that teaches agents when to use the tools.
 
 ## Run the tests
 
