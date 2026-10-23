@@ -4,6 +4,8 @@ import { type CommentSample, type IssueSample, isMaintainer, unquoted } from "..
 import { daysAgo } from "../util/time.ts";
 import { truncate } from "../util/text.ts";
 
+import { fetchHintedIssues } from "../github/hinted.ts";
+import { applyIssueDrift, assessIssueDrift, permalinks } from "./issue-drift.ts";
 import { type Analyzer, type Finding, type FindingSignals, evidence } from "./types.ts";
 
 const BUG_LABEL = /\b(bug|defect|regression|crash|broken|error)\b/i;
@@ -184,7 +186,12 @@ export const issuesAnalyzer: Analyzer = {
     let triage = 0;
     const hinted = new Set((ctx.options.hints?.issues ?? []).map((i) => i.number));
     const repoUrl = `https://${ctx.ref.host}/${ctx.ref.owner}/${ctx.ref.name}`;
-    const assessments = samples.openIssues.map((issue) => ({ issue, a: assessIssue(issue, ctx.now, responsive, repoUrl) }));
+    // Issues discovery pointed at but the recent-activity sample missed are fetched individually (capped).
+    const sampled = new Set(samples.openIssues.map((i) => i.number));
+    const missingHints = [...hinted].filter((n) => !sampled.has(n)).slice(0, 5);
+    const extra = ctx.github && missingHints.length ? await fetchHintedIssues(ctx.github, ctx.ref.owner, ctx.ref.name, missingHints) : [];
+    if (extra.length) ctx.budget.note(`fetched ${extra.length} hinted issue${extra.length === 1 ? "" : "s"} missing from the sample (#${extra.map((i) => i.number).join(", #")})`);
+    const assessments = [...samples.openIssues, ...extra].map((issue) => ({ issue, a: assessIssue(issue, ctx.now, responsive, repoUrl) }));
 
     for (const { issue, a: lexical } of assessments) {
       let a = lexical;
@@ -202,6 +209,10 @@ export const issuesAnalyzer: Analyzer = {
         continue;
       }
       const finding = issueFinding(ctx, issue, a, profile, languages, hinted.has(issue.number));
+      if (a.kind !== "feature_request") {
+        const drift = await assessIssueDrift(ctx, issue, finding.files).catch(() => undefined);
+        if (drift) applyIssueDrift(ctx, finding, issue, drift);
+      }
       findings.push(finding);
     }
     // A compact tally first, so a thin or empty report still explains itself; the detailed list follows.
@@ -256,7 +267,7 @@ function issueRef(issue: IssueSample, inFlight: boolean): IssueRef {
 }
 
 function mentionedFiles(ctx: AnalysisContext, text: string): string[] {
-  const found: string[] = [];
+  const found: string[] = permalinks(text, ctx.ref).map((l) => l.path).filter((p) => ctx.inventory.byPath.has(p)).slice(0, 5);
   for (const m of text.matchAll(PATH_TOKEN)) {
     const token = m[1]!;
     const hit = ctx.inventory.byPath.has(token) ? token : ctx.inventory.files.find((f) => !f.vendored && (f.path.endsWith(`/${token}`) || f.path === token))?.path;
