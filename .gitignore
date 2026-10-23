@@ -7,3 +7,6 @@ coverage/
 .cache/
 .DS_Store
 .gitgoblin/
+
+# Worktrees for parallel branches live inside the checkout (see AGENTS.md).
+.worktrees/
