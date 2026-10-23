@@ -76,7 +76,8 @@ describe("symlinks and oversized files", () => {
     await repoFixture.git(["commit", "-q", "-m", "links"]);
     // The same history checked out without symlink support, as a sandboxed caller may do.
     plainCheckout = `${repoFixture.dir}-plain`;
-    await repoFixture.git(["clone", "-q", "-c", "core.symlinks=false", repoFixture.dir, plainCheckout]);
+    // autocrlf off as in product clones: Windows runners default to true and would rewrite the fixture's line endings.
+    await repoFixture.git(["clone", "-q", "-c", "core.symlinks=false", "-c", "core.autocrlf=false", repoFixture.dir, plainCheckout]);
   });
   afterAll(async () => {
     await repoFixture.cleanup();
