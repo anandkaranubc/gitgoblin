@@ -72,7 +72,7 @@ claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/re
 | Prepare a contribution with an AI agent, then publish it after you approve | `contribute`, `runs`, `show`, `publish` | Experimental; needs an Anthropic API key or Claude Code login, and each run costs money |
 | MCP server and agent skill | | Released on GitHub and listed in the MCP Registry |
 
-GitHub repositories only, for now. Developed on macOS and tested on Linux in CI; Windows is untested. [docs/architecture.md](docs/architecture.md) explains how the packages fit together, and [CHANGELOG.md](CHANGELOG.md) lists what changed in each release.
+`analyze` reads GitHub, GitLab and Gitea or Forgejo repositories (Codeberg among them); discovery and publishing are GitHub-only for now. Developed on macOS and tested on Linux in CI; Windows is untested. [docs/architecture.md](docs/architecture.md) explains how the packages fit together, and [CHANGELOG.md](CHANGELOG.md) lists what changed in each release.
 
 ## How gitgoblin behaves in other people's projects
 
