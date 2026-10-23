@@ -129,7 +129,8 @@ checks, the independent review, cost), the proposed pull request title and
 description, and the path of the diff. Read the diff before answering yes. If you
 answer no, the change stays in the run directory and `gitgoblin publish <runId>`
 opens it later. The exit code is 1 when the run failed; a run the engine stopped
-or escalated exits 0 and says why.
+or escalated exits 0 and says why. When the repository's install failed, the end
+of its log is printed under the status, since it usually names the cause.
 
 ### `gitgoblin runs`, `gitgoblin show <runId>`, `gitgoblin publish <runId>`
 
@@ -139,7 +140,8 @@ The lifecycle of prepared changes, in the same workdir `contribute` uses
 - `runs` lists every run, newest first: id, status, cost, repository, task, and
   for a run awaiting approval the command that publishes it.
 - `show <runId>` prints the run's report; `--diff` prints the prepared change as
-  a patch, `--pr` the pull request title and description.
+  a patch, `--pr` the pull request title and description, `--install` the output
+  of the repository's install command.
 - `publish <runId>` shows the pull request text and the paths to the diff and
   report, asks, then pushes with your `gh` login (to a fork when you cannot push
   to the repository) and opens a draft pull request. `--ready` opens it ready for
