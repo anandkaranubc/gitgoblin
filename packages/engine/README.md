@@ -20,6 +20,7 @@ gitgoblin-engine run --task task.json --confirm-plan
 # Read what it did, then decide
 gitgoblin-engine show <runId>
 gitgoblin-engine publish <runId>          # pushes with your gh login, opens a draft PR, asks first
+gitgoblin-engine clean <runId>            # frees the workspace (and its branch); report and diff stay
 ```
 
 `publish` asks at a terminal and has no flag to skip the question; piped input is refused, so a
@@ -39,7 +40,7 @@ Each run writes `.gitgoblin/runs/<runId>/`, which other tools may read:
 | `investigation.json`, `plan.json`, `implementation-<n>.json`, `review-<n>.json` | each phase's structured output |
 | `diff-<n>.patch` | the change as reviewed in round `n` |
 | `pr.md`, `pr-title.txt`, `diff.patch`, `delivery.json` | the prepared pull request, when the run reached `awaiting_approval` |
-| `workspace/` | the checkout (a clone, or a worktree of a local checkout); it stays until you remove it |
+| `workspace/` | the checkout (a clone, or a worktree of a local checkout); it stays until `clean` (or `cleanRun()`) removes it with its `gitgoblin/...` branch, which refuses a run still awaiting approval unless forced |
 
 Requirements: Node 24, git, a Claude Code login or `ANTHROPIC_API_KEY` (the Agent SDK uses either),
 and `gh auth login` for publishing. The agent's bash runs in the Agent SDK sandbox with no network;
