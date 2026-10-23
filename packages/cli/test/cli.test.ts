@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DiscoveryQuery, DiscoveryResult } from "@gitgoblin/core";
@@ -140,6 +140,15 @@ function fakeSiblings(options: { status?: RunStatus; report?: AnalysisReport; in
           writeFileSync(join(runDir, "diff.patch"), "diff --git a/src/main.rs b/src/main.rs\n");
         }
         return { runId, runDir, status, reason: approved ? "ready for human review" : "plan rejected by the operator", questions: [], workspace: join(runDir, "workspace"), branch: "gitgoblin/fix-42", costUsd: 0.42, durationMs: 61_000 };
+      },
+      cleanRun: async (runId: string, options: { workdir?: string; force?: boolean }) => {
+        calls.push({ fn: "cleanRun", args: [runId, options] });
+        // Mirrors the engine: a prepared change is kept unless forced; the workspace goes, the report stays.
+        const dir = join(options.workdir!, "runs", runId);
+        const status = (JSON.parse(readFileSync(join(dir, "result.json"), "utf8")) as { status: string }).status;
+        if (status === "awaiting_approval" && !options.force) throw new Error(`run ${runId} is awaiting approval; publish it, or clean with force to discard the prepared change`);
+        rmSync(join(dir, "workspace"), { recursive: true, force: true });
+        return { removed: [join(dir, "workspace")] };
       },
       publishRun: async (...args: unknown[]) => {
         calls.push({ fn: "publishRun", args });
@@ -814,5 +823,52 @@ describe("analyze and contribute say when issues were not read", () => {
     const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
     expect(await run(["contribute", "acme/widget", "--workdir", siblings.workdir], runtime)).toBe(1);
     expect(err.join("\n")).toMatch(/No contribution opportunities found in acme\/widget\. Issues and pull requests were not analyzed \(fetch failed\)/);
+  });
+});
+
+describe("clean", () => {
+  it("frees one finished run's workspace and says how much", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261023-182616-x3md", { status: "stopped", workspaceBytes: 2 * 1024 * 1024 });
+    const { runtime, out } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["clean", "20261023-182616-x3md", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(siblings.calls).toEqual([{ fn: "cleanRun", args: ["20261023-182616-x3md", { workdir: siblings.workdir }] }]);
+    expect(out.join("\n")).toMatch(/^Cleaned 20261023-182616-x3md \(stopped\): freed 2\.0 MB$/m);
+    expect(existsSync(join(siblings.workdir, "runs", "20261023-182616-x3md", "report.md"))).toBe(true);
+  });
+
+  it("keeps a prepared change unless --force is given", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261023-171222-u5ul", { status: "awaiting_approval", workspaceBytes: 1000 });
+    const kept = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["clean", "20261023-171222-u5ul", "--workdir", siblings.workdir], kept.runtime)).toBe(1);
+    expect(kept.err.join("\n")).toMatch(/awaiting approval; publish it, or clean with force/);
+    expect(kept.err).toHaveLength(1);
+    const forced = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["clean", "20261023-171222-u5ul", "--force", "--workdir", siblings.workdir], forced.runtime)).toBe(0);
+    expect(siblings.calls.at(-1)?.args[1]).toEqual({ workdir: siblings.workdir, force: true });
+  });
+
+  it("--finished cleans every finished run that still keeps a workspace, and only those", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261023-182616-x3md", { status: "stopped", workspaceBytes: 1024 * 1024 });
+    writeRun(siblings.workdir, "20261023-164002-gns8", { status: "failed", workspaceBytes: 1024 * 1024 });
+    writeRun(siblings.workdir, "20261023-171222-u5ul", { status: "awaiting_approval", workspaceBytes: 1024 * 1024 });
+    writeRun(siblings.workdir, "20261023-053806-6u65", { status: "escalated" });
+    const { runtime, out } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["clean", "--finished", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(siblings.calls.map((c) => c.args[0]).sort()).toEqual(["20261023-164002-gns8", "20261023-182616-x3md"]);
+    expect(out.join("\n")).toMatch(/Freed 2\.0 MB from 2 runs\./);
+
+    const again = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["clean", "--finished", "--workdir", siblings.workdir], again.runtime)).toBe(0);
+    expect(again.out.join("\n")).toMatch(/Nothing to clean/);
+  });
+
+  it("needs a run id or --finished", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["clean", "--workdir", siblings.workdir], runtime)).toBe(2);
+    expect(err.join("\n")).toMatch(/run id .* or --finished/);
   });
 });

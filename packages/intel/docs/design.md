@@ -185,13 +185,22 @@ probing the version endpoints. They supply the same `RepoMeta` and samples the
 GitHub path uses: open and closed issues, merge requests, labels, and comment
 threads for the most recently active items (one call each, capped). Those APIs
 expose no author association, so maintainers are inferred from who merges and
-closes; the profile says so. In-flight detection uses GitLab's related merge
-requests plus, on both forges, the issues a pull request description says it
-fixes. GitLab pipelines on the default branch feed the CI-health analyzer
-(failed jobs by stage); Gitea/Forgejo exposes no public runs API.
-Hosts that are neither fall back to the clone-only mode. Items whose comments exist but were not
-fetched are excluded from response-time statistics rather than counted as
-silence.
+closes, and a reporter closing their own issue does not count. In-flight
+detection uses GitLab's related merge requests plus, on both forges, the issues
+a pull request description closes (closing keywords only; a mention is not a
+fix). GitLab pipelines on the default branch feed the CI-health analyzer
+(failed jobs by stage); Gitea/Forgejo exposes no public runs API. Self-hosted
+GitLab is recognised by the 401 its version endpoint returns without a token.
+Hosts that are neither fall back to the clone-only mode.
+
+Without a token, gitlab.com and most self-hosted GitLab instances refuse to show
+comments, and do not say whether a project is archived. Gitea's comments
+endpoint is read in pages over a 90-day window, plus each recently active open
+item's thread. Items whose comments exist but could not be read carry
+`commentsFetched: false`: they are never triage candidates ("nobody replied"
+needs the replies), and when more than a fifth of a sample is unread the
+response time is reported as unknown, because the readable rest would be only
+the unanswered items. The budget notes say which of these applied.
 
 ## Language-model review
 
@@ -248,6 +257,17 @@ treats all of it as data.
   show or sandbox, never to run on trust.
 - Per-run caps bound outside calls: TODO issue lookups, generated-page greps,
   HTTP checks, OSV batches, and the GraphQL sample sizes.
+- Every function that parses outsider text runs in linear time. Issue bodies
+  reach 65,536 characters and a backtracking regex on one line can stall a run
+  for hours, synchronously, so multiline patterns match horizontal whitespace
+  only, every span is bounded, and delimited spans (headings, HTML comments,
+  code fences) are cut with string scans. `test/redos.test.ts` feeds about sixty
+  such functions adversarial 64 KB inputs on every CI run; a new parser belongs
+  in `test/redos-cases.ts`.
+- Issue text handed downstream (`IssueRef.body`, summaries, the model prompt)
+  has template boilerplate removed but is otherwise the author's words: treat it
+  as data. GitHub refusing a burst of GraphQL requests is retried once; if the
+  samples still cannot be read, the report is marked truncated and says so.
 
 ## Known limits
 

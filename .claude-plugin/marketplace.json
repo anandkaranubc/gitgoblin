@@ -3,14 +3,14 @@
   "owner": { "name": "Karan Anand", "url": "https://github.com/anandkaranubc" },
   "metadata": {
     "description": "gitgoblin: discover open-source projects worth your time and the work they actually need.",
-    "version": "0.1.5"
+    "version": "0.1.6"
   },
   "plugins": [
     {
       "name": "gitgoblin",
       "source": "./",
       "description": "MCP server plus a skill: discover repositories, profile them, and get evidence-backed contribution opportunities.",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "category": "development",
       "keywords": ["open-source", "contributing", "github", "good-first-issue"]
     }
