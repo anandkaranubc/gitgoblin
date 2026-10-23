@@ -2,6 +2,7 @@ import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import path from "node:path";
 import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
 import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
+import { REGISTRY_HOSTS, startEgressProxy, proxyEnv, type EgressProxy } from "./egress.ts";
 import { execShell, tail } from "./exec.ts";
 import { commandEnv, isInside, isSafeCommand, scrubEnv } from "./guard.ts";
 import { hostSandboxFor, OFFLINE_ENV, specFor, type CheckIsolation, type HostIsolation } from "./hostbox.ts";
@@ -106,6 +107,11 @@ export interface RunOptions {
   maxPatchBytes?: number;
   /** Shallow clone depth for very large repositories; omitted means full history. */
   cloneDepth?: number;
+  /**
+   * Hosts the install may reach under strict isolation, besides the public package registries
+   * (REGISTRY_HOSTS), for example a private registry. Entries starting with "." match subdomains.
+   */
+  installHosts?: string[];
   /** Replaces the Claude Agent SDK runner; tests use a scripted one. */
   runnerFactory?: (ctx: RunnerContext) => AgentRunner;
 }
@@ -311,13 +317,35 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     // Checks run with the network cut when sandboxed; say so to the package managers so they fail fast.
     const checkEnv = hostBox.kind === "none" ? hostEnv : { ...hostEnv, ...OFFLINE_ENV };
     const checkOptions = { cwd: workspace.path, env: checkEnv, ...timeout, ...wrapFor(false) };
-    const installOptions = { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(true) };
     let installFailure: PlanContext["install"];
     if (task.commands.install && !options.skipInstall) {
       reporter.phase("install", task.commands.install);
-      const install = await execShell(task.commands.install, installOptions);
-      journal.text("install-output.txt", install.output);
-      journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs, timedOut: install.timedOut, outputTail: tail(install.output, 2000) });
+      // Strict isolation: the install reaches package registries only, through a proxy the engine
+      // runs, with the sandbox allowing nothing but localhost. bubblewrap gives the install its own
+      // network namespace, which cannot reach a proxy on the host's loopback, so there the install's
+      // network stays open and the run says so.
+      let egress: EgressProxy | undefined;
+      if (strict && hostBox.kind === "sandbox-exec") egress = await startEgressProxy([...REGISTRY_HOSTS, ...(options.installHosts ?? [])]);
+      const installNetwork = egress ? "registries" : hostBox.kind === "none" ? "unsandboxed" : "open";
+      journal.event("install", "start", { network: installNetwork });
+      if (strict && !egress) reporter.warn(`strict isolation: the install's network is not limited to package registries under ${hostBox.kind}`);
+      const installOptions = egress
+        ? { cwd: workspace.path, env: { ...hostEnv, ...proxyEnv(egress.url) }, ...timeout, ...wrapFor(false) }
+        : { cwd: workspace.path, env: hostEnv, ...timeout, ...wrapFor(true) };
+      let install: Awaited<ReturnType<typeof execShell>>;
+      let denied: string[] = [];
+      try {
+        install = await execShell(task.commands.install, installOptions);
+      } finally {
+        if (egress) {
+          denied = egress.denied();
+          await egress.close();
+        }
+      }
+      if (egress) checkIsolation = `${hostBox.kind} (strict; install limited to package registries${denied.length ? `, refused ${denied.length}: ${denied.slice(0, 5).join(", ")}` : ""})`;
+      journal.text("install-output.txt", denied.length ? `${install.output}\n[gitgoblin] the install tried to reach hosts that are not package registries, refused: ${denied.join(", ")}\n` : install.output);
+      journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs, timedOut: install.timedOut, network: installNetwork, refused: denied, outputTail: tail(install.output, 2000) });
+      if (denied.length) reporter.warn(`install tried to reach hosts that are not package registries (refused): ${denied.join(", ")}`);
       if (install.exitCode !== 0) {
         installFailure = { exitCode: install.exitCode ?? -1, logPath: journal.pathFor("install-output.txt"), timedOut: install.timedOut };
         reporter.warn(`install failed (exit ${install.exitCode}); checks may fail. Output: ${installFailure.logPath}`);
