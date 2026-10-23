@@ -1,3 +1,4 @@
+import { apiDocsAnalyzer } from "./api-docs.ts";
 import { ciHealthAnalyzer } from "./ci-health.ts";
 import { ciRotAnalyzer } from "./ci-rot.ts";
 import { dependenciesAnalyzer } from "./dependencies.ts";
@@ -26,4 +27,5 @@ export const ANALYZERS: readonly Analyzer[] = [
   testGapsAnalyzer,
   techDebtAnalyzer,
   hygieneAnalyzer,
+  apiDocsAnalyzer,
 ];

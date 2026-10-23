@@ -3,6 +3,7 @@ import type { AnalysisContext } from "../context.ts";
 import { computeActivity, hotFiles } from "./activity.ts";
 import { inferConventions } from "./conventions.ts";
 import { describeEcosystems } from "./ecosystems.ts";
+import { centralFiles } from "./imports.ts";
 import { classifyNature } from "./nature.ts";
 import { assessWelcomeness } from "./welcomeness.ts";
 
@@ -55,6 +56,9 @@ export async function buildProfile(ctx: AnalysisContext): Promise<RepositoryProf
   if (lastRun?.conclusion) ci.lastRunConclusion = lastRun.conclusion;
   if (lastRun) ci.lastRunAt = lastRun.updatedAt;
 
+  const central = await centralFiles(inventory, (p, max) => ctx.read(p, max), manifests.go?.module);
+  if (central.truncated) ctx.budget.cut("import graph built from the first 3000 source files");
+
   const notes: string[] = [];
   if (!ctx.samples && !ctx.budget.notes.some((n) => n.startsWith("issue and PR sampling skipped"))) notes.push("Issue and pull request samples unavailable (no GitHub token or GraphQL failed); welcomeness uses git and metadata only.");
   if (inventory.truncated) notes.push(`Only ${inventory.files.length} of ${inventory.totalCount} files were inventoried.`);
@@ -75,7 +79,7 @@ export async function buildProfile(ctx: AnalysisContext): Promise<RepositoryProf
     languages,
     ecosystems,
     ci,
-    structure: describeStructure(inventory, manifests),
+    structure: { ...describeStructure(inventory, manifests), centralFiles: central.files },
     activity,
     welcomeness,
     conventions,
@@ -89,7 +93,7 @@ export async function buildProfile(ctx: AnalysisContext): Promise<RepositoryProf
   return profile;
 }
 
-function describeStructure(inventory: AnalysisContext["inventory"], manifests: AnalysisContext["manifests"]): Structure {
+function describeStructure(inventory: AnalysisContext["inventory"], manifests: AnalysisContext["manifests"]): Omit<Structure, "centralFiles"> {
   const live = inventory.files.filter((f) => !f.vendored);
   const topDirs = (predicate: (p: string) => boolean) => {
     const counts = new Map<string, number>();
