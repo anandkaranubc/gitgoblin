@@ -8,6 +8,8 @@ export interface ExecResult {
   output: string;
   durationMs: number;
   timedOut: boolean;
+  /** True when more than `maxOutputBytes` arrived and the start of the output was dropped. */
+  truncated: boolean;
 }
 
 export interface ExecOptions {
@@ -22,18 +24,52 @@ const DEFAULT_MAX_OUTPUT = 512 * 1024;
 /** After the process exits, how long to wait for stray children holding its pipes. */
 const STDIO_GRACE_MS = 2000;
 
+/**
+ * Every command runs in its own process group so a timeout can take its children with it. The
+ * groups are tracked so that when the engine itself exits or is interrupted, nothing it started
+ * (an install, a test suite, a server a test left behind) keeps running on the operator's machine.
+ */
+const live = new Map<number, () => void>();
+let handlersInstalled = false;
+
+export function liveChildCount(): number {
+  return live.size;
+}
+
+/** Kills every process group the engine started. Safe to call more than once. */
+export function killAllChildren(): void {
+  for (const kill of [...live.values()]) kill();
+}
+
+function installExitHandlers(): void {
+  if (handlersInstalled) return;
+  handlersInstalled = true;
+  process.on("exit", killAllChildren);
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    const onSignal = () => {
+      killAllChildren();
+      process.removeListener(signal, onSignal);
+      process.kill(process.pid, signal);
+    };
+    process.on(signal, onSignal);
+  }
+}
+
 function run(file: string, args: string[], display: string, opts: ExecOptions): Promise<ExecResult> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBytes = opts.maxOutputBytes ?? DEFAULT_MAX_OUTPUT;
   const started = Date.now();
   return new Promise((resolve) => {
     // Own process group so a timeout can kill whatever the command spawned.
+    installExitHandlers();
     const child = spawn(file, args, { cwd: opts.cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"], detached: true });
     let output = "";
+    let received = 0;
     let timedOut = false;
     let done = false;
     let graceTimer: NodeJS.Timeout | undefined;
     const append = (chunk: Buffer) => {
+      received += chunk.length;
       output += chunk.toString("utf8");
       if (output.length > maxBytes * 2) output = output.slice(-maxBytes);
     };
@@ -41,11 +77,12 @@ function run(file: string, args: string[], display: string, opts: ExecOptions): 
     child.stderr.on("data", append);
     const killGroup = () => {
       try {
-        process.kill(-child.pid!, "SIGKILL");
+        if (child.pid) process.kill(-child.pid, "SIGKILL");
       } catch {
         child.kill("SIGKILL");
       }
     };
+    if (child.pid) live.set(child.pid, killGroup);
     const timer = setTimeout(() => {
       timedOut = true;
       killGroup();
@@ -55,7 +92,8 @@ function run(file: string, args: string[], display: string, opts: ExecOptions): 
       done = true;
       clearTimeout(timer);
       if (graceTimer) clearTimeout(graceTimer);
-      resolve({ command: display, exitCode, signal, output: output.slice(-maxBytes), durationMs: Date.now() - started, timedOut });
+      if (child.pid) live.delete(child.pid);
+      resolve({ command: display, exitCode, signal, output: output.slice(-maxBytes), durationMs: Date.now() - started, timedOut, truncated: received > maxBytes });
     };
     child.on("error", (err) => {
       output += `\n${err.message}`;

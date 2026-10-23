@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { execFile, execShell, tail } from "../src/exec.ts";
+import { execFile, execShell, killAllChildren, liveChildCount, tail } from "../src/exec.ts";
 
 const opts = { cwd: process.cwd(), env: { PATH: process.env["PATH"] ?? "" } };
 
@@ -18,9 +18,22 @@ describe("execShell", () => {
     expect(r.output).not.toContain("late");
   });
 
-  it("caps output to the configured size", async () => {
+  it("caps output to the configured size and says so", async () => {
     const r = await execShell("yes | head -c 50000", { ...opts, maxOutputBytes: 1000 });
     expect(r.output.length).toBeLessThanOrEqual(1000);
+    expect(r.truncated).toBe(true);
+    expect((await execShell("echo small", opts)).truncated).toBe(false);
+  });
+
+  it("kills every live child when the engine is told to shut down", async () => {
+    const pending = execShell("sleep 30; echo late", { ...opts, timeoutMs: 60_000 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(liveChildCount()).toBeGreaterThan(0);
+    killAllChildren();
+    const r = await pending;
+    expect(r.output).not.toContain("late");
+    expect(r.exitCode).not.toBe(0);
+    expect(liveChildCount()).toBe(0);
   });
 });
 

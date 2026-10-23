@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
+import { parseCostLimit, parseEffort } from "./flags.ts";
 import { RunJournal } from "./journal.ts";
 import { publishRun, runContribution } from "./orchestrator.ts";
 
@@ -75,10 +76,11 @@ async function main(argv: string[]): Promise<void> {
     } else {
       fail("run needs --task FILE or --report FILE --opportunity ID");
     }
-    const effort = values.effort as "low" | "medium" | "high" | "xhigh" | "max" | undefined;
+    const effort = parseEffort(values.effort);
+    if (values["no-sandbox"]) process.stderr.write("warning: --no-sandbox: the agent's commands run on this machine with only text-matching hooks between them and your files\n");
     const result = await runContribution(input, {
       workdir: path.resolve(values.workdir ?? ".gitgoblin"),
-      ...(values["max-cost"] ? { limits: { maxCostUsd: Number(values["max-cost"]) } } : {}),
+      ...(values["max-cost"] ? { limits: { maxCostUsd: parseCostLimit(values["max-cost"]) } } : {}),
       ...(values.model ? { model: values.model } : {}),
       ...(effort ? { effort } : {}),
       ...(values["skip-install"] ? { skipInstall: true } : {}),

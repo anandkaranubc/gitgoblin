@@ -284,6 +284,36 @@ describe("runContribution", () => {
     expect(existsSync(path.join(result.runDir, "verification-1.json"))).toBe(true);
   });
 
+  it("escalates when the diff is too large to review in full", async () => {
+    const repo = await createFixtureRepo();
+    const handlers: Record<string, PhaseHandler> = {
+      ...happyPath,
+      implement: (_spec, ws) => {
+        write(ws, "src/paginate.js", `${FIXED}// ${"x".repeat(5000)}\n`);
+        return notes;
+      },
+    };
+    const result = await run(handlers, [], { maxPatchBytes: 2000 })(repo, workdir());
+    expect(result.status).toBe("escalated");
+    expect(result.reason).toMatch(/too large/);
+  });
+
+  it("refuses to publish a run whose artifacts no longer validate", async () => {
+    const repo = await createFixtureRepo();
+    const wd = workdir();
+    const result = await run(happyPath)(repo, wd);
+    expect(result.status).toBe("awaiting_approval");
+    const taskFile = path.join(result.runDir, "task.json");
+    const task = JSON.parse(readFileSync(taskFile, "utf8"));
+    writeFileSync(taskFile, JSON.stringify({ ...task, repo: { ...task.repo, name: "../../evil" } }));
+    await expect(publishRun(result.runId, { workdir: wd, approved: true, dryRun: true, env })).rejects.toThrow();
+    writeFileSync(taskFile, JSON.stringify(task));
+    const deliveryFile = path.join(result.runDir, "delivery.json");
+    const delivery = JSON.parse(readFileSync(deliveryFile, "utf8"));
+    writeFileSync(deliveryFile, JSON.stringify({ ...delivery, commitSha: "not a sha" }));
+    await expect(publishRun(result.runId, { workdir: wd, approved: true, dryRun: true, env })).rejects.toThrow();
+  });
+
   it("reports a failed phase instead of throwing", async () => {
     const repo = await createFixtureRepo();
     const result = await run({ orient: () => ({ not: "an investigation" }) })(repo, workdir());

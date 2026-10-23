@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeText, taskFromIntel } from "../src/intake.ts";
+import { parseTask, sanitizeText, taskFromIntel } from "../src/intake.ts";
 
 const profile = {
   repo: { host: "github.com", owner: "acme", name: "widgets", localPath: "/tmp/widgets" },
@@ -73,5 +73,32 @@ describe("taskFromIntel", () => {
 describe("sanitizeText", () => {
   it("strips zero-width and bidi characters but keeps newlines", () => {
     expect(sanitizeText("a​b‮c\nd\te")).toBe("abc\nd\te");
+  });
+});
+
+describe("TaskSchema repository fields", () => {
+  const base = { id: "x", title: "t", repo: { owner: "acme", name: "widgets" } };
+  it("accepts ordinary identifiers, shas, branches and clone urls", () => {
+    const task = parseTask({ ...base, repo: { ...base.repo, host: "codeberg.org", headSha: "abc123", defaultBranch: "release/2.x", cloneUrl: "https://codeberg.org/acme/widgets.git" } });
+    expect(task.repo.host).toBe("codeberg.org");
+    expect(() => parseTask({ ...base, repo: { ...base.repo, cloneUrl: "file:///tmp/repo" } })).not.toThrow();
+    expect(() => parseTask({ ...base, repo: { ...base.repo, cloneUrl: "git@github.com:acme/widgets.git" } })).not.toThrow();
+    expect(() => parseTask({ ...base, repo: { owner: "a.b-c_d", name: "x.y" } })).not.toThrow();
+  });
+  it.each([
+    { owner: "../etc", name: "w" },
+    { owner: "acme", name: "w/x" },
+    { owner: "acme", name: ".." },
+    { owner: "-acme", name: "w" },
+    { owner: "acme", name: "w", host: "evil host" },
+    { owner: "acme", name: "w", headSha: "--output=/tmp/x" },
+    { owner: "acme", name: "w", headSha: "main" },
+    { owner: "acme", name: "w", defaultBranch: "-x" },
+    { owner: "acme", name: "w", defaultBranch: "a..b" },
+    { owner: "acme", name: "w", defaultBranch: "has space" },
+    { owner: "acme", name: "w", cloneUrl: "ext::sh -c id" },
+    { owner: "acme", name: "w", cloneUrl: "-oProxyCommand=id" },
+  ])("rejects repo fields that could change what git does: %o", (repo) => {
+    expect(() => parseTask({ ...base, repo })).toThrow();
   });
 });
