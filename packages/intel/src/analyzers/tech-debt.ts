@@ -11,6 +11,8 @@ export interface DebtMarker {
   line: number;
   marker: string;
   text: string;
+  /** The source line as written, for evidence. */
+  raw: string;
   /** Issue numbers referenced in the comment. */
   issues: number[];
 }
@@ -32,7 +34,7 @@ export function findDebtMarkers(path: string, text: string): DebtMarker[] {
     if (/^\s*(\/\/[\/!]|#:)/.test(line)) continue;
     const after = line.slice(m.index + m[0].length).replace(/\*\/\s*$|-->\s*$/, "").trim();
     const issues = [...line.matchAll(/(?:#|GH-|issues\/|issue\s)(\d{1,6})\b/gi)].map((x) => Number(x[1])).slice(0, 3);
-    out.push({ path, line: i + 1, marker: m[1]!.toUpperCase(), text: after, issues });
+    out.push({ path, line: i + 1, marker: m[1]!.toUpperCase(), text: after, raw: lines[i]!.trim(), issues });
   }
   return out;
 }
@@ -101,7 +103,7 @@ export const techDebtAnalyzer: Analyzer = {
         title: "Clean up TODOs that reference issues which are already closed",
         summary: "Comments say to revisit code once an issue is resolved; those issues are closed, so the workaround or note is stale.",
         evidence: [
-          evidence(ctx, "file", `${m.path}:${m.line}`, { excerpt: `${m.marker}: ${m.text}` }),
+          evidence(ctx, "file", `${m.path}:${m.line}`, { excerpt: m.raw }),
           evidence(ctx, "issue", closed.url, { note: `#${n} "${closed.title}" closed${closed.reason ? ` as ${closed.reason.replace("_", " ")}` : ""}${closed.closedAt ? ` on ${closed.closedAt.slice(0, 10)}` : ""}` }),
         ],
         files: [m.path],
@@ -124,7 +126,7 @@ export const techDebtAnalyzer: Analyzer = {
         title: `Remove compatibility code kept for Python ${mentioned}, which is no longer supported`,
         summary: `Comments say to clean up once Python ${mentioned} support is dropped; the project now requires Python ${minPy} or newer, so the condition is met.`,
         evidence: [
-          evidence(ctx, "file", `${m.path}:${m.line}`, { excerpt: `${m.marker}: ${m.text}` }),
+          evidence(ctx, "file", `${m.path}:${m.line}`, { excerpt: m.raw }),
           evidence(ctx, "file", python!.paths[0]!, { note: `minimum Python is ${minPy} (${python!.requiresPython ? `requires-python ${python!.requiresPython}` : "from classifiers"})` }),
         ],
         files: [m.path, python!.paths[0]!],
@@ -155,7 +157,7 @@ export const techDebtAnalyzer: Analyzer = {
         clusterKey: `todo:${m.path}:${m.line}`,
         title: `Resolve a ${age}-year-old ${m.marker} in ${m.path}`,
         summary: `${m.marker}: ${m.text}`,
-        evidence: [evidence(ctx, "file", `${m.path}:${m.line}`, { excerpt: `${m.marker}: ${m.text}` }), evidence(ctx, "commit", blame.sha, { note: `line last changed ${blame.date.slice(0, 10)}` })],
+        evidence: [evidence(ctx, "file", `${m.path}:${m.line}`, { excerpt: m.raw }), evidence(ctx, "commit", blame.sha, { note: `line last changed ${blame.date.slice(0, 10)}` })],
         files: [m.path],
         effort: "medium",
         skills: [ctx.inventory.byPath.get(m.path)?.language?.toLowerCase() ?? "code"],
@@ -163,7 +165,7 @@ export const techDebtAnalyzer: Analyzer = {
         acceptanceCriteria: ["The comment is removed because the underlying problem is fixed, with maintainer agreement."],
         etiquette: ["Ask before doing: old TODOs are sometimes deliberately deferred."],
         risks: ["Maintainers may have reasons to leave it; the comment may be outdated."],
-        signals: { value: 0.35, valueReason: "self-admitted debt the authors wanted fixed", feasibility: 0.5, feasibilityReason: "scope depends on the comment's accuracy", confidence: 0.4, confidenceReason: "the marker is real, but whether it is still wanted is unknown", welcomenessFactor: 0.7 },
+        signals: { value: 0.25, valueReason: "self-admitted debt; in three backtests old TODOs were removed no more often than random lines, mostly in refactors", feasibility: 0.5, feasibilityReason: "scope depends on the comment's accuracy", confidence: 0.4, confidenceReason: "the marker is real, but whether it is still wanted is unknown", welcomenessFactor: 0.7 },
       });
     }
     return findings;
