@@ -1,16 +1,18 @@
-// Starts an installed MCP server and checks that it answers an initialize request over stdio with
-// the expected version. Used by the release workflow: `--version` alone never loads the bundle.
+// Starts an MCP server and checks that it answers an initialize request over stdio with the expected
+// version. Used by the release workflow (`--version` alone never loads the bundle) and the Windows CI
+// job, which starts the launcher through node because Windows cannot spawn a .mjs file directly.
 //
 //   node scripts/smoke-mcp.mjs <path to gitgoblin-mcp> <expected version>
+//   node scripts/smoke-mcp.mjs <command> <expected version> [arguments...]
 import { spawn } from "node:child_process";
 
-const [bin, expected] = process.argv.slice(2);
+const [bin, expected, ...args] = process.argv.slice(2);
 if (!bin || !expected) {
-  console.error("usage: node scripts/smoke-mcp.mjs <path to gitgoblin-mcp> <expected version>");
+  console.error("usage: node scripts/smoke-mcp.mjs <command> <expected version> [arguments...]");
   process.exit(2);
 }
 
-const child = spawn(bin, [], { stdio: ["pipe", "pipe", "inherit"] });
+const child = spawn(bin, args, { stdio: ["pipe", "pipe", "inherit"] });
 const fail = (why) => {
   console.error(why);
   child.kill();

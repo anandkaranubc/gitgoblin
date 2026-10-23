@@ -27,3 +27,38 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run docs:check
+
+  # Not a required check: Windows is not a supported platform yet (issue #80), and this job is how we
+  # find out what works there. The engine is left out on purpose: its sandbox for repository commands
+  # exists only on macOS and Linux, so `contribute` is not expected to work on Windows.
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Tests of everything but the engine
+        run: npm test -w @gitgoblin/core -w @gitgoblin/sources -w @gitgoblin/discovery -w @gitgoblin/intel -w gitgoblin -w @gitgoblin/mcp
+      # The steps below run even when tests fail, so one run reports on every part.
+      - name: The command, from source and from the npm bundle
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          # Read-only and only in this step, for GitHub's higher rate limit on public data.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node packages/cli/bin/gitgoblin.mjs goals
+          node packages/cli/bin/gitgoblin.mjs discover learn --language zig --limit 2
+          node packages/cli/bin/gitgoblin.mjs analyze jd/tenacity --max 2 --no-links
+          npm run bundle -w gitgoblin
+          node packages/cli/dist/gitgoblin.mjs --version
+      - name: The MCP server answers an initialize request
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: node scripts/smoke-mcp.mjs node "$(node -p "require('./packages/mcp/package.json').version")" packages/mcp/bin/gitgoblin-mcp.mjs

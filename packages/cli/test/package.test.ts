@@ -2,11 +2,12 @@ import { execFileSync } from "node:child_process";
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Runtime, run } from "../src/index.ts";
 import { AGENT_SDK } from "../src/siblings.ts";
 
-const here = new URL("..", import.meta.url).pathname;
+const here = fileURLToPath(new URL("..", import.meta.url));
 const manifest = JSON.parse(readFileSync(join(here, "package.json"), "utf8")) as {
   version: string;
   dependencies?: Record<string, string>;
