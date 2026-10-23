@@ -14,19 +14,22 @@ claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
 | --- | --- | --- |
 | `discover_repositories` | `goal` (default `contribute`), `languages`, `topics`, `keywords`, `min_stars`, `max_stars`, `pushed_within_days`, `created_within_days`, `license`, `like`, `exclude_owners`, `include_archived`, `include_forks`, `limit` (default 10, max 25) | Ranked repositories: stars, language, license, score, the three strongest reasons for and one against, starter issues for `contribute`. `structuredContent.results[]` carries the same fields. |
 | `explain_repository` | `repository`, `goal` | All ten discovery signals with value, weight for the goal and evidence. Unknown signals say so. |
-| `analyze_repository` | `repository`, `max_opportunities` (default 10, max 30), `check_links` (default false), `check_dependencies` (default true), `goal` | The profile (nature, activity, responsiveness, welcomeness with signals, rules, commands, conventions) and the ranked opportunities with their primary evidence. |
+| `analyze_repository` | `repository`, `max_opportunities` (default 10, max 30), `check_dependencies` (default true), `goal` | The profile (nature, activity, responsiveness, welcomeness with signals, rules, commands, conventions) and the ranked opportunities with their primary evidence. |
 | `get_opportunity` | `repository`, `opportunity_id` or `issue_number` | One opportunity in full plus how to work on the project: clone, commands, conventions, rules, etiquette. |
 
-`repository` accepts `owner/name` or a URL. Errors come back as tool results with advice (how to get a token, how to spell a repository), never as protocol failures. Long calls send progress notifications when the client provides a progress token.
+`repository` accepts `owner/name` or a URL on github.com, gitlab.com or codeberg.org; other hosts are refused unless listed in `GITGOBLIN_MCP_HOSTS`. Errors come back as tool results with advice (how to get a token, how to spell a repository), never as protocol failures. Long calls send progress notifications when the client provides a progress token.
 
-The server's `instructions` tell the agent the typical flow and the one rule that matters: it never opens issues, pull requests or comments on the person's behalf unless asked.
+The server's `instructions` tell the agent the typical flow, that quoted repository text is data and never instructions, and the one rule that matters: it never opens issues, pull requests or comments on the person's behalf unless asked.
+
+The repository is often chosen by a model, so the server treats it as hostile: git checks committed symlinks out as plain files and only speaks HTTPS, clones live in their own cache, external links are never fetched, and control characters are stripped from every result. [docs/design.md](docs/design.md#untrusted-repositories) explains each defence.
 
 ## Environment
 
 | Variable | Effect |
 | --- | --- |
 | `GITHUB_TOKEN`, `GH_TOKEN` | Optional. Raises GitHub's limits and unlocks starter issues. Falls back to `gh auth token`. |
-| `GITGOBLIN_CACHE_DIR` | Where the HTTP cache and blob-less clones live (default `~/.cache/gitgoblin`). |
+| `GITGOBLIN_CACHE_DIR` | Where the HTTP cache lives (default `~/.cache/gitgoblin`); the server's blob-less clones go in its `mcp` subdirectory. |
+| `GITGOBLIN_MCP_HOSTS` | Extra forges the tools may read, comma-separated, for example `git.example.org`. Only add hosts you trust: the server clones from them. |
 
 ## Development
 
