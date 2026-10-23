@@ -205,6 +205,11 @@ describe("when issues could not be read", () => {
     expect(gap).toBe("Issues and pull requests were not analyzed (GitHub rate limit nearly exhausted (0 left); stopping API use), so opportunities from them are missing. Try again in a minute, or check your token with `gh auth status`.");
   });
 
+  it("does not repeat the advice when intel's note already carries it", () => {
+    const gap = issueGap(withoutIssues("issue and PR samples unavailable: GitHub refused requests as rate limited (secondary limit; 3967 of the hourly quota left); issues and pull requests were not analyzed, try again in a minute"));
+    expect(gap).toBe("Issues and pull requests were not analyzed (GitHub refused requests as rate limited (secondary limit; 3967 of the hourly quota left)), so opportunities from them are missing. Try again in a minute, or check your token with `gh auth status`.");
+  });
+
   it("gives the reason without advice when sampling was skipped on purpose", () => {
     expect(issueGap(withoutIssues("issue and PR sampling skipped: the README says the project does not accept contributions"))).toBe(
       "Issues and pull requests were not analyzed (the README says the project does not accept contributions), so opportunities from them are missing.",

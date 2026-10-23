@@ -176,7 +176,8 @@ export function issueGap(report: AnalysisReport): string | undefined {
   if (activity.sampleSizes.issues > 0 || activity.openIssues === 0) return undefined;
   const failed = report.budget.notes.find((n) => SAMPLE_FAILED.test(n));
   const skipped = failed ? undefined : report.budget.notes.find((n) => SAMPLE_SKIPPED.test(n));
-  const reason = failed ? failed.replace(SAMPLE_FAILED, "") : skipped ? skipped.replace(SAMPLE_SKIPPED, "") : "";
+  // Intel may append its own "were not analyzed, try again" clause; this sentence already says both.
+  const reason = (failed ? failed.replace(SAMPLE_FAILED, "") : skipped ? skipped.replace(SAMPLE_SKIPPED, "") : "").replace(/;\s*issues and pull requests were not analyzed.*$/i, "");
   const why = reason ? ` (${plain(reason)})` : "";
   const advice = failed ? " Try again in a minute, or check your token with `gh auth status`." : "";
   return `Issues and pull requests were not analyzed${why}, so opportunities from them are missing.${advice}`;
