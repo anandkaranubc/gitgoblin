@@ -10,6 +10,7 @@ import { ensureClone, openRepo } from "./git/repo.ts";
 import { FetchGitHubApi, type GitHubApi, discoverToken } from "./github/client.ts";
 import { sharedGitHubApi } from "./github/sources-adapter.ts";
 import { detectForge, fetchForge } from "./forge/index.ts";
+import { type LlmClient, createAnthropicLlm } from "./llm/client.ts";
 import { fetchLanguages, fetchReleases, fetchRepoMeta, fetchSamples, fetchWorkflowRuns } from "./github/fetch.ts";
 import type { FailedJob, GitHubSamples, Release, RepoMeta, WorkflowRun } from "./github/types.ts";
 import type { FileInventory } from "./fs/scan.ts";
@@ -135,10 +136,12 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
     });
   }
   const manifests = await detectManifests(inventory, (p) => repo.readText(p));
+  const llm = resolveLlm(opts.llm);
+  if (llm) log(`language-model review enabled (${llm.model})`);
 
   const ctx: AnalysisContext = {
     ref, repo, inventory, meta, languages, samples, releases, runs, failedJobs, manifests, commits, now,
-    nowIso: now.toISOString(), budget, options: opts, github: onGitHub ? github : undefined,
+    nowIso: now.toISOString(), budget, options: opts, github: onGitHub ? github : undefined, llm,
     read: (path, maxBytes) => repo.readText(path, maxBytes),
     log,
   };
@@ -159,6 +162,7 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
     }
   }
 
+  if (llm && llm.usage.calls > 0) budget.note(`llm: ${llm.usage.calls} calls, ${llm.usage.inputTokens} input and ${llm.usage.outputTokens} output tokens (${llm.model})`);
   const { opportunities, skipped } = evaluate(findings, profile, opts.maxOpportunities);
   const report: AnalysisReport = { version: "1", profile, opportunities, skipped, budget: budget.toBudget() };
   return AnalysisReport.parse(report);
@@ -197,4 +201,11 @@ function languagesFromInventory(inventory: FileInventory): Record<string, number
   return bytes;
 }
 
+function resolveLlm(option: ReturnType<typeof resolveOptions>["llm"]): LlmClient | undefined {
+  if (!option) return undefined;
+  if (typeof option === "object" && "parse" in option) return option;
+  return createAnthropicLlm(typeof option === "object" ? { model: option.model } : {});
+}
+
 export type { ContributionOpportunity };
+export type { LlmClient } from "./llm/client.ts";
