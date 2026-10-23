@@ -78,8 +78,58 @@ describe("publishPullRequest", () => {
     expect(result.commands).toEqual([
       "gh repo fork acme/widgets --clone=false",
       "git -c credential.helper= -c credential.helper=!gh auth git-credential push https://github.com/<login>/widgets.git abc123:refs/heads/gitgoblin/fix-42",
+      "gh api repos/acme/widgets/pulls?head=<login>:gitgoblin/fix-42&state=open&per_page=1 --jq .[0].html_url // empty",
       "gh pr create --repo acme/widgets --base main --head <login>:gitgoblin/fix-42 --title T --body-file pr.md --draft",
     ]);
+  });
+
+  describe("after a partial failure", () => {
+    // A publish that pushed but lost the answer to `gh pr create` is retried by the person; GitHub
+    // refuses a second pull request for the same branch, so the retry must find the first one.
+    const env = { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@x", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@x" };
+    async function preparedRepo() {
+      const repo = mkdtempSync(path.join(os.tmpdir(), "gg-pub-"));
+      await git(["init", "-q", "-b", "main"], repo, env);
+      writeFileSync(path.join(repo, "a"), "1");
+      await git(["add", "."], repo, env);
+      await git(["commit", "-q", "-m", "one"], repo, env);
+      return { repo, sha: await git(["rev-parse", "HEAD"], repo, env) };
+    }
+    const fakeRunner = (existing: string, calls: string[]) => ({
+      gh: async (args: string[]) => {
+        calls.push(`gh ${args.join(" ")}`);
+        if (args[0] === "api" && args[1] === "user") return "octo";
+        if (args[0] === "repo" && args[1] === "view") return "WRITE";
+        if (args[0] === "api" && String(args[1]).includes("/pulls?head=")) return existing;
+        if (args[0] === "pr" && args[1] === "create") return "https://github.com/acme/widgets/pull/99";
+        return "";
+      },
+      push: async (args: string[]) => {
+        calls.push(`git ${args.join(" ")}`);
+        return "";
+      },
+    });
+
+    it("reuses the pull request a previous attempt opened instead of failing", async () => {
+      const { repo, sha } = await preparedRepo();
+      const calls: string[] = [];
+      const lines: string[] = [];
+      const delivery = { branch: "gitgoblin/fix-42", commitSha: sha, commitMessage: "m", prTitle: "T", prBody: "B" };
+      const result = await publishPullRequest({ task: base, delivery, wsPath: repo, bodyFile: "pr.md", env, runner: fakeRunner("https://github.com/acme/widgets/pull/7", calls), log: (l) => lines.push(l) });
+      expect(result.url).toBe("https://github.com/acme/widgets/pull/7");
+      expect(calls.some((c) => c.startsWith("gh pr create"))).toBe(false);
+      expect(calls.some((c) => c.includes("pulls?head=acme:gitgoblin/fix-42"))).toBe(true);
+      expect(lines.join("\n")).toMatch(/already open/);
+    });
+
+    it("opens a pull request when none is open for the branch", async () => {
+      const { repo, sha } = await preparedRepo();
+      const calls: string[] = [];
+      const delivery = { branch: "gitgoblin/fix-42", commitSha: sha, commitMessage: "m", prTitle: "T", prBody: "B" };
+      const result = await publishPullRequest({ task: base, delivery, wsPath: repo, bodyFile: "pr.md", env, runner: fakeRunner("", calls) });
+      expect(result.url).toBe("https://github.com/acme/widgets/pull/99");
+      expect(calls.filter((c) => c.startsWith("gh pr create"))).toHaveLength(1);
+    });
   });
   it("refuses to publish anything but the prepared commit, before touching the network", async () => {
     const env = { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@x", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@x" };
