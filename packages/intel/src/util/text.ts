@@ -6,6 +6,20 @@ export function stableId(prefix: string, ...parts: string[]): string {
   return `${prefix}-${hash.slice(0, 8)}`;
 }
 
+/**
+ * Remove control characters (keeping newlines and tabs), bidi overrides and isolates, zero-width
+ * spaces and joiners that carry no text, from text that came from a repository, an issue or a model.
+ * ZWJ and ZWNJ (U+200C, U+200D) stay: Persian words and emoji sequences need them.
+ */
+export function stripControl(text: string): string {
+  return text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u061C\u180E\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g, "");
+}
+
+/** Externally sourced text on a single line: no control characters, collapsed whitespace, backticks neutralised. */
+export function inline(text: string, max = 400): string {
+  return truncate(stripControl(text).replace(/`/g, "'"), max);
+}
+
 export function truncate(text: string, max: number): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length <= max ? flat : `${flat.slice(0, max - 1).trimEnd()}…`;

@@ -1,7 +1,7 @@
-import { stat } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 
-import type { GitRepo } from "../git/repo.ts";
+import { type GitRepo, resolveInCheckout } from "../git/repo.ts";
 import { mapLimit } from "../util/limit.ts";
 
 export type FileCategory = "source" | "test" | "docs" | "config" | "ci" | "other";
@@ -117,12 +117,20 @@ export async function scanRepo(repo: GitRepo, maxFiles = MAX_INVENTORY): Promise
   const paths = await repo.lsFiles();
   const truncated = paths.length > maxFiles;
   const selected = truncated ? prioritize(paths, maxFiles) : paths;
-  const files = await mapLimit(selected, 64, async (path): Promise<FileEntry> => {
+  const entries = await mapLimit(selected, 64, async (path): Promise<FileEntry | undefined> => {
     let sizeBytes = 0;
     try {
-      sizeBytes = (await stat(join(repo.dir, path))).size;
+      const info = await lstat(join(repo.dir, path));
+      if (info.isSymbolicLink()) {
+        // A link to another file in the checkout (a README pointing into docs/) is content; anything else is not.
+        const target = await resolveInCheckout(repo.dir, path);
+        if (!target) return undefined;
+        sizeBytes = target.size;
+      } else {
+        sizeBytes = info.size;
+      }
     } catch {
-      // Submodule entries and broken symlinks have no size; keep the path.
+      // Submodule entries have no file; keep the path.
     }
     return {
       path,
@@ -133,6 +141,7 @@ export async function scanRepo(repo: GitRepo, maxFiles = MAX_INVENTORY): Promise
       vendored: isVendored(path),
     };
   });
+  const files = entries.filter((e): e is FileEntry => e !== undefined);
   return { files, totalCount: paths.length, truncated, byPath: new Map(files.map((f) => [f.path, f])) };
 }
 
