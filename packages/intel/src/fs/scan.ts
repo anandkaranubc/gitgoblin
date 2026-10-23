@@ -1,5 +1,8 @@
 import { lstat } from "node:fs/promises";
-import { basename, extname, join } from "node:path";
+import { join, posix } from "node:path";
+
+// `join` builds file-system paths; repository paths are POSIX on every OS.
+const { basename, extname } = posix;
 
 import { type GitRepo, resolveInCheckout } from "../git/repo.ts";
 import { mapLimit } from "../util/limit.ts";
