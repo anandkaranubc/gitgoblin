@@ -11,6 +11,7 @@ export const MAX_ISSUE_BODY = 20_000;
 const BOILERPLATE_HEADING = /\b(have you (read|searched|checked)|did you (read|search)|before (you )?(submit|open|post)|prerequisites?|pre-?flight|checklist|code of conduct|contributing guidelines?|terms|validations?|confirm(ation)?s?|i have|is there an existing issue|existing issues?|search(ed)? (for )?existing)\b/i;
 /** Sections that describe the problem, in the order a reader wants them. */
 const PROBLEM_HEADING = /\b(describe the (bug|issue|problem)|bug description|what happened|what problem|problem|description|summary|current behaviou?r|actual behaviou?r|observed behaviou?r|issue|details?|motivation|feature request|proposal|steps to reproduce|reproduction)\b/i;
+const GREETING = /^(?:hi|hello|hey|greetings|good (?:morning|afternoon|evening))\b(?:\s+(?:all|there|team|folks|everyone|everybody|guys|maintainers|@?[\w-]+))?\s*[,!.:]*\s*/i;
 const EMPTY_ANSWER = /^\s*(_?no response_?|n\/?a|none|-|yes|no|y|n|\[x\].*|\[ \].*)\s*$/i;
 
 interface Section {
@@ -65,5 +66,6 @@ export function problemStatement(markdown: string): string {
   const ordered = problem ? [problem, ...kept.filter((s) => s !== problem)] : kept;
   // Short answers to version and environment questions say nothing a summary needs.
   const prose = ordered.filter((s) => s === problem || !/\b(version|environment|operating system|platform|os|browser|node|python|runtime)\b/i.test(s.heading));
-  return prose.map((s) => clean(s.text)).join("\n\n").trim();
+  // "Hello," or "Hi team!" opens many reports and says nothing about the problem.
+  return prose.map((s) => clean(s.text)).join("\n\n").trim().replace(GREETING, "");
 }

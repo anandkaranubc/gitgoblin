@@ -36,3 +36,11 @@ describe("issue text", () => {
     expect(problemStatement("Calling `f()` twice raises KeyError.\n\n```py\nf(); f()\n```")).toBe("Calling `f()` twice raises KeyError.\n\n```py\nf(); f()\n```");
   });
 });
+
+describe("greetings", () => {
+  it("drops an opening salutation from the problem statement", () => {
+    expect(problemStatement("Hello, I've reached code that is marked as unreachable in `before_log`.")).toBe("I've reached code that is marked as unreachable in `before_log`.");
+    expect(problemStatement("Hi team! The parser drops trailing commas.")).toBe("The parser drops trailing commas.");
+    expect(problemStatement("Highlighting breaks on long lines.")).toBe("Highlighting breaks on long lines.");
+  });
+});
