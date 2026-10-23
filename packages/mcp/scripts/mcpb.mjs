@@ -3,9 +3,10 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { findPackageJSON } from "node:module";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const MCPB_VERSION = "2.1.2";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
 
@@ -73,7 +74,12 @@ const manifest = {
 };
 writeFileSync(`${stage}/manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
 
-const mcpb = (...args) => execFileSync("npx", ["-y", `@anthropic-ai/mcpb@${MCPB_VERSION}`, ...args], { stdio: "inherit" });
+// The packer comes from node_modules, pinned by the lockfile like every other build input, never from a
+// fresh `npx` download: whatever runs here shapes the bundle people install.
+const mcpbManifest = findPackageJSON("@anthropic-ai/mcpb", import.meta.url);
+const { bin } = JSON.parse(readFileSync(mcpbManifest, "utf8"));
+const mcpbCli = join(dirname(mcpbManifest), typeof bin === "string" ? bin : bin.mcpb);
+const mcpb = (...args) => execFileSync(process.execPath, [mcpbCli, ...args], { stdio: "inherit" });
 mcpb("validate", `${stage}/manifest.json`);
 const output = `${root}dist/gitgoblin.mcpb`;
 rmSync(output, { force: true });
