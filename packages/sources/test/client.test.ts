@@ -182,3 +182,21 @@ describe("HttpClient defensive limits", () => {
     await expect(client.json(URL_A)).rejects.toThrow();
   });
 });
+
+describe("HttpClient.forget", () => {
+  it("drops one cached entry so the next request goes to the network", async () => {
+    const { fetch, calls } = fetchStub(() => jsonResponse({ n: 1 }));
+    const { client } = makeClient(fetch);
+    await client.json(URL_A);
+    await client.json(URL_A);
+    expect(calls).toHaveLength(1);
+    client.forget("GET", URL_A);
+    await client.json(URL_A);
+    expect(calls).toHaveLength(2);
+    // POST entries are keyed by body as well.
+    await client.json(URL_A, { method: "POST", body: "{\"q\":1}" });
+    client.forget("POST", URL_A, "{\"q\":1}");
+    await client.json(URL_A, { method: "POST", body: "{\"q\":1}" });
+    expect(calls).toHaveLength(4);
+  });
+});

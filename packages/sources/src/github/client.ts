@@ -1,6 +1,6 @@
 import { type IssueCandidate, type RepoFacts, type RepoRef, repoId } from "@gitgoblin/core";
 import { z } from "zod";
-import { type HttpClient, HttpError, type RateLimitState } from "../http/client.ts";
+import { type HttpClient, HttpError, RateLimitError, type RateLimitState } from "../http/client.ts";
 
 const API_VERSION = "2022-11-28";
 const SEARCH_TTL_MS = 10 * 60 * 1000;
@@ -202,6 +202,12 @@ export class GraphQLError extends Error {
   }
 }
 
+function isRateLimitError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const type = (error as { type?: unknown }).type;
+  return typeof type === "string" && /^RATE_LIMIT(ED)?$/.test(type);
+}
+
 export class MissingTokenError extends Error {
   constructor(what: string) {
     super(`${what} needs a GitHub token. Set GITHUB_TOKEN or run \`gh auth login\`.`);
@@ -259,6 +265,11 @@ export class GitHubClient {
    * null nodes and a RESOURCE_LIMITS_EXCEEDED error. Partial data is returned
    * so callers can keep what they got and retry smaller; GraphQLError is
    * thrown only when there is no data at all. Other packages rely on this.
+   *
+   * An answer with errors and no data is not an answer: it is dropped from the
+   * cache (the HTTP layer stored it as a 200) so the next call asks again, and
+   * an exhausted GraphQL budget, which GitHub also reports this way, becomes a
+   * RateLimitError with the reset time from the response headers.
    */
   async graphql<T = unknown>(
     query: string,
@@ -266,15 +277,22 @@ export class GitHubClient {
     options: { ttlMs?: number | undefined } = {},
   ): Promise<T> {
     if (!this.#token) throw new MissingTokenError("The GitHub GraphQL API");
+    const url = `${this.#baseUrl}/graphql`;
     const body = JSON.stringify({ query, variables });
-    const response = await this.http.json<{ data?: T; errors?: unknown[] }>(`${this.#baseUrl}/graphql`, {
+    const response = await this.http.json<{ data?: T | null; errors?: unknown[] }>(url, {
       method: "POST",
       headers: this.#headers(),
       body,
       ttlMs: options.ttlMs,
     });
-    if (response.errors?.length && response.data === undefined) throw new GraphQLError(response.errors);
-    if (response.data === undefined) throw new GraphQLError([{ message: "empty response" }]);
+    if (response.data === undefined || response.data === null) {
+      this.http.forget("POST", url, body);
+      const errors = response.errors ?? [];
+      if (errors.some(isRateLimitError)) {
+        throw new RateLimitError(url, JSON.stringify(errors).slice(0, 500), this.rateLimits()["graphql"]?.resetAt);
+      }
+      throw new GraphQLError(errors.length ? errors : [{ message: "empty response" }]);
+    }
     return response.data;
   }
 
