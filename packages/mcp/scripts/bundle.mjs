@@ -6,7 +6,7 @@
 import { copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { writeNotices } from "./notices.mjs";
+import { writeNotices } from "../../../scripts/notices.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 

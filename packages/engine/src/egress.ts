@@ -40,6 +40,51 @@ export interface EgressProxy {
 export interface EgressOptions {
   /** Ports a tunnel may open; 443 by default. Tests add a local one. */
   allowedPorts?: number[];
+  /**
+   * Listen on this Unix socket instead of 127.0.0.1. Used with bubblewrap, whose network namespace
+   * has its own loopback: the socket's folder is bound into the sandbox and `forwardedCommand` offers
+   * it on the namespace's 127.0.0.1.
+   */
+  socketPath?: string;
+}
+
+/** The port the in-sandbox forwarder listens on; the namespace is fresh, so any port is free. */
+export const FORWARDER_PORT = 3128;
+
+/**
+ * Runs inside the sandbox: listens on 127.0.0.1 and pipes each connection to the proxy's Unix socket,
+ * then runs the real command and exits with its status. Plain CommonJS for `node -e`.
+ */
+const FORWARDER_SOURCE = [
+  "const net = require('net');",
+  "const { spawn } = require('child_process');",
+  "const server = net.createServer((c) => { const u = net.connect(process.env.GG_EGRESS_SOCKET); c.pipe(u); u.pipe(c); u.on('error', () => c.destroy()); c.on('error', () => u.destroy()); });",
+  "server.listen(Number(process.env.GG_EGRESS_PORT), '127.0.0.1', () => {",
+  "  const child = spawn('/bin/sh', ['-c', process.env.GG_EGRESS_COMMAND], { stdio: 'inherit' });",
+  "  child.on('exit', (code, signal) => process.exit(code ?? (signal ? 128 : 1)));",
+  "});",
+].join(" ");
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Wraps `command` so it runs behind the forwarder, with the proxy variables pointing at it. The
+ * command, socket and source travel in the environment, so nothing needs shell escaping but the
+ * node path.
+ */
+export function forwardedCommand(command: string, socketPath: string, nodePath: string = process.execPath): { command: string; env: Record<string, string> } {
+  return {
+    command: `exec ${shellQuote(nodePath)} -e "$GG_EGRESS_FORWARDER"`,
+    env: {
+      ...proxyEnv(`http://127.0.0.1:${FORWARDER_PORT}`),
+      GG_EGRESS_FORWARDER: FORWARDER_SOURCE,
+      GG_EGRESS_SOCKET: socketPath,
+      GG_EGRESS_PORT: String(FORWARDER_PORT),
+      GG_EGRESS_COMMAND: command,
+    },
+  };
 }
 
 /**
@@ -90,10 +135,10 @@ export function startEgressProxy(allowed: readonly string[] = REGISTRY_HOSTS, op
   });
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as net.AddressInfo;
+    const ready = () => {
+      const address = server.address();
       resolve({
-        url: `http://127.0.0.1:${port}`,
+        url: typeof address === "string" ? `unix:${address}` : `http://127.0.0.1:${(address as net.AddressInfo).port}`,
         denied: () => [...denied],
         close: () =>
           new Promise<void>((done) => {
@@ -101,7 +146,9 @@ export function startEgressProxy(allowed: readonly string[] = REGISTRY_HOSTS, op
             server.close(() => done());
           }),
       });
-    });
+    };
+    if (options.socketPath) server.listen(options.socketPath, ready);
+    else server.listen(0, "127.0.0.1", ready);
   });
 }
 

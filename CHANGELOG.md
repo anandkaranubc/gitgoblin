@@ -36,8 +36,8 @@ The first release of the `gitgoblin` command.
 - The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
   `bwrap` on Linux when installed).
 - `--check-isolation strict` is the setting for repositories you do not trust: your home directory
-  is hidden from the repository's commands except toolchains and caches, and on macOS the install
-  can reach package registries only; hosts it tried and was refused are listed in the run report.
+  is hidden from the repository's commands except toolchains and caches, and the install can reach
+  package registries only; hosts it tried and was refused are listed in the run report.
 - Prepared pull requests are written for the maintainers who will read them: the title describes
   the fix, the summary says what changed and why, checks that already failed before the change are
   marked as such, and notes about gitgoblin's own environment stay in your run report.
