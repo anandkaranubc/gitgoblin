@@ -26,7 +26,7 @@ To rehearse without a tag, run the workflow by hand: **Actions → Release → R
 ## Cutting a release
 
 1. **Prepare a pull request** titled `chore(release): gitgoblin 0.2.0` (or `@gitgoblin/mcp 0.2.0`). It should:
-   - Bump `version` in the package's `package.json`, plus the places that repeat it. For the CLI that is `.version()` in `packages/cli/src/index.ts`; a test fails if the two differ. For the MCP server it is `src/version.ts`, `bin/gitgoblin-mcp.mjs`, the two `.claude-plugin` manifests, and the install URLs in the docs: `git grep -n <old version>` finds them all.
+   - Bump `version` in the package's `package.json`, plus the places that repeat it. For the CLI that is `.version()` in `packages/cli/src/index.ts`; a test fails if the two differ. For the MCP server it is `src/version.ts` and `bin/gitgoblin-mcp.mjs`. Install URLs and the plugin manifests name a release tag that does not exist yet, so they move in step 7.
    - Turn the CHANGELOG section's heading from `## gitgoblin 0.2.0 - Unreleased` into `## gitgoblin 0.2.0 - <today>`. Write it for users: what they can do now, what changed, what to watch out for.
 2. **Merge it**, then tag the merge commit and push the tag:
 
@@ -50,7 +50,7 @@ To rehearse without a tag, run the workflow by hand: **Actions → Release → R
 6. **Publish the draft release.**
 7. **MCP server only.** Open a pull request that points everything at the new release:
    - `packages/mcp/server.json`: its version, the `.mcpb` URL, and the SHA-256 copied from the published release's `SHA256SUMS`. The `.mcpb` is a zip whose hash changes with every build, so never use a hash from a local rebuild.
-   - The install URLs that name the tag, until the npm package is the documented install: `.mcp.json`, `docs/agents.md` (including the base64 Cursor link and the URL-encoded VS Code link), `skills/gitgoblin/SKILL.md`, the README, `docs/architecture.md`, and the site's getting-started and status pages.
+   - The version in the two `.claude-plugin` manifests, and the install URLs that name the tag, until the npm package is the documented install: `.mcp.json`, `docs/agents.md` (including the base64 Cursor link and the URL-encoded VS Code link), `skills/gitgoblin/SKILL.md`, the README, and the site's front page and getting-started page. `git grep -n mcp-v<old version>` finds them.
 
    Merge it, then run **Actions → MCP Registry → Run workflow**. Fill in `deprecate` with the previous version when it has a known defect.
 
@@ -62,7 +62,7 @@ The maintainer does this once, before the first release. None of it can be done 
 2. **Tags.** Add a tag ruleset (**Settings → Rules → Rulesets → New tag ruleset**) for `refs/tags/v*` and `refs/tags/mcp-v*` that restricts creations, updates and deletions, with only the maintainer allowed to bypass. Releases can then only start from the maintainer, and a published tag cannot move. The workflow also refuses a tag that is not on `main`.
 3. **The `npm` environment.** In **Settings → Environments**, create `npm`. Add yourself as a required reviewer and limit deployment to tags matching `v*` and `mcp-v*`.
 4. **Turn publishing on.** In **Settings → Secrets and variables → Actions → Variables**, set `NPM_PUBLISH` to `true`. Until then, the workflow drafts releases and never publishes. This makes sure step 3 is done first.
-5. **First publish of each package.** npm can only set up trusted publishing for a package that already exists, so the first version of each package needs a token. The first npm release of `@gitgoblin/mcp` has to be 0.1.4 or later, because the `mcp-v0.1.3` tag already exists. Either:
+5. **First publish of each package.** npm can only set up trusted publishing for a package that already exists, so the first version of each package needs a token. The first npm release of `@gitgoblin/mcp` needs a version that has no `mcp-v` tag yet and includes every parser fix, so 0.1.6 or later. Either:
    - create a granular access token with read and write access to all packages (a package that does not exist yet cannot be selected), tick **Bypass two-factor authentication** so a workflow can use it, and pick the shortest expiry. Add it as the secret `NPM_TOKEN` *on the `npm` environment*, not the repository. Push the tag, approve, then delete the secret and revoke the token; or
    - reject the waiting npm job, run `npm login`, download the tarball from the draft release, check it against `SHA256SUMS`, and run `npm publish ./<file>.tgz --access public` yourself. This version has no provenance.
 6. **Trusted publishing.** Add one for each package no more than two days before the next release: a trusted publisher whose first publish does not come within two days expires and has to be recreated. On npmjs.com, open the package's **Settings → Trusted publishing** and add GitHub Actions with owner `anandkaranubc`, repository `gitgoblin`, workflow `release.yml` and environment `npm`. Allow `npm publish`, which the workflow runs; new configurations only allow `npm stage publish` by default. Or from the command line (`npm trust` needs a recent npm; 11.19 has it):
