@@ -46,6 +46,9 @@ The first release of the `gitgoblin` command.
 - Prepared pull requests are written for the maintainers who will read them: the title describes
   the fix, the summary says what changed and why, checks that already failed before the change are
   marked as such, and notes about gitgoblin's own environment stay in your run report.
+- `contribute` stops before spending anything on a dependency-bump opportunity: the agent works
+  offline and cannot regenerate the lockfile, so it says so and leaves the update to the
+  repository's dependency bot or a maintainer.
 - `publish` can be run again after a partial failure: if a pull request for the branch is already
   open (the push worked but the answer to creating it was lost), it is found and returned instead of
   failing.
