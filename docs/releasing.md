@@ -48,7 +48,7 @@ To rehearse without a tag, run the workflow by hand: **Actions → Release → R
 6. **Publish the draft release.**
 7. **MCP server only.** Open a pull request that points everything at the new release:
    - `packages/mcp/server.json`: its version, the `.mcpb` URL, and the SHA-256 copied from the published release's `SHA256SUMS`. The `.mcpb` is a zip whose hash changes with every build, so never use a hash from a local rebuild.
-   - The install URLs that name the tag, until the npm package is the documented install: `.mcp.json`, `docs/agents.md` (including the base64 Cursor link and the URL-encoded VS Code link), `skills/gitgoblin/SKILL.md`, the README, `docs/architecture.md`, and the site's getting-started and status pages.
+   - The install URLs that name the tag, until the npm package is the documented install: `.mcp.json`, `docs/agents.md` (including the base64 Cursor link and the URL-encoded VS Code link), `skills/gitgoblin/SKILL.md`, the README, and the site's front page and getting-started page. `git grep -n mcp-v<old version>` finds them.
 
    Merge it, then run **Actions → MCP Registry → Run workflow**. Fill in `deprecate` with the previous version when it has a known defect.
 
