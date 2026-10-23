@@ -76,6 +76,41 @@ describe("prepareWorkspace", () => {
     expect(unknown.startNote).toMatch(/started from the checkout's HEAD/);
   });
 
+  it("clones from the remote's own default branch when the task names the wrong one", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "gg-repo-"));
+    await git(["init", "-q", "-b", "trunk"], dir, env);
+    await git(["config", "user.name", "t"], dir, env);
+    await git(["config", "user.email", "t@example.com"], dir, env);
+    writeFileSync(path.join(dir, "a.txt"), "one\n");
+    await git(["add", "."], dir, env);
+    await git(["commit", "-q", "-m", "init"], dir, env);
+    const task = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", cloneUrl: `file://${dir}` }, title: "Tweak" });
+    const ws = await prepareWorkspace(task, mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env);
+    expect(ws.baseSha).toBe(await git(["rev-parse", "HEAD"], dir, env));
+    expect(ws.startNote).toMatch(/origin\/main is not a branch of the repository; started from its default branch/);
+  });
+
+  it("clones at the profiled commit when it exists, and says so when it does not", async () => {
+    const repo = await sampleRepo();
+    const first = await git(["rev-parse", "HEAD"], repo, env);
+    writeFileSync(path.join(repo, "a.txt"), "changed\n");
+    await git(["commit", "-q", "-am", "second"], repo, env);
+    const pinned = await prepareWorkspace(TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", cloneUrl: `file://${repo}`, headSha: first }, title: "P" }), mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env);
+    expect(pinned.baseSha).toBe(first);
+    const missing = await prepareWorkspace(TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", cloneUrl: `file://${repo}`, headSha: "f".repeat(40) }, title: "M" }), mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env);
+    expect(missing.baseSha).toBe(await git(["rev-parse", "HEAD"], repo, env));
+    expect(missing.startNote).toMatch(/is not in the repository; started from origin\/main/);
+  });
+
+  it("refuses a repository with no commits with a plain explanation", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "gg-repo-"));
+    await git(["init", "-q", "-b", "main"], dir, env);
+    const task = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", cloneUrl: `file://${dir}` }, title: "Tweak" });
+    await expect(prepareWorkspace(task, mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env)).rejects.toThrow(/no commits/);
+    const local = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", localPath: dir }, title: "Tweak" });
+    await expect(prepareWorkspace(local, mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env)).rejects.toThrow(/no commits/);
+  });
+
   it("clones when only a URL is known", async () => {
     const repo = await sampleRepo();
     const runDir = mkdtempSync(path.join(os.tmpdir(), "gg-run-"));

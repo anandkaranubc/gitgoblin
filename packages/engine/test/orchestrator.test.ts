@@ -337,6 +337,17 @@ describe("runContribution", () => {
     expect(readFileSync(path.join(result.runDir, "report.md"), "utf8")).toContain("ran without an OS sandbox");
   });
 
+  it("ends as failed, with a report, when the repository has no commits", async () => {
+    const empty = mkdtempSync(path.join(os.tmpdir(), "gg-empty-"));
+    await git(["init", "-q", "-b", "main"], empty, env);
+    const base = fixtureTask(empty);
+    const task = { ...base, repo: { host: base.repo.host, owner: base.repo.owner, name: base.repo.name, defaultBranch: "main", cloneUrl: `file://${empty}` } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, runnerFactory: () => scriptedRunner("", {}) });
+    expect(result.status).toBe("failed");
+    expect(result.reason).toMatch(/no commits/);
+    expect(existsSync(path.join(result.runDir, "report.md"))).toBe(true);
+  });
+
   it("reports a failed phase instead of throwing", async () => {
     const repo = await createFixtureRepo();
     const result = await run({ orient: () => ({ not: "an investigation" }) })(repo, workdir());
