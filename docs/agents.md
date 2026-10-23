@@ -114,7 +114,7 @@ Project: `.cursor/mcp.json`; everywhere: `~/.cursor/mcp.json`; both take the sta
 
 ### Gemini CLI
 
-`gemini mcp add` writes to the project's `.gemini/settings.json` unless you pass `-s user` for `~/.gemini/settings.json`. The `mcpServers` entry takes the standard block; `/mcp` inside a session shows the connection. [Gemini CLI MCP docs](https://geminicli.com/docs/tools/mcp-server/).
+`gemini mcp add` writes to the project's `.gemini/settings.json` unless you pass `-s user` for `~/.gemini/settings.json`. The `mcpServers` entry takes the standard block. Check the connection with `/mcp` inside a session: in Gemini CLI 0.64, `gemini mcp list` labels every configured server "Disabled" without trying to start it, so that label says nothing about the server. [Gemini CLI MCP docs](https://geminicli.com/docs/tools/mcp-server/).
 
 ### VS Code
 
@@ -184,7 +184,7 @@ Checked on macOS on 22 October 2026 with the server run from a clone:
 | --- | --- | --- |
 | Claude Code 2.1.309 | `claude mcp add`, `claude mcp list` | Connected; all four tools listed |
 | Codex 0.163.0 | `codex mcp add`, `codex mcp list`, `codex mcp get` | Registered in `config.toml`; connection not exercised from the shell |
-| Gemini CLI 0.64.0 | `gemini mcp add -s user`, `gemini mcp list` | Registered in user settings; see the note in the client section |
+| Gemini CLI 0.64.0 | `gemini mcp add -s user`, `gemini mcp list` | Registered in user settings; `mcp list` labels every server Disabled without connecting (a nonexistent command gets the same label), so the connection was not exercised |
 | VS Code 1.139.1 | `code --add-mcp` | Entry written to the user profile `mcp.json`; connection not exercised |
 | Cursor | install link | Encoded and decoded correctly; not opened in Cursor |
 | `npx` from a packed tarball | `npm pack`, install into an empty project, `npx gitgoblin-mcp` | Initializes and lists the tools |
