@@ -67,7 +67,7 @@ without a model.
 | `workspace.ts` | git: worktree or clone, diffs against the base commit, the single squashed commit |
 | `exec.ts` | runs commands with timeouts, process-group kill and capped output |
 | `hostbox.ts` | OS sandbox (sandbox-exec, bwrap) for the repository's own commands |
-| `toolchain.ts` | per-run prefix for what the toolchain installs: a Python virtualenv, bundler's gem path |
+| `toolchain.ts` | per-run prefix for what the toolchain installs (Python virtualenv, bundler's gem path) and the Node package manager's writable caches |
 | `journal.ts` | the run directory: events, artifacts, report |
 | `deliver.ts` | commit message, PR text, push and PR creation via `gh` |
 | `intake.ts` | maps `@gitgoblin/intel` contracts to the engine's `Task` |
