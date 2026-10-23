@@ -21,7 +21,9 @@ Inside a run, the agent is boxed in:
 - The Agent SDK sandbox limits writes to the workspace and temp directories and blocks the network. The engine refuses to run unsandboxed unless asked.
 - Hooks deny, regardless of mode: `git push`, remote changes, `gh`, network tools, package publishing, installing packages, `sudo`, container and system tools, writes outside the workspace, writes into `.git/`, and writes to protected paths such as CI workflows, release config and secrets. Hooks are best-effort text matching; the sandbox is the hard boundary.
 - The agent subprocess gets a scrubbed environment: path, home, locale and Anthropic auth only. `GH_TOKEN`, cloud credentials and similar never reach it.
-- Publishing uses the operator's `gh` login from the engine process, never from an agent.
+- Publishing uses the operator's `gh` login from the engine process, never from an agent, and only after a person confirms at a terminal.
+
+The repository's own install, test, lint and build commands run on your machine, so they get a box of their own: an OS sandbox (`sandbox-exec` on macOS, `bwrap` on Linux when installed) that allows writes only to the checkout and tool caches, keeps credential files unreadable, and blocks the network except during install. If a change edits what those commands execute, such as package scripts, Makefiles or test-runner configuration, the engine stops for a person before running them. `--check-isolation strict` also hides your home directory from them.
 
 A change that makes it easier to break any of this is a bug, and the fix belongs in code, not in a prompt. [SECURITY.md](https://github.com/anandkaranubc/gitgoblin/blob/main/SECURITY.md) says how to report one.
 
@@ -34,7 +36,7 @@ The full policy is [docs/etiquette.md](https://github.com/anandkaranubc/gitgobli
 3. Evidence before action. "This might be improved" is not a contribution.
 4. Small, finished and tested. One change per pull request, in the project's style. No sweeps, no spam.
 5. Nobody's work is taken. Assigned issues, linked pull requests and recent "I'm on it" comments are respected.
-6. AI assistance is disclosed when it matters, and policies that forbid it are followed.
+6. AI assistance is disclosed in every pull request, and policies that forbid it are followed.
 7. Quiet projects are approached with care, never flooded.
 
 ## Opting out
