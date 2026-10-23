@@ -2,7 +2,7 @@
 // page has the metadata search engines and social cards need, and basic
 // accessibility invariants hold. Exit code 1 on any failure.
 import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
-import { join, resolve, dirname, posix } from "node:path";
+import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), "../dist");
@@ -41,7 +41,9 @@ for (const page of pages) {
   need(/<html[^>]+lang="/, "html lang");
   need(/<title>[^<]+<\/title>/, "title");
   need(/<meta name="description" content="[^"]+"/, "meta description");
-  need(/<link rel="canonical"/, "canonical link");
+  // The 404 page has no address of its own, so it is kept out of search instead of naming one.
+  if (rel === "/404.html") need(/<meta name="robots" content="noindex"/, "noindex");
+  else need(/<link rel="canonical"/, "canonical link");
   need(/<meta property="og:image"/, "og:image");
   need(/<meta name="viewport"/, "viewport");
   const h1s = html.match(/<h1[\s>]/g)?.length ?? 0;
@@ -72,7 +74,7 @@ for (const page of pages) {
   }
 }
 
-for (const required of ["sitemap-index.xml", "robots.txt", "llms.txt", "404.html", "site.webmanifest"]) {
+for (const required of ["sitemap-index.xml", "robots.txt", "llms.txt", "404.html", "site.webmanifest", "og.png"]) {
   if (!existsSync(join(dist, required))) problems.push(`dist: missing ${required}`);
 }
 
