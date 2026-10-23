@@ -2,7 +2,7 @@ import type { AnalysisHints, Budget, RepoRef } from "./contracts.ts";
 import type { FileInventory } from "./fs/scan.ts";
 import type { Commit, GitRepo } from "./git/repo.ts";
 import type { GitHubApi } from "./github/client.ts";
-import type { GitHubSamples, Release, RepoMeta, WorkflowRun } from "./github/types.ts";
+import type { FailedJob, GitHubSamples, Release, RepoMeta, WorkflowRun } from "./github/types.ts";
 import type { Manifests } from "./manifests/index.ts";
 
 export interface AnalysisOptions {
@@ -56,6 +56,8 @@ export function resolveOptions(options: AnalysisOptions, cacheDir: string): Reso
 /** Tracks what an analysis spent so the report can say when it cut corners. */
 export class BudgetTracker {
   httpChecks = 0;
+  /** Requests to a non-GitHub forge API. */
+  forgeRequests = 0;
   cloneMs = 0;
   truncated = false;
   readonly notes: string[] = [];
@@ -77,7 +79,7 @@ export class BudgetTracker {
 
   toBudget(): Budget {
     return {
-      apiRequests: this.api?.stats.requests ?? 0,
+      apiRequests: (this.api?.stats.requests ?? 0) + this.forgeRequests,
       httpChecks: this.httpChecks,
       cloneMs: this.cloneMs,
       totalMs: Date.now() - this.started,
@@ -99,6 +101,8 @@ export interface AnalysisContext {
   releases: Release[];
   /** Recent completed runs on the default branch (push, schedule, dispatch), newest first. */
   runs: WorkflowRun[];
+  /** Failed jobs of a run; set for forges whose API provides them (GitHub's is the default). */
+  failedJobs: ((runId: number) => Promise<FailedJob[]>) | undefined;
   manifests: Manifests;
   /** Non-merge commits from the last 365 days, newest first (capped). */
   commits: Commit[];
