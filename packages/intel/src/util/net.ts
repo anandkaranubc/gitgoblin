@@ -4,8 +4,11 @@
  * loopback or link-local addresses (cloud metadata endpoints, routers, local
  * services) are never requested.
  */
+import { lookup as dnsLookup } from "node:dns";
 import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { type LookupFunction, isIP } from "node:net";
 
 export type Lookup = (host: string) => Promise<string[]>;
 
@@ -99,6 +102,22 @@ function isPublicIpv6(ip: string): boolean {
   return true;
 }
 
+/**
+ * Where a host points: every address public, any address private (or the lookup failed oddly), or
+ * no such host at all, which for a link is a finding rather than a reason to stay quiet.
+ */
+export async function classifyHost(host: string, lookupFn: Lookup = defaultLookup): Promise<"public" | "private" | "unresolvable"> {
+  const literal = host.replace(/^\[|\]$/g, "");
+  if (isIP(literal)) return isPublicIp(literal) ? "public" : "private";
+  try {
+    const addresses = await lookupFn(host);
+    if (addresses.length === 0) return "unresolvable";
+    return addresses.every(isPublicIp) ? "public" : "private";
+  } catch (error) {
+    return (error as { code?: string }).code === "ENOTFOUND" ? "unresolvable" : "private";
+  }
+}
+
 /** True when every address the host resolves to is public; false for literals, private ranges and failed lookups. */
 export async function resolvesToPublicAddress(host: string, lookupFn: Lookup = defaultLookup): Promise<boolean> {
   const literal = host.replace(/^\[|\]$/g, "");
@@ -109,4 +128,51 @@ export async function resolvesToPublicAddress(host: string, lookupFn: Lookup = d
   } catch {
     return false;
   }
+}
+
+/**
+ * A `lookup` for node:http(s) that resolves the host and refuses unless every address is public.
+ * The socket then connects to exactly an address that was checked, so a DNS answer that changes
+ * between a pre-check and the request (rebinding) cannot reach a private address.
+ */
+export function publicOnlyLookup(resolve?: Lookup): LookupFunction {
+  return (hostname, options, callback) => {
+    const done = (error: Error | null, addresses: string[]) => {
+      if (error) return callback(error as NodeJS.ErrnoException, "", 0);
+      if (addresses.length === 0 || !addresses.every(isPublicIp)) {
+        return callback(Object.assign(new Error(`${hostname} resolves to a non-public address`), { code: "ENOTPUBLIC" }) as NodeJS.ErrnoException, "", 0);
+      }
+      const entries = addresses.map((address) => ({ address, family: isIP(address) }));
+      // net asks for every address when it races IPv4 and IPv6 (autoSelectFamily); otherwise for one.
+      if ((options as { all?: boolean }).all) (callback as unknown as (e: null, a: typeof entries) => void)(null, entries);
+      else callback(null, entries[0]!.address, entries[0]!.family);
+    };
+    if (resolve) resolve(hostname).then((a) => done(null, a), (e: Error) => done(e, []));
+    else dnsLookup(hostname, { all: true, verbatim: true }, (e, a) => done(e, e ? [] : a.map((x) => x.address)));
+  };
+}
+
+export interface HeadResponse {
+  status: number;
+  location: string | undefined;
+}
+
+/** One HEAD or GET without following redirects or reading the body, connecting only to public addresses. */
+export function requestStatus(url: string, method: "HEAD" | "GET", timeoutMs: number, resolve?: Lookup): Promise<HeadResponse> {
+  return new Promise((done, fail) => {
+    const target = new URL(url);
+    const send = target.protocol === "https:" ? httpsRequest : httpRequest;
+    const req = send(target, {
+      method,
+      lookup: publicOnlyLookup(resolve),
+      timeout: timeoutMs,
+      headers: { "user-agent": "Mozilla/5.0 (compatible; gitgoblin-intel link check)", accept: "*/*" },
+    }, (res) => {
+      done({ status: res.statusCode ?? 0, location: res.headers.location });
+      res.destroy();
+    });
+    req.on("timeout", () => req.destroy(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" })));
+    req.on("error", fail);
+    req.end();
+  });
 }
