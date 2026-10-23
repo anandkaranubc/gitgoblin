@@ -4,6 +4,7 @@ import type { RepositoryProfile } from "../contracts.ts";
 import type { AnalysisContext } from "../context.ts";
 import { mapLimit } from "../util/limit.ts";
 import { type Analyzer, type Finding, evidence, textFiles } from "./types.ts";
+import { type Lookup, defaultLookup, resolvesToPublicAddress } from "../util/net.ts";
 
 export interface DocLink {
   path: string;
@@ -123,38 +124,83 @@ export async function checkRelativeLink(
 export type LinkStatus = "ok" | "broken" | "unknown";
 
 /** HEAD then GET; only a confirmed 404/410 or a repeatable DNS failure counts as broken. */
-export async function probeUrl(url: string, fetchImpl: typeof fetch, timeoutMs = 8000): Promise<{ status: LinkStatus; detail: string }> {
-  let host = "";
+export interface ProbeOptions {
+  timeoutMs?: number;
+  /** Resolves a host name to its addresses; replaced in tests. */
+  lookup?: Lookup;
+}
+
+const MAX_REDIRECTS = 5;
+
+/** Hosts whose answers prove nothing: they block automated clients. */
+function notVerifiable(host: string): string | undefined {
+  return BOT_HOSTILE.test(host) ? "host blocks automated checks" : undefined;
+}
+
+/** Only http(s) on standard ports to hosts that resolve to public addresses; everything else is left unchecked. */
+async function admissible(url: string, lookupFn: Lookup): Promise<{ host: string } | { refused: string }> {
+  let parsed: URL;
   try {
-    host = new URL(url).hostname;
+    parsed = new URL(url);
   } catch {
-    return { status: "unknown", detail: "unparseable URL" };
+    return { refused: "unparseable URL" };
   }
-  if (BOT_HOSTILE.test(host)) return { status: "unknown", detail: "host blocks automated checks" };
-  const attempt = async (method: "HEAD" | "GET"): Promise<number | "network"> => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetchImpl(url, {
-        method,
-        redirect: "follow",
-        signal: controller.signal,
-        headers: { "user-agent": "Mozilla/5.0 (compatible; gitgoblin-intel link check)", accept: "*/*" },
-      });
-      if (method === "GET" && res.body) await res.body.cancel().catch(() => undefined);
-      return res.status;
-    } catch (error) {
-      return isDnsFailure(error) ? "network" : -1;
-    } finally {
-      clearTimeout(timer);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return { refused: "not an http(s) URL" };
+  if (parsed.port && parsed.port !== "80" && parsed.port !== "443") return { refused: "non-standard port not checked" };
+  if (parsed.username || parsed.password) return { refused: "URL with credentials not checked" };
+  if (!(await resolvesToPublicAddress(parsed.hostname, lookupFn))) return { refused: "host does not resolve to a public address" };
+  return { host: parsed.hostname };
+}
+
+/** HEAD then GET; only a confirmed 404/410 or a repeatable DNS failure counts as broken. Never contacts private addresses. */
+export async function probeUrl(url: string, fetchImpl: typeof fetch, options: ProbeOptions | number = {}): Promise<{ status: LinkStatus; detail: string }> {
+  const { timeoutMs = 8000, lookup = defaultLookup } = typeof options === "number" ? { timeoutMs: options } : options;
+  const admitted = await admissible(url, lookup);
+  if ("refused" in admitted) return { status: "unknown", detail: admitted.refused };
+  const unverifiable = notVerifiable(admitted.host);
+  if (unverifiable) return { status: "unknown", detail: unverifiable };
+  // Redirects are followed by hand so every hop passes the same checks as the first URL.
+  const attempt = async (method: "HEAD" | "GET"): Promise<number | "network" | "redirect-refused"> => {
+    let current = url;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let res: Response;
+      try {
+        res = await fetchImpl(current, {
+          method,
+          redirect: "manual",
+          signal: controller.signal,
+          headers: { "user-agent": "Mozilla/5.0 (compatible; gitgoblin-intel link check)", accept: "*/*" },
+        });
+      } catch (error) {
+        return isDnsFailure(error) ? "network" : -1;
+      } finally {
+        clearTimeout(timer);
+      }
+      if (res.body) await res.body.cancel().catch(() => undefined);
+      const location = res.headers.get("location");
+      if (!(res.status >= 300 && res.status < 400 && location)) return res.status;
+      let next: string;
+      try {
+        next = new URL(location, current).toString();
+      } catch {
+        return res.status;
+      }
+      const hop = await admissible(next, lookup);
+      if ("refused" in hop || notVerifiable(hop.host)) return "redirect-refused";
+      current = next;
     }
+    return -1;
   };
   let status = await attempt("HEAD");
+  if (status === "redirect-refused") return { status: "unknown", detail: "redirects to a host or port that is not checked" };
   if (status === -1 || status === 405 || status === 403 || status === 404 || status === 400 || status === 501 || status === 500) status = await attempt("GET");
   if (status === "network") {
     const again = await attempt("GET");
     return again === "network" ? { status: "broken", detail: "host does not resolve" } : { status: "unknown", detail: "intermittent network error" };
   }
+  if (status === "redirect-refused") return { status: "unknown", detail: "redirects to a host or port that is not checked" };
   if (status === 404 || status === 410) return { status: "broken", detail: `HTTP ${status}` };
   if (status >= 200 && status < 400) return { status: "ok", detail: `HTTP ${status}` };
   return { status: "unknown", detail: status === -1 ? "timeout or connection error" : `HTTP ${status}` };

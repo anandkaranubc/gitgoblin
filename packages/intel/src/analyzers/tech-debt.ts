@@ -26,7 +26,7 @@ export function findDebtMarkers(path: string, text: string): DebtMarker[] {
     const m = MARKER.exec(line);
     if (!m || !COMMENT_TOKEN.test(line) || /^\s*(import|from|def|class|function|const|let|var)\b/.test(line)) continue;
     const after = line.slice(m.index + m[0].length).replace(/\*\/\s*$|-->\s*$/, "").trim();
-    const issues = [...line.matchAll(/(?:#|GH-|issues\/|issue\s)(\d{1,6})\b/gi)].map((x) => Number(x[1]));
+    const issues = [...line.matchAll(/(?:#|GH-|issues\/|issue\s)(\d{1,6})\b/gi)].map((x) => Number(x[1])).slice(0, 3);
     out.push({ path, line: i + 1, marker: m[1]!.toUpperCase(), text: after, issues });
   }
   return out;
@@ -74,7 +74,7 @@ export const techDebtAnalyzer: Analyzer = {
     const withIssues = markers.filter((m) => m.issues.length > 0).slice(0, 15);
     const issueState = new Map<number, { state: string; reason: string | undefined; url: string; title: string; closedAt: string | undefined }>();
     if (ctx.github && withIssues.length > 0) {
-      for (const n of new Set(withIssues.flatMap((m) => m.issues))) {
+      for (const n of [...new Set(withIssues.flatMap((m) => m.issues))].slice(0, 20)) {
         try {
           const issue = await ctx.github.rest<{ state: string; state_reason: string | null; html_url: string; title: string; closed_at: string | null; pull_request?: unknown }>(`/repos/${ctx.ref.owner}/${ctx.ref.name}/issues/${n}`);
           issueState.set(n, { state: issue.state, reason: issue.state_reason ?? undefined, url: issue.html_url, title: issue.title, closedAt: issue.closed_at ?? undefined });

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import { access, mkdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access, lstat, mkdir, readFile, realpath, stat } from "node:fs/promises";
+import { isAbsolute, join, posix, relative, sep } from "node:path";
 import { promisify } from "node:util";
 
 import type { RepoRef } from "../contracts.ts";
@@ -47,7 +47,32 @@ export interface GitRepo {
   grep(word: string, paths: string[]): Promise<string[]>;
 }
 
-const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" };
+/** A minimal environment: no tokens, and no GIT_DIR/GIT_WORK_TREE from a calling hook or alias pointing git at another repository. */
+/**
+ * A repository path as a regular file inside the checkout: symlinks are followed only while they stay
+ * inside it (git checks out a link with any target, so `README.md -> /dev/zero` or `docs -> /` must
+ * resolve to nothing), and the `.git` directory is never a target.
+ */
+export async function resolveInCheckout(dir: string, path: string): Promise<{ real: string; size: number } | undefined> {
+  try {
+    const root = await realpath(dir);
+    const real = await realpath(join(dir, path));
+    const inside = relative(root, real);
+    if (inside === "" || inside.startsWith(`..${sep}`) || inside === ".." || isAbsolute(inside) || inside.split(sep)[0] === ".git") return undefined;
+    const info = await stat(real);
+    return info.isFile() ? { real, size: info.size } : undefined;
+  } catch {
+    return undefined; // missing, a dangling link, or unreadable
+  }
+}
+
+const GIT_ENV: NodeJS.ProcessEnv = Object.fromEntries(
+  ["PATH", "HOME", "USERPROFILE", "TMPDIR", "TEMP", "TMP", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "GIT_SSL_CAINFO", "GIT_EXEC_PATH", "SystemRoot", "SYSTEMROOT", "windir", "COMSPEC", "PATHEXT"]
+    .filter((k) => process.env[k] !== undefined)
+    .map((k) => [k, process.env[k]]),
+);
+GIT_ENV.GIT_TERMINAL_PROMPT = "0";
+GIT_ENV.LC_ALL = "C";
 
 export async function git(args: string[], cwd: string, timeoutMs = 120_000): Promise<string> {
   const { stdout } = await execFileAsync("git", args, {
@@ -129,10 +154,41 @@ class LocalGitRepo implements GitRepo {
     return out.split("\0").filter((p) => p.length > 0);
   }
 
+  private linkBlobs: Promise<Set<string>> | undefined;
+
+  /** Paths git records as symlinks (mode 120000), whether or not the checkout made them real links. */
+  private symlinkEntries(): Promise<Set<string>> {
+    this.linkBlobs ??= git(["ls-files", "-s", "-z"], this.dir)
+      .then((out) => new Set(out.split("\0").filter((e) => e.startsWith("120000 ")).map((e) => e.slice(e.indexOf("\t") + 1))))
+      .catch(() => new Set<string>());
+    return this.linkBlobs;
+  }
+
+  /**
+   * Follow a path to a regular file inside the checkout. Real symlinks are resolved by the file system;
+   * a checkout made with core.symlinks=false stores the link target as file text, which is followed the
+   * same way so a symlinked README still reads as the README.
+   */
+  private async resolveFile(path: string, hops: number): Promise<{ real: string; size: number } | undefined> {
+    if (hops > 5) return undefined;
+    const file = await resolveInCheckout(this.dir, path);
+    if (!file) return undefined;
+    if (file.size < 1024 && !(await lstat(join(this.dir, path))).isSymbolicLink() && (await this.symlinkEntries()).has(path)) {
+      const target = (await readFile(file.real, "utf8")).trim();
+      if (!target || isAbsolute(target)) return undefined;
+      const next = posix.normalize(posix.join(posix.dirname(path), target));
+      if (next === ".." || next.startsWith("../")) return undefined;
+      return this.resolveFile(next, hops + 1);
+    }
+    return file;
+  }
+
   async readText(path: string, maxBytes = 512 * 1024): Promise<string | undefined> {
     try {
-      const buf = await readFile(join(this.dir, path));
-      if (buf.length > maxBytes || looksBinary(buf)) return undefined;
+      const file = await this.resolveFile(path, 0);
+      if (!file || file.size > maxBytes) return undefined; // the size is checked before reading, never after
+      const buf = await readFile(file.real);
+      if (looksBinary(buf)) return undefined;
       return buf.toString("utf8");
     } catch {
       return undefined;
@@ -178,7 +234,7 @@ class LocalGitRepo implements GitRepo {
   async blameLine(path: string, line: number): Promise<BlameInfo | undefined> {
     try {
       const out = await git(
-        ["blame", "--porcelain", "-L", `${line},${line}`, "--", path],
+        ["blame", "--porcelain", "--no-textconv", "-L", `${line},${line}`, "--", path],
         this.dir,
         30_000,
       );

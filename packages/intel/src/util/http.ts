@@ -17,10 +17,24 @@ export async function fetchWithTimeout(
 ): Promise<HttpResponse> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  timer.unref?.();
   try {
-    return await fetchImpl(url, { ...init, signal: controller.signal });
-  } finally {
+    const response = await fetchImpl(url, { ...init, signal: controller.signal });
+    // The body is read under the same timer, so a slow or endless body cannot hang the caller.
+    return {
+      status: response.status,
+      headers: response.headers,
+      text: async () => {
+        try {
+          return await response.text();
+        } finally {
+          clearTimeout(timer);
+        }
+      },
+    };
+  } catch (error) {
     clearTimeout(timer);
+    throw error;
   }
 }
 
