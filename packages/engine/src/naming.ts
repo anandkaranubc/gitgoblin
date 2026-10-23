@@ -65,9 +65,21 @@ function clip(text: string, max: number): string {
 }
 
 /** One-line description of the change, from the plan goal when it is short, else the task title. */
+/** The part of a sentence before its first qualifying clause: "Make X work when Y" gives "Make X work". */
+function firstClause(text: string): string {
+  return text.split(/[,;:]\s|\s[-\u2013\u2014]\s|\s(?:when|because|so that|if|while|by|without)\s/i)[0]?.trim() ?? text;
+}
+
+/**
+ * One line describing the change. The plan's goal describes the fix; the task title is often the
+ * issue's title, which describes the bug, so it is the last choice.
+ */
 export function changeSummary(task: Task, goal: string | undefined): string {
-  const candidate = goal && goal.length <= 60 ? goal : task.title;
-  return stripIssuePrefix(candidate).replace(/\.$/, "").trim();
+  const clean = (text: string) => stripIssuePrefix(text).replace(/\.$/, "").trim();
+  if (goal && goal.length <= 60) return clean(goal);
+  const clause = goal ? clean(firstClause(goal)) : "";
+  if (clause.length >= 15 && clause.length <= 60) return clause;
+  return clean(task.title);
 }
 
 /**
@@ -80,6 +92,9 @@ export function subjectFor(task: Task, goal: string | undefined, proposed?: stri
     if (usesConventionalCommits(task)) {
       const subject = CONVENTIONAL.test(candidate) ? candidate : `${typeForKind(task.kind)}: ${candidate.charAt(0).toLowerCase()}${candidate.slice(1)}`;
       if (subject.length <= 72) return subject;
+      // A scope is the first thing to give up: "fix(long-rule-name): x" becomes "fix: x".
+      const unscoped = subject.replace(/^([a-z]+)\([^)]+\)(!?):/, "$1$2:");
+      if (unscoped.length <= 72) return unscoped;
     } else if (!CONVENTIONAL.test(candidate) && candidate.length <= 72) {
       return candidate.charAt(0).toUpperCase() + candidate.slice(1);
     }
