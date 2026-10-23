@@ -261,14 +261,27 @@ export function findNearDuplicate(issue: IssueSample, others: IssueSample[]): Is
 
 /** Issue body without code blocks, HTML comments, headings and emphasis. */
 export function plainText(markdown: string): string {
-  return markdown
-    .replace(/```[\s\S]*?```/g, " [code] ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+  // Issue bodies are attacker-sized (64 KB): delimited spans are cut with indexOf, and every regex is bounded per line.
+  return cutBetween(cutBetween(markdown, "```", "```", " [code] "), "<!--", "-->", " ")
+    .replace(/<[^<>\n]{1,200}>/g, " ")
+    .replace(/^ {0,3}#{1,6}[ \t]+/gm, "")
     .replace(/[*_`~]+/g, "")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+    .replace(/!\[[^\]\n]{0,300}\]\([^)\n]{0,1000}\)/g, "")
+    .replace(/\[([^\]\n]{0,300})\]\([^)\n]{0,1000}\)/g, "$1");
+}
+
+/** Replace each `open`...`close` span with `replacement`; an unclosed span runs to the end. Linear time. */
+function cutBetween(text: string, open: string, close: string, replacement: string): string {
+  let out = "";
+  let i = 0;
+  for (;;) {
+    const start = text.indexOf(open, i);
+    if (start === -1) return out + text.slice(i);
+    out += text.slice(i, start) + replacement;
+    const end = text.indexOf(close, start + open.length);
+    if (end === -1) return out;
+    i = end + close.length;
+  }
 }
 
 /** Which lexical outcomes a model may overturn: the uncertain ones, never the hard facts (locked, merged PR, negative labels). */

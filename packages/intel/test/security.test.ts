@@ -7,7 +7,7 @@ import { scanRepo } from "../src/fs/scan.ts";
 import { openRepo } from "../src/git/repo.ts";
 import { renderMarkdown } from "../src/report/markdown.ts";
 import { fetchWithTimeout } from "../src/util/http.ts";
-import { ipv6Groups, isPublicIp, resolvesToPublicAddress } from "../src/util/net.ts";
+import { classifyHost, ipv6Groups, isPublicIp, publicOnlyLookup, resolvesToPublicAddress } from "../src/util/net.ts";
 import { inline, stripControl } from "../src/util/text.ts";
 import { FixtureRepo } from "./helpers/fixture-repo.ts";
 import fixture from "../fixtures/tenacity.report.json" with { type: "json" };
@@ -130,5 +130,35 @@ describe("fetchWithTimeout", () => {
     })) as never;
     const response = await fetchWithTimeout(stalled, "https://x.test", {}, 20);
     await expect(response.text()).rejects.toThrow("aborted");
+  });
+});
+
+describe("connect-time address check", () => {
+  const ask = (lookupFn: ReturnType<typeof publicOnlyLookup>, all: boolean) =>
+    new Promise<{ error: (Error & { code?: string }) | null; result: unknown }>((resolve) =>
+      lookupFn("host.test", { all } as never, ((error: Error | null, address: unknown) => resolve({ error, result: address })) as never),
+    );
+
+  it("hands net only public addresses, in both single and all-address forms", async () => {
+    expect((await ask(publicOnlyLookup(async () => ["93.184.216.34"]), false)).result).toBe("93.184.216.34");
+    expect((await ask(publicOnlyLookup(async () => ["93.184.216.34", "2606:4700::1111"]), true)).result).toEqual([{ address: "93.184.216.34", family: 4 }, { address: "2606:4700::1111", family: 6 }]);
+    expect((await ask(publicOnlyLookup(async () => ["93.184.216.34", "10.0.0.1"]), true)).error?.code).toBe("ENOTPUBLIC");
+  });
+
+  it("refuses a host whose answer turns private between the check and the connection (DNS rebinding)", async () => {
+    let calls = 0;
+    const rebinding = async () => (calls++ === 0 ? ["93.184.216.34"] : ["169.254.169.254"]);
+    expect(await probeUrl("http://rebind.test/latest/meta-data/", undefined, { lookup: rebinding, timeoutMs: 2000 })).toEqual({ status: "unknown", detail: "host resolved to a non-public address when connecting" });
+    expect(calls).toBe(2);
+  });
+});
+
+describe("hosts that do not resolve", () => {
+  it("reports a link to a host that no longer exists as broken, after asking twice", async () => {
+    let calls = 0;
+    const nxdomain = async () => { calls++; throw Object.assign(new Error("getaddrinfo ENOTFOUND"), { code: "ENOTFOUND" }); };
+    expect(await probeUrl("https://expired-project-domain.test/docs", undefined, { lookup: nxdomain })).toEqual({ status: "broken", detail: "host does not resolve" });
+    expect(calls).toBe(2);
+    expect(await classifyHost("x.test", async () => { throw Object.assign(new Error("timeout"), { code: "ETIMEOUT" }); })).toBe("private");
   });
 });

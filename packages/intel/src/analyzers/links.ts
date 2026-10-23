@@ -3,7 +3,7 @@ import { dirname, normalize, posix } from "node:path";
 import type { RepositoryProfile } from "../contracts.ts";
 import type { AnalysisContext } from "../context.ts";
 import { mapLimit } from "../util/limit.ts";
-import { type Lookup, defaultLookup, resolvesToPublicAddress } from "../util/net.ts";
+import { type Lookup, classifyHost, defaultLookup, requestStatus } from "../util/net.ts";
 import { type Analyzer, type Finding, evidence, textFiles } from "./types.ts";
 
 export interface DocLink {
@@ -195,7 +195,7 @@ function notVerifiable(url: string, host: string): string | undefined {
 }
 
 /** Only http(s) on standard ports to hosts that resolve to public addresses; everything else is left unchecked. */
-async function admissible(url: string, lookupFn: Lookup): Promise<{ host: string } | { refused: string }> {
+async function admissible(url: string, lookupFn: Lookup): Promise<{ host: string } | { refused: string } | { unresolvable: string }> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -205,37 +205,36 @@ async function admissible(url: string, lookupFn: Lookup): Promise<{ host: string
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return { refused: "not an http(s) URL" };
   if (parsed.port && parsed.port !== "80" && parsed.port !== "443") return { refused: "non-standard port not checked" };
   if (parsed.username || parsed.password) return { refused: "URL with credentials not checked" };
-  if (!(await resolvesToPublicAddress(parsed.hostname, lookupFn))) return { refused: "host does not resolve to a public address" };
+  const where = await classifyHost(parsed.hostname, lookupFn);
+  if (where === "unresolvable") return { unresolvable: parsed.hostname };
+  if (where === "private") return { refused: "host does not resolve to a public address" };
   return { host: parsed.hostname };
 }
 
-export async function probeUrl(url: string, fetchImpl: typeof fetch, options: ProbeOptions | number = {}): Promise<{ status: LinkStatus; detail: string }> {
-  const { timeoutMs = 8000, lookup = defaultLookup } = typeof options === "number" ? { timeoutMs: options } : options;
-  const admitted = await admissible(url, lookup);
+export async function probeUrl(url: string, fetchImpl?: typeof fetch, options: ProbeOptions | number = {}): Promise<{ status: LinkStatus; detail: string }> {
+  const opts: ProbeOptions = typeof options === "number" ? { timeoutMs: options } : options;
+  const timeoutMs = opts.timeoutMs ?? 8000;
+  const lookup = opts.lookup ?? defaultLookup;
+  let admitted = await admissible(url, lookup);
+  // No such host: ask once more before calling it broken, as DNS hiccups happen.
+  if ("unresolvable" in admitted) admitted = await admissible(url, lookup);
+  if ("unresolvable" in admitted) return { status: "broken", detail: "host does not resolve" };
   if ("refused" in admitted) return { status: "unknown", detail: admitted.refused };
   const unverifiable = notVerifiable(url, admitted.host);
   if (unverifiable) return { status: "unknown", detail: unverifiable };
   // Redirects are followed by hand so every hop passes the same host check as the first URL.
-  const attempt = async (method: "HEAD" | "GET"): Promise<number | "network" | "redirect-refused"> => {
+  const attempt = async (method: "HEAD" | "GET"): Promise<number | "network" | "redirect-refused" | "not-public"> => {
     let current = url;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      let res: Response;
+      let res: { status: number; location: string | undefined };
       try {
-        res = await fetchImpl(current, {
-          method,
-          redirect: "manual",
-          signal: controller.signal,
-          headers: { "user-agent": "Mozilla/5.0 (compatible; gitgoblin-intel link check)", accept: "*/*" },
-        });
+        res = fetchImpl ? await viaFetch(fetchImpl, current, method, timeoutMs) : await requestStatus(current, method, timeoutMs, opts.lookup);
       } catch (error) {
+        // The address resolved at connect time was not public: a changed DNS answer, refused before any byte was sent.
+        if ((error as { code?: string }).code === "ENOTPUBLIC") return "not-public";
         return isDnsFailure(error) ? "network" : -1;
-      } finally {
-        clearTimeout(timer);
       }
-      if (res.body) await res.body.cancel().catch(() => undefined);
-      const location = res.headers.get("location");
+      const location = res.location;
       if (!(res.status >= 300 && res.status < 400 && location)) return res.status;
       let next: string;
       try {
@@ -244,27 +243,42 @@ export async function probeUrl(url: string, fetchImpl: typeof fetch, options: Pr
         return res.status;
       }
       const hop = await admissible(next, lookup);
-      if ("refused" in hop || notVerifiable(next, hop.host)) return "redirect-refused";
+      if (!("host" in hop) || notVerifiable(next, hop.host)) return "redirect-refused";
       current = next;
     }
     return -1;
   };
   let status = await attempt("HEAD");
   if (status === "redirect-refused") return { status: "unknown", detail: "redirects to a host or port that is not checked" };
+  if (status === "not-public") return { status: "unknown", detail: "host resolved to a non-public address when connecting" };
   if (status === -1 || status === 405 || status === 403 || status === 404 || status === 400 || status === 501 || status === 500) status = await attempt("GET");
   if (status === "network") {
     const again = await attempt("GET");
     return again === "network" ? { status: "broken", detail: "host does not resolve" } : { status: "unknown", detail: "intermittent network error" };
   }
   if (status === "redirect-refused") return { status: "unknown", detail: "redirects to a host or port that is not checked" };
+  if (status === "not-public") return { status: "unknown", detail: "host resolved to a non-public address when connecting" };
   if (status === 404 || status === 410) return { status: "broken", detail: `HTTP ${status}` };
   if (status >= 200 && status < 400) return { status: "ok", detail: `HTTP ${status}` };
   return { status: "unknown", detail: status === -1 ? "timeout or connection error" : `HTTP ${status}` };
 }
 
 function isDnsFailure(error: unknown): boolean {
-  const cause = (error as { cause?: { code?: string } })?.cause;
-  return cause?.code === "ENOTFOUND" || cause?.code === "EAI_AGAIN";
+  const code = (error as { code?: string; cause?: { code?: string } })?.cause?.code ?? (error as { code?: string })?.code;
+  return code === "ENOTFOUND" || code === "EAI_AGAIN";
+}
+
+/** An injected fetch (tests, or a caller with its own transport), with the same no-follow, no-body behaviour. */
+async function viaFetch(fetchImpl: typeof fetch, url: string, method: "HEAD" | "GET", timeoutMs: number): Promise<{ status: number; location: string | undefined }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl(url, { method, redirect: "manual", signal: controller.signal, headers: { "user-agent": "Mozilla/5.0 (compatible; gitgoblin-intel link check)", accept: "*/*" } });
+    if (res.body) await res.body.cancel().catch(() => undefined);
+    return { status: res.status, location: res.headers.get("location") ?? undefined };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const TEMPLATE = /(^|\/)(pull_request_template|issue_template|ISSUE_TEMPLATE\/|PULL_REQUEST_TEMPLATE\/|DISCUSSION_TEMPLATE\/)/i;
@@ -348,8 +362,8 @@ export const linksAnalyzer: Analyzer = {
     for (const l of links.filter((l) => isExternal(l.target))) external.set(l.target, [...(external.get(l.target) ?? []), l]);
     const urls = [...external.keys()].slice(0, 150);
     if (external.size > urls.length) ctx.budget.cut(`checked ${urls.length} of ${external.size} external links`);
-    const fetchImpl = ctx.options.fetchImpl ?? fetch;
-    const results = await mapLimit(urls, 8, async (url) => ({ url, result: await probeUrl(url, fetchImpl) }));
+    // Without an injected fetch, probes go through node:http(s) with a lookup that only connects to public addresses.
+    const results = await mapLimit(urls, 8, async (url) => ({ url, result: await probeUrl(url, ctx.options.fetchImpl) }));
     ctx.budget.httpChecks += urls.length;
     for (const { url, result } of results) {
       if (result.status !== "broken") continue;
