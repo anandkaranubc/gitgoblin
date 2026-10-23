@@ -227,6 +227,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   const started = Date.now();
   const phases: PhaseSummary[] = [];
   let checkIsolation: string | undefined;
+  let lastNotes: ImplementationNotes | undefined;
   let costUsd = 0;
   let workspace: Workspace | undefined;
   let investigation: Investigation | undefined;
@@ -387,6 +388,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       attempt += 1;
       const implemented = await phase(runner, { ...common, name: `implement-${attempt}`, prompt, schema: ImplementationNotesSchema, maxTurns: PHASE_TURNS.implement, maxBudgetUsd: 0, ...(session ? { resume: session } : {}) });
       notes = implemented.output;
+      lastNotes = notes;
       session = implemented.sessionId ?? session;
       journal.artifact(`implementation-${attempt}`, notes);
 
@@ -461,7 +463,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
 
     // Deliver: commit locally and write the pull request text. Publishing is a separate, approved step.
     reporter.phase("prepare", "commit and pull request text");
-    delivery = await preparePullRequest({ task, plan, notes: notes!, verification: verification!, review: review!, ...(guidance.template ? { template: guidance.template } : {}) }, workspace.path, workspace.baseSha, env);
+    delivery = await preparePullRequest({ task, plan, notes: notes!, verification: verification!, review: review!, ...(investigation ? { investigation } : {}), ...(guidance.template ? { template: guidance.template } : {}) }, workspace.path, workspace.baseSha, env);
     journal.artifact("delivery", delivery);
     journal.text("pr.md", delivery.prBody);
     journal.text("pr-title.txt", `${delivery.prTitle}\n`);
@@ -498,6 +500,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
         ...(review ? { review } : {}),
         ...(delivery ? { prTitle: delivery.prTitle } : {}),
         ...(checkIsolation ? { checkIsolation } : {}),
+        ...(lastNotes ? { notes: lastNotes } : {}),
       }),
     );
     journal.event("run", "end", { status, reason, costUsd });

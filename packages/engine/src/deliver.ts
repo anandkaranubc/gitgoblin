@@ -1,6 +1,6 @@
 import { subjectFor, typeForKind } from "./naming.ts";
 import { execFile } from "./exec.ts";
-import type { ChangePlan, ImplementationNotes, PreparedDelivery, Review, Task, Verification } from "./types.ts";
+import type { ChangePlan, ImplementationNotes, Investigation, PreparedDelivery, Review, Task, Verification } from "./types.ts";
 import { commitAll, git } from "./workspace.ts";
 
 export interface DeliveryInput {
@@ -9,6 +9,8 @@ export interface DeliveryInput {
   notes: ImplementationNotes;
   verification: Verification;
   review: Review;
+  /** The orientation's findings; its root cause explains the change in the pull request summary. */
+  investigation?: Investigation;
   /** Content of the repository's pull request template, if any. */
   template?: string;
 }
@@ -25,21 +27,34 @@ const MENTION = /(^|[^\w`/.@-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[A-Za-z0-
  * GitHub shows as written but does not act on. Existing code spans are left as they are. The
  * engine's own "Fixes #N" line for the task's issue is added after this, so it still works.
  */
-export function neutralizeForGitHub(text: string): string {
+export function neutralizeForGitHub(text: string, ownIssue?: number): string {
+  const own = ownIssue === undefined ? undefined : `#${ownIssue}`;
   return text
     .split(/(`+[^`]*`+)/)
     .map((part, i) => {
       if (i % 2 === 1) return part; // an existing code span
       return part
-        .replace(CLOSING, (_m, keyword: string, sep: string, refs: string) => `${keyword}${sep}${refs.replace(REF, (ref) => `\`${ref}\``)}`)
+        .replace(CLOSING, (_m, keyword: string, sep: string, refs: string) => `${keyword}${sep}${refs.replace(REF, (ref) => (ref === own ? ref : `\`${ref}\``))}`)
         .replace(MENTION, (_m, lead: string, name: string) => `${lead}\`@${name}\``);
     })
     .join("");
 }
 
+/**
+ * Notes about the agent's own working conditions (the sandbox, the network, a package manager's lock)
+ * mean nothing to a maintainer and expose the operator's setup. The prompt asks for them in
+ * environmentNotes; this catches the ones that still land in the maintainer-facing lists.
+ */
+const ENVIRONMENT_NOTE = /\bsandbox|ERR_PNPM_|\bEPERM\b|operation not permitted|reach the network|no network access|network access|\.pnpm-store|store lock|install-output\.txt|\bphase \d\b|\buntracked\b|\bthe (?:review )?hook\b|\bmy operator\b|\brecommend (?:approving|approval)\b/i;
+
+export function forMaintainers(lines: string[]): string[] {
+  return lines.filter((line) => !ENVIRONMENT_NOTE.test(line));
+}
+
 export function commitMessage(input: DeliveryInput): string {
-  const subject = neutralizeForGitHub(subjectFor(input.task, input.plan.goal));
-  const body = [neutralizeForGitHub(input.notes.summary.trim()), input.task.issue ? `Refs #${input.task.issue.number}` : ""].filter(Boolean).join("\n\n");
+  const own = input.task.issue?.number;
+  const subject = neutralizeForGitHub(subjectFor(input.task, input.plan.goal, input.plan.commitSubject), own);
+  const body = [neutralizeForGitHub(input.notes.summary.trim(), own), input.task.issue ? `Refs #${input.task.issue.number}` : ""].filter(Boolean).join("\n\n");
   return `${subject}\n\n${body}\n`;
 }
 
@@ -53,20 +68,33 @@ function checklistFrom(template: string | undefined): string[] {
 }
 
 export function pullRequestTitle(input: DeliveryInput): string {
-  return neutralizeForGitHub(subjectFor(input.task, input.plan.goal));
+  return neutralizeForGitHub(subjectFor(input.task, input.plan.goal, input.plan.commitSubject), input.task.issue?.number);
 }
 
 export function pullRequestBody(input: DeliveryInput): string {
   const { task, plan, notes, verification, review } = input;
-  const n = neutralizeForGitHub;
+  const n = (text: string) => neutralizeForGitHub(text, task.issue?.number);
   const closes = typeForKind(task.kind) === "fix" ? "Fixes" : "Refs";
-  const summaryLines = [n(task.summary || plan.goal), task.issue ? `${closes} #${task.issue.number}` : ""].filter(Boolean);
-  const checks = verification.checks.map((c) => `| \`${c.command}\` | ${c.status} |`);
+  // The plan's goal says what this change does in one sentence. The task summary is often the issue
+  // body (template questions and all), which the linked issue already shows.
+  const rootCause = input.investigation?.rootCause?.trim();
+  const goal = plan.goal.trim().replace(/([^.!?])$/, "$1.");
+  const summaryLines = [
+    n(rootCause && rootCause.length <= 400 && !ENVIRONMENT_NOTE.test(rootCause) ? `${goal} ${rootCause.replace(/([^.!?])$/, "$1.")}` : goal),
+    task.issue ? `${closes} #${task.issue.number}` : "",
+  ].filter(Boolean);
+  const preexisting = new Set(verification.preexisting ?? []);
+  const checks = verification.checks.map((c) => `| \`${c.command}\` | ${c.status}${preexisting.has(c.name) ? " (also fails on the base commit)" : ""} |`);
+  // Deviations from the plan are the engine's bookkeeping, not something a maintainer needs; findings
+  // about files outside the change (a stray directory in the workspace) are not about the change.
+  const changed = new Set(verification.diff.changedFiles);
   const reviewerNotes = [
-    ...notes.knownGaps.map((g) => `- ${n(g)}`),
-    ...notes.deviationsFromPlan.map((d) => `- Deviation from plan: ${n(d)}`),
-    ...review.findings.filter((f) => f.severity === "minor" || f.severity === "nit").map((f) => `- Reviewer note (${f.severity}): ${n(f.summary)}`),
-    review.prNotes ? `- ${n(review.prNotes)}` : "",
+    ...forMaintainers(notes.knownGaps).map((g) => `- ${n(g)}`),
+    ...review.findings
+      .filter((f) => (f.severity === "minor" || f.severity === "nit") && changed.has(f.file))
+      .filter((f) => forMaintainers([f.summary]).length === 1)
+      .map((f) => `- Reviewer note (${f.severity}): ${n(f.summary)}`),
+    review.prNotes && forMaintainers([review.prNotes]).length === 1 ? `- ${n(review.prNotes)}` : "",
   ].filter(Boolean);
   const checklist = checklistFrom(input.template);
 
