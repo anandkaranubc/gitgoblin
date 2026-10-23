@@ -33,8 +33,19 @@ export class RunJournal {
     mkdirSync(dir, { recursive: true });
   }
 
-  static create(workdir: string, runId = newRunId()): RunJournal {
-    return new RunJournal(path.join(workdir, "runs", runId));
+  /** A new run directory; never an existing one, so two runs started at once cannot share artifacts. */
+  static create(workdir: string, runId?: string): RunJournal {
+    const runs = path.join(workdir, "runs");
+    mkdirSync(runs, { recursive: true });
+    for (let attempt = 0; ; attempt += 1) {
+      const id = runId ?? newRunId();
+      try {
+        mkdirSync(path.join(runs, id));
+        return new RunJournal(path.join(runs, id));
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST" || runId !== undefined || attempt >= 5) throw err;
+      }
+    }
   }
 
   /** Opens an existing run without creating anything. The id must name a directory under runs/, nothing else. */
