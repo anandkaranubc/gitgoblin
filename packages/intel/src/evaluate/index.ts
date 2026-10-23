@@ -15,7 +15,7 @@ export interface EvaluationResult {
 }
 
 /** Filter, cluster, score and rank findings into opportunities. */
-export function evaluate(findings: Finding[], profile: RepositoryProfile, maxOpportunities: number): EvaluationResult {
+export function evaluate(findings: Finding[], profile: RepositoryProfile, maxOpportunities: number, kindCaps: Partial<Record<string, number>> = KIND_CAPS): EvaluationResult {
   const skipped: SkippedFinding[] = [];
   const kept: Finding[] = [];
   for (const finding of findings) {
@@ -29,7 +29,7 @@ export function evaluate(findings: Finding[], profile: RepositoryProfile, maxOpp
   const opportunities: ContributionOpportunity[] = [];
   const perKind = new Map<string, number>();
   for (const o of scored) {
-    const cap = KIND_CAPS[o.kind];
+    const cap = kindCaps[o.kind];
     const n = perKind.get(o.kind) ?? 0;
     if (cap !== undefined && n >= cap) {
       skipped.push({ kind: o.kind, title: o.title, reason: `more than ${cap} ${o.kind.replace("_", " ")} items; kept the best ${cap} (score ${o.score.toFixed(2)})` });

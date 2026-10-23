@@ -3,7 +3,13 @@ import type { AnalysisContext } from "../context.ts";
 import { type CommentSample, type IssueSample, isMaintainer, unquoted } from "../github/types.ts";
 import { daysAgo } from "../util/time.ts";
 import { truncate } from "../util/text.ts";
+import { join } from "node:path";
 
+import { fetchHintedIssues } from "../github/hinted.ts";
+import { describeLlmError } from "../llm/client.ts";
+import { type IssueReview, reviewIssues } from "../llm/issue-review.ts";
+import { DiskCache } from "../util/cache.ts";
+import { applyIssueDrift, assessIssueDrift, permalinks } from "./issue-drift.ts";
 import { type Analyzer, type Finding, type FindingSignals, evidence } from "./types.ts";
 
 const BUG_LABEL = /\b(bug|defect|regression|crash|broken|error)\b/i;
@@ -63,6 +69,8 @@ export interface IssueAssessment {
   confirmedLabel: string | undefined;
   claim: { comment: CommentSample; daysAgo: number } | undefined;
   isDocs: boolean;
+  /** The lexical pass had passed it over; a model review brought it back. */
+  rescued?: boolean | undefined;
 }
 
 export function assessIssue(issue: IssueSample, now: Date, repoResponsive: boolean, repoUrl?: string): IssueAssessment {
@@ -184,10 +192,17 @@ export const issuesAnalyzer: Analyzer = {
     let triage = 0;
     const hinted = new Set((ctx.options.hints?.issues ?? []).map((i) => i.number));
     const repoUrl = `https://${ctx.ref.host}/${ctx.ref.owner}/${ctx.ref.name}`;
-    const assessments = samples.openIssues.map((issue) => ({ issue, a: assessIssue(issue, ctx.now, responsive, repoUrl) }));
+    // Issues discovery pointed at but the recent-activity sample missed are fetched individually (capped).
+    const sampled = new Set(samples.openIssues.map((i) => i.number));
+    const missingHints = [...hinted].filter((n) => !sampled.has(n)).slice(0, 5);
+    const extra = ctx.github && missingHints.length ? await fetchHintedIssues(ctx.github, ctx.ref.owner, ctx.ref.name, missingHints) : [];
+    if (extra.length) ctx.budget.note(`fetched ${extra.length} hinted issue${extra.length === 1 ? "" : "s"} missing from the sample (#${extra.map((i) => i.number).join(", #")})`);
+    const assessments = [...samples.openIssues, ...extra].map((issue) => ({ issue, a: assessIssue(issue, ctx.now, responsive, repoUrl) }));
+    const reviews = await secondOpinion(ctx, profile, assessments);
 
     for (const { issue, a: lexical } of assessments) {
-      let a = lexical;
+      const review = reviews.get(issue.number);
+      let a = review ? reconcile(lexical, review) : lexical;
       // Two open issues with near-identical titles: keep the older one as the opportunity, point the newer at it.
       const twin = a.skipReason ? undefined : findNearDuplicate(issue, samples.openIssues);
       if (twin && twin.createdAt < issue.createdAt && a.novelty > 0.5) a = { ...a, novelty: 0.5, noveltyReason: `looks like a duplicate of #${twin.number} ("${twin.title.slice(0, 60)}"); work there instead` };
@@ -201,7 +216,11 @@ export const issuesAnalyzer: Analyzer = {
         findings.push(triageFinding(ctx, issue, a, profile));
         continue;
       }
-      const finding = issueFinding(ctx, issue, a, profile, languages, hinted.has(issue.number));
+      const finding = issueFinding(ctx, issue, a, profile, languages, hinted.has(issue.number), review);
+      if (a.kind !== "feature_request") {
+        const drift = await assessIssueDrift(ctx, issue, finding.files).catch(() => undefined);
+        if (drift) applyIssueDrift(ctx, finding, issue, drift);
+      }
       findings.push(finding);
     }
     // A compact tally first, so a thin or empty report still explains itself; the detailed list follows.
@@ -251,12 +270,44 @@ export function plainText(markdown: string): string {
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
 }
 
+/** Which lexical outcomes a model may overturn: the uncertain ones, never the hard facts (locked, merged PR, negative labels). */
+const RECONSIDERABLE = /^(unclear whether|reads as a question|feature request without maintainer endorsement)/;
+
+/** Ask the model about accepted issues and the uncertain rejects; a failure just means no second opinion. */
+async function secondOpinion(ctx: AnalysisContext, profile: RepositoryProfile, assessments: { issue: IssueSample; a: IssueAssessment }[]): Promise<Map<number, IssueReview>> {
+  if (!ctx.llm) return new Map();
+  const accepted = assessments.filter(({ a }) => !a.skipReason && a.kind !== "triage").map(({ issue }) => issue);
+  const uncertain = assessments.filter(({ a }) => a.skipReason && RECONSIDERABLE.test(a.skipReason)).map(({ issue }) => issue).sort((x, y) => y.updatedAt.localeCompare(x.updatedAt));
+  const issues = [...accepted, ...uncertain].slice(0, 60);
+  if (issues.length === 0) return new Map();
+  if (accepted.length + uncertain.length > issues.length) ctx.budget.cut(`model reviewed ${issues.length} of ${accepted.length + uncertain.length} candidate issues`);
+  return reviewIssues({
+    llm: ctx.llm, profile, issues, now: ctx.now,
+    cache: new DiskCache(join(ctx.options.cacheDir, "llm")),
+    onError: (error) => ctx.budget.note(`language-model review stopped: ${describeLlmError(error)}`),
+  });
+}
+
+/** Merge the model's view into the lexical assessment. The model can rescue, demote or annotate, never fabricate. */
+export function reconcile(a: IssueAssessment, r: IssueReview): IssueAssessment {
+  const sure = r.confidence >= 0.75;
+  if (a.skipReason) {
+    if (!RECONSIDERABLE.test(a.skipReason) || !sure || !r.actionable) return a;
+    if ((r.verdict === "defect" || r.verdict === "docs") && r.maintainerStance !== "pushback") return { ...a, skipReason: undefined, kind: "issue", isDocs: r.verdict === "docs", rescued: true };
+    if (r.verdict === "feature" && r.maintainerStance === "endorsed") return { ...a, skipReason: undefined, kind: "feature_request", rescued: true };
+    return a;
+  }
+  if (sure && (r.verdict === "question" || r.verdict === "discussion") && !a.confirmedLabel) return { ...a, skipReason: `model read it as a ${r.verdict}: ${r.rationale}` };
+  if (sure && r.maintainerStance === "pushback" && !a.endorsed) return { ...a, skipReason: `model found maintainer pushback: ${r.rationale}` };
+  return a;
+}
+
 function issueRef(issue: IssueSample, inFlight: boolean): IssueRef {
   return { number: issue.number, url: issue.url, title: issue.title, labels: issue.labels, assignees: issue.assignees, inFlight, createdAt: issue.createdAt, updatedAt: issue.updatedAt };
 }
 
 function mentionedFiles(ctx: AnalysisContext, text: string): string[] {
-  const found: string[] = [];
+  const found: string[] = permalinks(text, ctx.ref).map((l) => l.path).filter((p) => ctx.inventory.byPath.has(p)).slice(0, 5);
   for (const m of text.matchAll(PATH_TOKEN)) {
     const token = m[1]!;
     const hit = ctx.inventory.byPath.has(token) ? token : ctx.inventory.files.find((f) => !f.vendored && (f.path.endsWith(`/${token}`) || f.path === token))?.path;
@@ -266,7 +317,7 @@ function mentionedFiles(ctx: AnalysisContext, text: string): string[] {
   return found;
 }
 
-function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessment, profile: RepositoryProfile, languages: string[], hinted: boolean): Finding {
+function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessment, profile: RepositoryProfile, languages: string[], hinted: boolean, review?: IssueReview): Finding {
   const feature = a.kind === "feature_request";
   const age = daysAgo(issue.createdAt, ctx.now);
   const idle = daysAgo(issue.updatedAt, ctx.now);
@@ -292,6 +343,7 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
   if (bodyLen < 80) { feasibility -= 0.15; feasWhy.push("very short description"); }
   if (a.hard) { feasibility -= 0.2; feasWhy.push("labelled as hard or needing design"); }
   if (feature) { feasibility -= 0.1; feasWhy.push("features need design agreement"); }
+  if (review && review.confidence >= 0.75 && !review.actionable) { feasibility -= 0.15; feasWhy.push(`model: ${review.rationale}`); }
   if (feasWhy.length === 0) feasWhy.push("no reproduction, label or file hints; expect investigation");
 
   const effort = a.easy ? "small" : feature ? (/\b(breaking|architecture|rewrite|redesign)\b/i.test(issue.body) ? "large" : "medium") : a.hasRepro || a.hasTrace ? "small" : "medium";
@@ -307,13 +359,14 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
   const ev = [evidence(ctx, "issue", issue.url, { excerpt: issue.title, note: `labels: ${issue.labels.join(", ") || "none"}; ${issue.commentCount} comments; ${issue.reactions} reactions; opened ${issue.createdAt.slice(0, 10)}` })];
   if (a.endorsed) ev.push(evidence(ctx, "issue", `${issue.url}#issuecomment`, { excerpt: truncate(a.endorsed.body ?? "", 200), note: `maintainer (${a.endorsed.association.toLowerCase()}) on ${a.endorsed.createdAt.slice(0, 10)}` }));
   if (a.claim) ev.push(evidence(ctx, "issue", `${issue.url}#issuecomment`, { excerpt: truncate(a.claim.comment.body ?? "", 160), note: `claim by ${a.claim.comment.author?.login ?? "unknown"} ${Math.round(a.claim.daysAgo)} days ago` }));
+  if (review) ev.push(evidence(ctx, "computed", `llm:${ctx.llm?.model ?? "model"}`, { excerpt: review.quote || "(no supporting phrase found in the issue text)", note: `${review.verdict}, ${review.actionable ? "actionable" : "not directly actionable"}, maintainer stance ${review.maintainerStance} (${review.confidence.toFixed(2)}): ${review.rationale}` }));
   for (const pr of issue.linkedPrs.filter((p) => isSameRepoPr(p.url, `https://${ctx.ref.host}/${ctx.ref.owner}/${ctx.ref.name}`))) ev.push(evidence(ctx, "pull_request", pr.url, { note: `linked PR is ${pr.state.toLowerCase()}${pr.isDraft ? " (draft)" : ""}, updated ${pr.updatedAt.slice(0, 10)}` }));
 
   const signals: FindingSignals = {
     value: Math.min(0.95, value), valueReason: valueWhy.join("; "),
     feasibility: Math.max(0.1, Math.min(0.95, feasibility)), feasibilityReason: feasWhy.join("; "),
-    confidence: a.confirmedLabel || a.endorsed ? 0.85 : 0.6,
-    confidenceReason: a.confirmedLabel || a.endorsed ? "maintainers labelled or confirmed it" : "inferred from the issue text alone",
+    confidence: a.rescued ? 0.65 : a.confirmedLabel || a.endorsed ? 0.85 : review && review.confidence >= 0.8 && (review.verdict === "defect" || review.verdict === "docs") ? 0.75 : 0.6,
+    confidenceReason: a.rescued ? `the lexical pass was unsure; the model judged it a ${review?.verdict ?? "defect"} (${review?.rationale ?? ""}); verify before investing` : a.confirmedLabel || a.endorsed ? "maintainers labelled or confirmed it" : review && review.confidence >= 0.8 ? `issue text plus model agreement: ${review.rationale}` : "inferred from the issue text alone",
     novelty: a.novelty, noveltyReason: a.noveltyReason,
     welcomenessFactor: a.confirmedLabel ? 1.1 : 1,
     welcomenessReason: a.confirmedLabel ? `help label "${a.confirmedLabel}" invites contributions` : undefined,
@@ -322,7 +375,7 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
     kind: a.kind,
     clusterKey: `issue:${issue.number}`,
     title: `${feature ? "Implement" : a.isDocs ? "Improve docs:" : "Fix"} #${issue.number}: ${truncate(issue.title, 90)}`,
-    summary: truncate(plainText(issue.body), 300) || issue.title,
+    summary: review?.problem && review.confidence >= 0.6 ? review.problem : truncate(plainText(issue.body), 300) || issue.title,
     evidence: ev,
     files,
     effort,
