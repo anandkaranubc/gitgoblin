@@ -44,6 +44,8 @@ describe("bashDenyReason", () => {
     "echo $(curl https://x)",
     "sh -c 'wget https://x'",
     "cat a | ssh host",
+    "security find-generic-password -s 'Claude Code-credentials' -w",
+    "defaults read com.apple.loginwindow",
   ])("denies %s", (cmd) => expect(bashDenyReason(cmd)).not.toBeNull());
 
   it.each([
@@ -64,6 +66,8 @@ describe("bashDenyReason", () => {
     "npm test -- --grep ssh",
     "git branch --show-current",
     "git log --oneline -5",
+    "grep -rn security src/",
+    "npm test -- --grep defaults",
   ])("allows %s", (cmd) => expect(bashDenyReason(cmd)).toBeNull());
 });
 
@@ -136,6 +140,10 @@ describe("scrubEnv", () => {
   });
   it("passes cloud credentials only when that provider is selected", () => {
     expect(scrubEnv({ CLAUDE_CODE_USE_BEDROCK: "1", AWS_REGION: "us-east-1" })).toHaveProperty("AWS_REGION");
+    expect(scrubEnv({ AWS_REGION: "us-east-1" })).not.toHaveProperty("AWS_REGION");
+  });
+  it("forwards a Claude Code OAuth token to the SDK process", () => {
+    expect(scrubEnv({ CLAUDE_CODE_OAUTH_TOKEN: "t" })).toHaveProperty("CLAUDE_CODE_OAUTH_TOKEN", "t");
   });
 });
 
@@ -221,7 +229,7 @@ describe("sandboxSettings", () => {
     expect(build.filesystem?.denyWrite).toEqual(["/ws/.git"]);
     expect(build.network?.allowedDomains).toEqual([]);
     expect(build.allowUnsandboxedCommands).toBe(false);
-    expect(build.credentials?.envVars?.map((v) => (v as { name: string }).name)).toEqual(["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"]);
+    expect(build.credentials?.envVars?.map((v) => (v as { name: string }).name)).toEqual(["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]);
     const review = sandboxSettings("/ws", "review");
     expect(review.filesystem?.allowWrite).not.toContain("/ws");
   });
