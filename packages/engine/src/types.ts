@@ -115,14 +115,20 @@ export const ChangePlanSchema = z.object({
   outOfScope: z.array(z.string()),
   risks: z.array(z.string()),
   needsNewDependency: z.boolean(),
+  /** The commit subject the planner proposes: imperative, at most 72 characters, no issue number. */
+  commitSubject: z.string().optional(),
 });
 export type ChangePlan = z.infer<typeof ChangePlanSchema>;
 
 export const ImplementationNotesSchema = z.object({
   summary: z.string(),
+  /** Read by the maintainers in the pull request. */
   deviationsFromPlan: z.array(z.string()),
   testsRun: z.array(z.string()),
+  /** Read by the maintainers in the pull request. */
   knownGaps: z.array(z.string()),
+  /** Problems with the agent's own tools or environment; shown to the operator, never to the maintainers. */
+  environmentNotes: z.array(z.string()).optional(),
   done: z.boolean(),
 });
 export type ImplementationNotes = z.infer<typeof ImplementationNotesSchema>;
@@ -179,6 +185,8 @@ export interface Verification {
   /** True when nothing regressed and the reproduction (if any) passes. */
   ok: boolean;
   diff: DiffStats;
+  /** Names of checks that already failed at baseline, so a reader does not blame the change for them. */
+  preexisting?: string[];
 }
 
 /** What `prepare` wrote and `publish` reads back; validated on the way back in because the file sat on disk. */

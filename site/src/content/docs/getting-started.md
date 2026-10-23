@@ -26,10 +26,10 @@ That prints ten ranked repositories with the reasons behind each ranking. `npx g
 gitgoblin also runs as an MCP server, so the agent you already use can discover repositories, analyze them and brief you on one piece of work:
 
 ```sh
-claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
+claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.2/gitgoblin-mcp-0.1.2.tgz
 ```
 
-Until the npm package is published, use the tarball URL from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.2) in place of `@gitgoblin/mcp`. [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) has the one-liner for Codex, Cursor, Gemini CLI, VS Code and every other client, plus the skill that teaches agents when to use the tools.
+That installs the server from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.2). Do not use `npx -y @gitgoblin/mcp` until that npm name is published: `npx -y` runs whatever package first claims it. [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) has the one-liner for Codex, Cursor, Gemini CLI, VS Code and every other client, plus the skill that teaches agents when to use the tools.
 
 ## Run the tests
 
