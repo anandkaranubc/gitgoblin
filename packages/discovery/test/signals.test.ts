@@ -52,6 +52,18 @@ describe("computeSignals", () => {
     expect(evidence.hasReadme).toBeUndefined();
   });
 
+  it("measures acceptance as the share of pull requests merged, and leaves small samples unknown", () => {
+    expect(computeSignals(healthyLibrary(), NOW).signals.acceptance).toBeCloseTo(50 / 60, 5);
+    expect(computeSignals(abandonedLibrary(), NOW).signals.acceptance).toBe(0);
+    const few = healthyLibrary();
+    few.issueStats = { ...few.issueStats!, pullRequests: 4, mergedPullRequests: 4, pastYear: { ...few.issueStats!.pastYear, pullRequests: 1, mergedPullRequests: 1 } };
+    expect(computeSignals(few, NOW).signals.acceptance).toBeUndefined();
+    const older = healthyLibrary();
+    older.issueStats = { ...older.issueStats!, pastYear: { ...older.issueStats!.pastYear, pullRequests: 2, mergedPullRequests: 0 } };
+    expect(computeSignals(older, NOW).signals.acceptance).toBeCloseTo(240 / 300, 5);
+    expect(computeSignals({ facts: facts({ owner: "a", name: "b" }) }, NOW).signals.acceptance).toBeUndefined();
+  });
+
   it("treats disabled issues as closed to newcomers", () => {
     const repo = healthyLibrary();
     repo.details = { ...repo.details!, hasIssuesEnabled: false };
