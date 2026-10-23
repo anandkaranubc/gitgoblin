@@ -44,6 +44,68 @@ export function isProtectedPath(filePath: string, task: Pick<Task, "kind">): boo
   return CI_PATHS.some((c) => (c.endsWith("/") ? p.startsWith(c) : p === c || p.endsWith("/" + c)));
 }
 
+/**
+ * Files that decide what the verification commands execute: package manifests with script sections,
+ * build files, test-runner and linter configuration that is itself code, hook managers, and
+ * package-manager settings. The repository's checks run on the operator's machine, so a change to one
+ * of these is a change to what runs there, and a human looks before the engine runs it.
+ */
+const CONTROL_BASENAMES = new Set([
+  "package.json", ".npmrc", ".yarnrc", ".yarnrc.yml", ".pnpmfile.cjs", "pnpm-workspace.yaml", "bunfig.toml",
+  "Makefile", "GNUmakefile", "makefile", "justfile", "Justfile", "Rakefile", "Gemfile", "Taskfile.yml", "Taskfile.yaml",
+  "pyproject.toml", "setup.py", "setup.cfg", "tox.ini", "noxfile.py", "conftest.py", "pytest.ini", "manage.py", "tasks.py",
+  "Cargo.toml", "build.rs",
+  "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "gradle.properties", "gradlew", "gradlew.bat", "pom.xml", "mvnw", "mvnw.cmd",
+  "CMakeLists.txt", "meson.build", "BUILD", "BUILD.bazel", "WORKSPACE", "WORKSPACE.bazel", "MODULE.bazel", ".bazelrc",
+  ".pre-commit-config.yaml", "lefthook.yml", ".lefthook.yml", ".envrc",
+  "composer.json", "phpunit.xml", "phpunit.xml.dist", "mix.exs", "Package.swift", "build.zig", "build.zig.zon", "build.sbt", "Rakefile.rb",
+]);
+const CONTROL_PATTERNS = [
+  /^(vitest|vite|vitest\.workspace|jest|babel|eslint|prettier|tsup|rollup|webpack|esbuild|playwright|cypress|karma|postcss|tailwind|svelte|next|nuxt|astro|remix|commitlint|lint-staged|release|nx|turbo|lerna|ava|wallaby|puppeteer|protractor|wdio|nightwatch)\.config\.[cm]?[jt]sx?$/,
+  /^\.(eslintrc|babelrc|mocharc|prettierrc|lintstagedrc|swcrc|nycrc|c8rc|avarc)(\.[\w.-]+)?$/,
+  /^karma\.conf\.[cm]?js$/,
+];
+/** Directories whose contents run as part of builds, checks or git operations. */
+const CONTROL_DIRS = new Set([".husky", ".cargo", ".mvn", ".yarn", "gradle"]);
+
+/** True when `filePath` is one of the files that decide what the repository's check commands run. */
+export function controlsChecks(filePath: string): boolean {
+  const p = filePath.replace(/^\.\//, "");
+  const segments = p.split("/");
+  const base = segments.at(-1) ?? "";
+  if (CONTROL_BASENAMES.has(base)) return true;
+  if (CONTROL_PATTERNS.some((re) => re.test(base))) return true;
+  return segments.slice(0, -1).some((dir) => CONTROL_DIRS.has(dir));
+}
+
+/** The parts of package.json that decide what `npm test` and friends execute. */
+const PACKAGE_JSON_CONTROL_KEYS = ["scripts", "workspaces", "packageManager", "bin", "config"];
+
+/** True when the control sections of package.json differ between the base and the working copy. */
+export function packageJsonControlChanged(base: string | undefined, head: string | undefined): boolean {
+  if (base === undefined || head === undefined) return true;
+  const pick = (text: string): string | undefined => {
+    try {
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      if (!parsed || typeof parsed !== "object") return undefined;
+      return JSON.stringify(PACKAGE_JSON_CONTROL_KEYS.map((key) => [key, canonical(parsed[key])]));
+    } catch {
+      return undefined;
+    }
+  };
+  const before = pick(base);
+  const after = pick(head);
+  return before === undefined || after === undefined || before !== after;
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value as object).sort().map((k) => [k, canonical((value as Record<string, unknown>)[k])]));
+  }
+  return value ?? null;
+}
+
 /** Some opportunities are conversations with maintainers, not patches. The engine only prepares code changes. */
 export function atIntake(task: Task): Decision {
   if (task.issue?.inFlight) return { action: "stop", reason: `issue #${task.issue.number} already has an assignee or an open pull request` };

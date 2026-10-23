@@ -1,10 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import path from "node:path";
 import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
 import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
 import { execShell } from "./exec.ts";
-import { commandEnv, isSafeCommand, scrubEnv } from "./guard.ts";
-import { parseTask, taskFromIntel } from "./intake.ts";
+import { commandEnv, isInside, isSafeCommand, scrubEnv } from "./guard.ts";
+import { parseTask, sanitizeText, taskFromIntel } from "./intake.ts";
 import { consoleReporter, RunJournal, type Reporter } from "./journal.ts";
 import {
   afterDiff,
@@ -15,9 +15,11 @@ import {
   afterVerify,
   blockerKeys,
   checkBudget,
+  controlsChecks,
   DEFAULT_LIMITS,
   failureSignature,
   findSecrets,
+  packageJsonControlChanged,
   type Decision,
   type Limits,
 } from "./policy.ts";
@@ -40,7 +42,7 @@ import {
   type Verification,
 } from "./types.ts";
 import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
-import { diffPatch, diffStats, git, prepareWorkspace, type Workspace } from "./workspace.ts";
+import { diffPatch, diffStats, git, prepareWorkspace, showAtBase, type Workspace } from "./workspace.ts";
 
 export interface RunInput {
   /** A Task written by hand or exported from an earlier run. */
@@ -79,23 +81,75 @@ const PHASE_TURNS = { orient: 80, plan: 12, implement: 150, review: 40 } as cons
 const GUIDANCE_CANDIDATES = ["CONTRIBUTING.md", ".github/CONTRIBUTING.md", "AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md"];
 const TEMPLATE_CANDIDATES = [".github/pull_request_template.md", ".github/PULL_REQUEST_TEMPLATE.md", "PULL_REQUEST_TEMPLATE.md", "docs/pull_request_template.md"];
 const MAX_GUIDANCE_FILE_CHARS = 20_000;
+const MAX_GUIDANCE_FILE_BYTES = 4 * MAX_GUIDANCE_FILE_CHARS;
+
+/**
+ * Reads the start of a regular file inside the workspace. A repository can contain a symlink named
+ * CONTRIBUTING.md that points at the operator's private key, or a path from the profile can climb
+ * out of the checkout; both come back undefined. Reading a bounded prefix keeps a huge or
+ * special file from stalling the run, and control characters that could hide instructions are
+ * stripped before the text is quoted to the model.
+ */
+function readGuidanceFile(wsPath: string, rel: string): string | undefined {
+  if (!isInside(rel, wsPath, wsPath)) return undefined;
+  const file = path.resolve(wsPath, rel);
+  const stat = statSync(file, { throwIfNoEntry: false });
+  if (!stat?.isFile()) return undefined;
+  const fd = openSync(file, "r");
+  try {
+    const buffer = Buffer.alloc(Math.min(stat.size, MAX_GUIDANCE_FILE_BYTES + 1));
+    const read = readSync(fd, buffer, 0, buffer.length, 0);
+    const text = sanitizeText(buffer.subarray(0, read).toString("utf8"));
+    const truncated = stat.size > MAX_GUIDANCE_FILE_BYTES || text.length > MAX_GUIDANCE_FILE_CHARS;
+    return truncated ? `${text.slice(0, MAX_GUIDANCE_FILE_CHARS)}\n[truncated]` : text;
+  } finally {
+    closeSync(fd);
+  }
+}
 
 export function readGuidance(wsPath: string, task: Task): RepositoryGuidance & { template?: string } {
-  const read = (rel: string): string | undefined => {
-    const file = path.join(wsPath, rel);
-    if (!existsSync(file)) return undefined;
-    const content = readFileSync(file, "utf8");
-    return content.length > MAX_GUIDANCE_FILE_CHARS ? `${content.slice(0, MAX_GUIDANCE_FILE_CHARS)}\n[truncated]` : content;
-  };
   const wanted = [...new Set([task.rules.contributingPath ?? "", ...task.rules.instructionFiles, ...GUIDANCE_CANDIDATES].filter(Boolean))];
   const files: RepositoryGuidance["files"] = [];
   for (const rel of wanted) {
-    const content = read(rel);
+    const content = readGuidanceFile(wsPath, rel);
     if (content) files.push({ path: rel, content });
   }
-  const templatePath = [task.rules.prTemplatePath ?? "", ...TEMPLATE_CANDIDATES].filter(Boolean).find((p) => existsSync(path.join(wsPath, p)));
-  const template = templatePath ? read(templatePath) : undefined;
+  const template = [task.rules.prTemplatePath ?? "", ...TEMPLATE_CANDIDATES]
+    .filter(Boolean)
+    .map((rel) => readGuidanceFile(wsPath, rel))
+    .find((content) => content !== undefined);
   return { files, ...(template ? { template } : {}) };
+}
+
+/**
+ * Changed files that decide what the verification commands execute on this machine. package.json
+ * counts only when its scripts or similar sections changed, so a version bump or dependency update
+ * does not stop the run.
+ */
+export async function checkControlChanges(wsPath: string, baseSha: string, changedFiles: string[], env: Record<string, string>): Promise<string[]> {
+  const flagged: string[] = [];
+  for (const file of changedFiles.filter(controlsChecks)) {
+    if (path.basename(file) === "package.json") {
+      const base = await showAtBase(wsPath, baseSha, file, env);
+      const head = readGuidanceFileRaw(path.join(wsPath, file));
+      if (!packageJsonControlChanged(base, head)) continue;
+    }
+    flagged.push(file);
+  }
+  return flagged;
+}
+
+function readGuidanceFileRaw(file: string): string | undefined {
+  const stat = statSync(file, { throwIfNoEntry: false });
+  if (!stat?.isFile() || stat.size > 4 * 1024 * 1024) return undefined;
+  const fd = openSync(file, "r");
+  try {
+    const buffer = Buffer.alloc(stat.size);
+    const read = readSync(fd, buffer, 0, buffer.length, 0);
+    return buffer.subarray(0, read).toString("utf8");
+  } finally {
+    closeSync(fd);
+  }
 }
 
 class RunAborted extends Error {
@@ -249,6 +303,17 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       const diff = await diffStats(workspace.path, workspace.baseSha, env);
       if (diff.files === 0) throw new RunAborted("stopped", "the implementation changed no files");
       decide("diff", afterDiff(diff, task, limits));
+      // The checks below run on this machine. If the change rewired what they execute, a person reads
+      // that diff first; the engine does not run it.
+      const control = await checkControlChanges(workspace.path, workspace.baseSha, diff.changedFiles, env);
+      if (control.length > 0) {
+        journal.text(`diff-${attempt}.patch`, await diffPatch(workspace.path, workspace.baseSha, env));
+        throw new RunAborted(
+          "escalated",
+          `the change edits files that decide what the verification commands run on this machine (${control.join(", ")}); the engine did not run them`,
+          ["Read the diff of those files. If the change is intended, run the repository's checks yourself before trusting it."],
+        );
+      }
       reporter.phase("verify", `${diff.files} files changed, +${diff.insertions} -${diff.deletions}`);
       const checks = await runChecks(checkSpecs(task.commands, reproduction), checkOptions);
       verification = compareWithBaseline(checks, baseline.checks, diff);

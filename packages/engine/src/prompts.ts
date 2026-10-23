@@ -96,7 +96,7 @@ export function orientPrompt(task: Task, baseline: Verification | undefined): st
     "# Phase 1: orient",
     "Investigate before changing anything:",
     "1. Read the relevant code and tests. Find where the behaviour lives and why it is wrong or missing.",
-    "2. Confirm how to run tests, lint and typecheck here (use the repository commands above; if they are missing or wrong, discover the right ones and report them in `commands`).",
+    "2. Confirm how to run tests, lint and typecheck here (use the repository commands above; if they are missing or wrong, discover the right ones and report them in `commands`). Report each as the project's own plain runner invocation, such as `npm test` or `pytest tests/`; the engine ignores commands with shell operators, inline code, paths outside the checkout, or installs.",
     "3. Reproduce the problem: write a focused failing test in the repository's test framework when feasible (that is the preferred `reproduction.kind: test`); otherwise a script or a manual check. Record the exact command and what you observed.",
     "4. Decide feasibility. Use `stop` when the problem is already fixed at this commit, the issue's premise is wrong, or the change is out of a contributor's reach. Use `needs_human` when a product or maintainer decision is required, the issue is too ambiguous to implement confidently, or the change would be large. Use `proceed` only when you are confident a small, test-backed change solves it.",
     "Do not implement the fix yet. The reproduction test may stay in the tree.",

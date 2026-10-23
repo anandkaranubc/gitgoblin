@@ -78,9 +78,19 @@ Escalations and stops still write a full report so a human can pick up where the
   run code on the host.
 - Install and verification commands run on the host (the setup phase needs the network) with an
   environment stripped of every credential, including model keys. Commands the model discovers
-  during orientation are accepted only as plain invocations of known tool runners. Running a
-  hostile repository's install script is still running its code: use a container for repositories
-  you do not trust.
+  during orientation are accepted only as plain invocations of known tool runners: no shell
+  operators, no inline code or preload flags, no paths outside the checkout, no installs or
+  download-and-run forms. Running a hostile repository's install script is still running its code:
+  use a container for repositories you do not trust.
+- The agent edits the tree before verification runs on the host, so an edit to the files that decide
+  what the check commands execute (package.json scripts, Makefiles, test-runner and linter config
+  that is code, hook managers, package-manager settings) escalates before the checks run; a person
+  reads that diff first. A test file the agent adds still runs under the repository's test command,
+  which is why the container advice above stands.
+- Repository guidance (CONTRIBUTING.md, AGENTS.md, pull request templates) is quoted into prompts
+  only when the path resolves to a regular file inside the checkout, so a symlink named
+  CONTRIBUTING.md pointing at a credential file is skipped; the text is read as a bounded prefix and
+  stripped of invisible control characters.
 - PreToolUse hooks deny, regardless of mode: `git push`, remote changes, `gh`, network tools,
   package publishing, installing new packages, `sudo`, container/system tools, writes outside the
   workspace, writes into `.git/` and to protected paths. Hooks are best-effort text matching; the

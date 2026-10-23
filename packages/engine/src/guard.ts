@@ -29,6 +29,11 @@ interface DenyRule {
 /** Options that may sit between `git` and its subcommand, e.g. `git -C . push`. */
 const GIT_OPTS = String.raw`(?:(?:-[cC]\s+\S+|--git-dir=\S+|--work-tree=\S+|-\S+)\s+)*`;
 const NETWORK_TOOLS = new Set(["curl", "wget", "nc", "ncat", "netcat", "telnet", "ssh", "scp", "sftp", "rsync", "ftp"]);
+/** Container, orchestration and host-administration tools, plus the macOS keychain and preferences CLIs. */
+const SYSTEM_TOOLS = new Set([
+  "docker", "podman", "kubectl", "helm", "terraform", "crontab", "launchctl", "systemctl", "osascript",
+  "security", "defaults", "dscl", "diskutil", "csrutil", "spctl", "nvram", "pmset", "scutil", "networksetup", "softwareupdate", "tmutil",
+]);
 const WRAPPERS = new Set(["env", "nohup", "time", "xargs", "exec", "command", "nice", "sh", "bash", "zsh", "-c"]);
 
 /** The program each shell segment would run: `A=1 env curl x | grep curl` gives ["curl", "grep"]. */
@@ -59,10 +64,6 @@ const BASH_DENY_RULES: DenyRule[] = [
   { pattern: /\b(sudo|doas)\b|(^|[\s;&|])su\s/, reason: "privilege escalation is disabled" },
   { pattern: /\brm\s+-[a-zA-Z]*[rf][a-zA-Z]*\s+(\/|~|\$HOME)\/?(\s|$)/, reason: "destructive delete outside the workspace" },
   { pattern: /\b(chmod|chown)\s+(-R\s+)?\S+\s+(\/|~)(\s|$)/, reason: "permission changes outside the workspace" },
-  {
-    pattern: /\b(docker|podman|kubectl|helm|terraform|crontab|launchctl|systemctl|osascript)\b/,
-    reason: "system and infrastructure tools are disabled",
-  },
 ];
 
 const PACKAGE_INSTALL = /\b(?:npm|pnpm|yarn|bun)\s+(?:install|add|i)\s+(.*)$|\b(?:pip3?|uv)\s+(?:pip\s+)?(?:install|add)\s+(.*)$/;
@@ -86,6 +87,7 @@ export function bashDenyReason(command: string): string | null {
   const names = commandNames(command);
   if (names.includes("gh")) return "GitHub writes happen in the engine after human approval";
   if (names.some((n) => NETWORK_TOOLS.has(n))) return "network tools are disabled";
+  if (names.some((n) => SYSTEM_TOOLS.has(n))) return "system and infrastructure tools are disabled";
   if (installsNewPackage(command)) return "new dependencies need a maintainer decision; put it in the plan";
   return null;
 }
@@ -116,14 +118,82 @@ const KNOWN_RUNNERS =
   /^(npm|npx|pnpm|yarn|bun|node|deno|python3?|pytest|uv|poetry|tox|nox|hatch|cargo|go|make|mvn|gradle|\.\/gradlew|dotnet|bundle|rake|rspec|mix|swift|zig|ruff|black|mypy|flake8|pylint|eslint|prettier|tsc|vitest|jest|mocha|ctest|cmake|meson|ninja|bazel|sbt|composer|phpunit|php|ruby|julia|Rscript|just)$/;
 
 /**
- * Commands the model discovers during orientation run on the host, outside the sandbox. Accept
- * only plain invocations of known tool runners: no shell operators, no network tools.
+ * Per runner, the arguments that turn a check command into something else: inline code, preloaded
+ * files, other manifests or directories, installs, and download-and-run forms. Matched against every
+ * argument, so a flag after `--` still counts; a false positive only means the engine keeps the
+ * command intel already knew.
+ */
+const RUNNER_DENY: Record<string, RegExp> = {
+  node: /^(-e|--eval|-p|--print|-i|--interactive|-r|--require|--import|--loader|--experimental-loader|--experimental-default-type|-c|--check)(=|$)/,
+  deno: /^(eval|repl|install|uninstall|upgrade|compile|add|remove|publish)$/,
+  bun: /^(-e|--eval|-p|--print|-r|--preload|--require|--import|x|install|i|add|remove|rm|create|init|upgrade|pm|publish|link|update)$/,
+  python: /^(-(?!-)[A-Za-z]*[ci][A-Za-z]*)$/,
+  python3: /^(-(?!-)[A-Za-z]*[ci][A-Za-z]*)$/,
+  ruby: /^(-(?!-)[A-Za-z]*[er][A-Za-z]*)(=|$)/,
+  php: /^(-r|-R|-B|-E|-F|-a|-d)$/,
+  npx: /^(-y|--yes|-p|--package|-c|--call|--ignore-existing)(=|$)/,
+  npm: /^(exec|x|it|install-test|install-ci-test|cit|ci|install|i|update|up|link|ln|publish|dedupe|ddp|prune|rebuild|rb|--prefix|-C|--userconfig|--globalconfig|--script-shell|--cache|--workspace|-w)(=|$)/,
+  pnpm: /^(dlx|install|i|add|update|up|publish|link|import|--dir|-C|--prefix|--filter|-F)(=|$)/,
+  yarn: /^(dlx|install|add|up|upgrade|publish|link|--cwd|--modules-folder)(=|$)/,
+  uv: /^(tool|pip|add|remove|publish|sync|lock|venv|--with|--with-requirements|--with-editable|--project|--directory|-s|--script)(=|$)/,
+  poetry: /^(add|remove|install|update|publish|lock|self|--directory|-C)(=|$)/,
+  make: /^(-f|--file|--makefile|-C|--directory|-I|--include-dir|-E|--eval)(=|$)/,
+  cargo: /^(--manifest-path|install|publish|add|remove|update|fetch|--config|-Z)(=|$)/,
+  go: /^(-C|get|install|env|generate)$/,
+  mvn: /^(-f|--file|-s|--settings|-gs|--global-settings|-t|--toolchains|deploy|install)$/,
+  gradle: /^(-b|--build-file|-c|--settings-file|-p|--project-dir|-I|--init-script)(=|$)/,
+  gradlew: /^(-b|--build-file|-c|--settings-file|-p|--project-dir|-I|--init-script)(=|$)/,
+  dotnet: /^(tool|nuget|add|remove|new|workload|--project|-p)(=|$)/,
+  bundle: /^(install|add|update|config|gem|plugin)$/,
+  composer: /^(install|update|require|remove|global|create-project|config|self-update)$/,
+  mix: /^(run|-e|--eval|deps\.get|deps\.update|archive\.install|escript\.install|local\.hex|local\.rebar|hex\.\S*)$/,
+  swift: /^(-e|package|-I|-F|-L)$/,
+  julia: /^(-e|--eval|-E|--print|-L|--load|-J|--sysimage)(=|$)/,
+  Rscript: /^(-e|--default-packages)(=|$)/,
+  just: /^(--justfile|-f|--working-directory|-d|--command|-c|--eval|--shell|--shell-arg)(=|$)/,
+  tox: /^(-c|--conf|--root|--workdir)(=|$)/,
+  nox: /^(-f|--noxfile)(=|$)/,
+  hatch: /^(-C|--config|--project|-p|python|env|publish)(=|$)/,
+  pytest: /^(-c|--config-file|--rootdir|--pythonpath|--confcutdir)(=|$)/,
+  cmake: /^(-P|-E|--preset|--toolchain)(=|$)/,
+  bazel: /^(--bazelrc|--override_repository|--override_module|--registry|--repository_cache|--output_base|--output_user_root)(=|$)/,
+  eslint: /^(-c|--config|--rulesdir|--plugin|--resolve-plugins-relative-to|--parser)(=|$)/,
+  prettier: /^(--config|--plugin|--plugin-search-dir)(=|$)/,
+  vitest: /^(-c|--config|-r|--root|--dir|--setupFiles|--globalSetup)(=|$)/,
+  jest: /^(-c|--config|--rootDir|--setupFiles|--setupFilesAfterEach|--globalSetup|--globalTeardown|--preset|--testEnvironment|--transform)(=|$)/,
+  mocha: /^(-r|--require|-n|--node-option|--config|--file|--package)(=|$)/,
+};
+/** `python -m <module>` forms that install or run arbitrary code rather than the project's tests. */
+const PYTHON_MODULE_DENY = /^(pip|pipx|ensurepip|venv|uv|http\.server|code|pdb|idlelib|webbrowser)$/;
+
+function hasPathOutsideWorkspace(token: string): boolean {
+  const value = token.replace(/^--?[A-Za-z][\w-]*=/, "");
+  if (value.startsWith("/") || value.startsWith("~") || /:\/\//.test(value)) return true;
+  return value.split(/[\\/]/).includes("..");
+}
+
+/**
+ * Commands the model discovers during orientation run on the host, outside the sandbox, so they are
+ * accepted only as plain invocations of a known tool runner: no shell operators, no inline code or
+ * preloads, nothing outside the workspace, no installs or download-and-run forms. The repository's
+ * own scripts are still the repository's code; the check-control gate in policy.ts covers edits to
+ * those.
  */
 export function isSafeCommand(command: string): boolean {
   const trimmed = command.trim();
   if (!trimmed || /[|;&$`<>\\\n]/.test(trimmed)) return false;
-  const first = trimmed.split(/\s+/)[0] ?? "";
-  return KNOWN_RUNNERS.test(first) && bashDenyReason(trimmed) === null;
+  const tokens = trimmed.split(/\s+/);
+  const first = tokens[0] ?? "";
+  if (!KNOWN_RUNNERS.test(first) || bashDenyReason(trimmed) !== null) return false;
+  const runner = path.basename(first);
+  const deny = RUNNER_DENY[runner];
+  for (let i = 1; i < tokens.length; i += 1) {
+    const token = tokens[i]!.replace(/^["']+|["']+$/g, "");
+    if (hasPathOutsideWorkspace(token)) return false;
+    if (deny?.test(token)) return false;
+    if (/^python3?$/.test(runner) && token === "-m" && PYTHON_MODULE_DENY.test(tokens[i + 1] ?? "")) return false;
+  }
+  return true;
 }
 
 function realpathOfNearestExisting(absolute: string): string {
