@@ -1,0 +1,46 @@
+# The pull request title becomes the commit subject on main (pull requests are
+# squash-merged), so the title is checked instead of each commit on the branch.
+# The format is in CONTRIBUTING.md under "Commits and pull requests". Editing
+# the title runs this again. No checkout and no token: it reads the event only.
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: PR title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the title
+        env:
+          # Through the environment, so a crafted title cannot run as shell code.
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|test|refactor|perf|build|ci|chore|revert)(\([A-Za-z0-9][A-Za-z0-9 ,./-]*\))?!?: [^ ].*[^. ]$'
+          if [ "${#TITLE}" -le 72 ] && printf '%s' "$TITLE" | grep -Eq "$pattern"; then
+            echo "ok: $TITLE"
+            exit 0
+          fi
+          cat <<'HELP'
+          The pull request title becomes the commit subject on main, so it must read
+
+              type(scope): what the change does
+
+          type:   feat, fix, docs, test, refactor, perf, build, ci, chore or revert
+          scope:  optional; the package or area, such as intel, engine, cli, site or docs
+          then what the change does, in the imperative, no final period, 72 characters at most in all.
+
+          Examples:
+              fix(intel): skip archived repositories before sampling issues
+              docs: say how to run one package's tests
+              feat(engine)!: require approval before any push
+
+          Edit the title on the pull request page and this check runs again.
+          HELP
+          echo "::error::The title does not follow the format: $TITLE"
+          exit 1
