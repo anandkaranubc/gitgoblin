@@ -17,6 +17,9 @@ Options:
   --no-links         Skip HTTP checks of external links
   --no-deps          Skip OSV and registry checks of dependencies
   --no-cache         Ignore cached API responses
+  --llm              Ask Claude for a second opinion on issue triage (costs money;
+                     needs ANTHROPIC_API_KEY or \`ant auth login\`)
+  --llm-model <id>   Model for --llm (default claude-opus-5-5, or GITGOBLIN_MODEL)
   --local <path>     Analyze an existing checkout instead of cloning
   --verbose          Progress on stderr
   -h, --help         This help
@@ -36,6 +39,8 @@ async function main(argv: string[]): Promise<number> {
       "no-deps": { type: "boolean", default: false },
       "no-cache": { type: "boolean", default: false },
       local: { type: "string" },
+      llm: { type: "boolean", default: false },
+      "llm-model": { type: "string" },
       verbose: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
@@ -51,6 +56,7 @@ async function main(argv: string[]): Promise<number> {
     dependencyChecks: !values["no-deps"],
     maxOpportunities: values.max ? Number(values.max) : undefined,
     cacheTtlMs: values["no-cache"] ? 0 : undefined,
+    llm: values.llm ? (values["llm-model"] ? { model: values["llm-model"] } : true) : false,
     log: values.verbose ? (m) => console.error(`[${((Date.now() - started) / 1000).toFixed(1)}s] ${m}`) : undefined,
   });
   const text = values.json ? JSON.stringify(report, null, 2) : renderMarkdown(report);
