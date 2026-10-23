@@ -43,7 +43,9 @@ The answer is a single bundled file, produced only when packing:
 - `npm pack` runs `scripts/bundle.mjs`, which uses esbuild to bundle `src/main.ts` with the workspace packages and every npm dependency into `dist/`. Node built-ins stay external. The published package therefore has no runtime dependencies, which makes `npx -y @gitgoblin/mcp` one download and a fast cold start.
 - The sibling packages and the libraries they use are `devDependencies` of this package: they are inputs to the bundle, not dependencies of the published artifact. esbuild is the one new development dependency, added for this reason.
 
-`server.json` next to the package is the manifest for the official MCP Registry. It can only be submitted after the npm package exists, and the registry verifies ownership through the `mcpName` field in `package.json`.
+`scripts/mcpb.mjs` wraps the same launcher and bundle into an MCPB bundle (`dist/gitgoblin.mcpb`): the double-click install for Claude Desktop, and an artifact the MCP Registry accepts when it is attached to a GitHub release. Each release carries both the npm tarball from `npm pack` and the bundle, so `npx -y <tarball url>` works before, and independently of, the npm package.
+
+`server.json` next to the package is the manifest for the official MCP Registry. It points at the release's `.mcpb` with its SHA-256; when the npm package is published, an npm entry joins it and the registry verifies ownership through the `mcpName` field in `package.json`.
 
 ## Distribution
 
@@ -52,7 +54,8 @@ One package, several doors:
 - **Any MCP client**: the stdio server, `npx -y @gitgoblin/mcp`. The README has the exact command or config for each client, verified against the installed client where that was possible.
 - **Claude Code plugin**: `.claude-plugin/plugin.json` at the repository root bundles the MCP server with the agent skill, so one `/plugin install` gives both.
 - **Agent skill**: `skills/gitgoblin/SKILL.md` follows the Agent Skills format that Claude Code, Codex, Cursor, Gemini CLI and others read. It teaches the agent when to reach for gitgoblin, how to read scores and evidence, and how to behave in someone else's repository, which is the part a tool list cannot carry.
-- **Registries**: the official MCP Registry manifest is ready; directory submissions follow the npm release.
+- **GitHub release**: `mcp-v<version>` carries the npm tarball and the MCPB bundle, so the server is installable from the day of a release, with or without npm.
+- **Registries**: `server.json` is ready for `mcp-publisher publish`, which needs the maintainer's GitHub login; directory submissions follow.
 
 ## Non-goals
 
