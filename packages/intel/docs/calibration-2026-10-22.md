@@ -256,3 +256,27 @@ false positive: pip-tools declares `--upgrade-package` as an assigned
 `click.option(` with the flag on a later line, which the collector did not
 read; fixed with a test. Rerun the sweep after any change to
 `src/analyzers/issue-drift.ts`.
+
+### Three samples on code findings
+
+The eval package graded intel's code findings on two more sets with the same
+targeted-removal rule, control lines graded alike and every counted item read
+by hand: discovery's own candidate pool (47 repositories, about 180 days) and
+its 17-repository calibration set.
+
+| Kind | Pool: targeted vs control | Calibration: targeted vs control | intel's 19 repositories |
+|---|---|---|---|
+| ci_rot | 18% vs 9% (22 findings) | 33% vs 0% (3) | 40% vs 5% (30) |
+| broken_link | 22% vs 11% (9) | 1 of 1 | 31% vs 5% (16) |
+| tech_debt | 3% vs 3% (32) | 0% vs 7% (15) | 8% vs 5% (24) |
+| skipped tests | 0% (9) | 43% vs 0% (7) | not graded |
+
+CI rot and broken links are real demand in every sample; old TODO lines go at
+the background rate, so the value prior of a plain TODO drops from 0.35 to
+0.25 while TODOs that cite a closed issue or a met condition keep theirs. In
+the pool, maintainers made nearly all of these changes themselves, a median of
+four to five months after the analyzed commit, so an outsider's PR on CI or a
+broken link rarely races them. Two evidence problems the grading exposed are
+fixed: undocumented-API excerpts and TODO excerpts are now verbatim source
+lines, and files generated from a sibling grammar or carrying a generated-file
+banner are skipped.
