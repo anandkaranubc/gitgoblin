@@ -45,6 +45,21 @@ export interface GitRepo {
   revisionCount(path: string): Promise<number>;
   /** Tracked files under `paths` containing `word` as a whole word, case-insensitive. */
   grep(word: string, paths: string[]): Promise<string[]>;
+  /**
+   * Files containing `text` exactly (case-sensitive), at HEAD or at `rev`. Searching a past
+   * revision fetches the blobs of `paths` in a blob:none clone, so callers keep `paths` short.
+   */
+  grepExact(text: string, options?: { paths?: string[]; rev?: string }): Promise<string[]>;
+  /** The newest commit on the current branch at or before an ISO date. */
+  revBefore(dateIso: string): Promise<string | undefined>;
+  /** A file's text at a revision, or undefined when missing, binary or over `maxBytes`. One blob fetch in a blob:none clone. */
+  showFile(rev: string, path: string, maxBytes?: number): Promise<string | undefined>;
+  /** Name of the branch origin/HEAD points at, or the current branch. */
+  defaultBranch(): Promise<string>;
+  /** Author date of the oldest reachable commit (bounded by clone depth). */
+  firstCommitDate(): Promise<string | undefined>;
+  /** Tags newest first, with their creation dates. */
+  tags(limit?: number): Promise<{ name: string; date: string }[]>;
 }
 
 /**
@@ -118,7 +133,7 @@ export async function ensureClone(ref: RepoRef, options: CloneOptions): Promise<
   }
 
   await mkdir(join(options.cacheDir, "repos"), { recursive: true });
-  const args = ["clone", "--quiet", "--filter=blob:none", "--single-branch"];
+  const args = ["clone", "--quiet", "--filter=blob:none", "--single-branch", "--tags"];
   if (ref.ref) args.push("--branch", ref.ref);
   if (options.depth) args.push("--depth", String(options.depth));
   args.push(url, dir);
@@ -214,12 +229,75 @@ class LocalGitRepo implements GitRepo {
     return parseLog(out);
   }
 
+  async defaultBranch(): Promise<string> {
+    try {
+      const ref = (await git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], this.dir)).trim();
+      if (ref) return ref.replace(/^origin\//, "");
+    } catch {
+      // No origin/HEAD (local checkout); fall through.
+    }
+    const branch = (await git(["rev-parse", "--abbrev-ref", "HEAD"], this.dir)).trim();
+    return branch === "HEAD" ? "main" : branch;
+  }
+
+  async firstCommitDate(): Promise<string | undefined> {
+    try {
+      const out = (await git(["log", "--reverse", "--format=%aI", "--max-parents=0", "HEAD"], this.dir)).trim().split("\n")[0];
+      return out || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async tags(limit = 10): Promise<{ name: string; date: string }[]> {
+    try {
+      const out = await git(["for-each-ref", "--sort=-creatordate", `--count=${limit}`, "--format=%(refname:short)%09%(creatordate:iso-strict)", "refs/tags"], this.dir);
+      return out.split("\n").filter((l) => l.includes("\t")).map((l) => { const [name, date] = l.split("\t"); return { name: name!, date: date! }; });
+    } catch {
+      return [];
+    }
+  }
+
   async grep(word: string, paths: string[]): Promise<string[]> {
     try {
       const out = await git(["grep", "-l", "-i", "-w", "-F", "-e", word, "--", ...paths], this.dir, 30_000);
       return out.split("\n").filter((l) => l.length > 0);
     } catch {
       return []; // git grep exits 1 when nothing matches
+    }
+  }
+
+  async grepExact(text: string, options: { paths?: string[]; rev?: string } = {}): Promise<string[]> {
+    const args = ["grep", "-l", "-I", "-F", "-e", text];
+    if (options.rev) args.push(options.rev);
+    args.push("--", ...(options.paths ?? []));
+    try {
+      const out = await git(args, this.dir, 30_000);
+      return out
+        .split("\n")
+        .filter((l) => l.length > 0)
+        .map((l) => (options.rev && l.startsWith(`${options.rev}:`) ? l.slice(options.rev.length + 1) : l));
+    } catch {
+      return [];
+    }
+  }
+
+  async showFile(rev: string, path: string, maxBytes = 512 * 1024): Promise<string | undefined> {
+    try {
+      const { stdout } = await execFileAsync("git", ["show", `${rev}:${path}`], { cwd: this.dir, env: GIT_ENV, timeout: 60_000, maxBuffer: maxBytes, encoding: "buffer" });
+      if (looksBinary(stdout)) return undefined;
+      return stdout.toString("utf8");
+    } catch {
+      return undefined; // missing path, unknown revision, or larger than maxBytes
+    }
+  }
+
+  async revBefore(dateIso: string): Promise<string | undefined> {
+    try {
+      const sha = (await git(["rev-list", "-1", `--before=${dateIso}`, "HEAD"], this.dir, 30_000)).trim();
+      return sha || undefined;
+    } catch {
+      return undefined;
     }
   }
 
