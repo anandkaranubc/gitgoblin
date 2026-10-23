@@ -62,13 +62,13 @@ The agent will call `discover_repositories`, then `analyze_repository` on whiche
 
 ## The tools
 
-All four only read public data, and only from github.com: discovery and analysis use GitHub's API, so other forges are refused rather than answered wrongly. Nothing is written anywhere except a local cache under `~/.cache/gitgoblin`. Because your agent picks the repository, the server treats every repository as hostile: committed symlinks are checked out as plain files, git only speaks HTTPS, external links are never fetched, and the agent is told that text quoted from a repository is data, not instructions.
+All four only read public data. Discovery and `explain_repository` read GitHub; `analyze_repository` and `get_opportunity` also read gitlab.com and codeberg.org through their public APIs. Other hosts are refused. Nothing is written anywhere except a local cache under `~/.cache/gitgoblin`. Because your agent picks the repository, the server treats every repository as hostile: committed symlinks are checked out as plain files, git only speaks HTTPS, external links are never fetched, and the agent is told that text quoted from a repository is data, not instructions.
 
 | Tool | What it does | Time |
 | --- | --- | --- |
 | `discover_repositories` | Ranks repositories for a goal (`contribute`, `learn`, `adopt`, `revive`, `explore`) with filters for language, topic, stars, license, recency or "more like this one". Each result explains its ranking. | up to 40 s cold, instant cached |
 | `explain_repository` | Every signal for one repository under a goal, with its weight and evidence. | a few seconds |
-| `analyze_repository` | Profile of one repository (what it is, how alive, how it treats outsiders, its rules, install and test commands, conventions) plus ranked opportunities with evidence. | seconds to a minute |
+| `analyze_repository` | Profile of one GitHub, GitLab or Codeberg repository (what it is, how alive, how it treats outsiders, its rules, install and test commands, conventions) plus ranked opportunities with evidence. | seconds to a minute |
 | `get_opportunity` | The full briefing for one opportunity: evidence with excerpts, approach, acceptance criteria, files to read, etiquette, and how to work on the project. | instant after an analysis |
 
 [packages/mcp/README.md](../packages/mcp/README.md) documents the inputs and outputs in detail.
@@ -176,7 +176,7 @@ The launcher runs the TypeScript source directly on Node 24; there is nothing to
 - **The first call times out**: a cold `discover_repositories` can take 40 seconds while it asks GitHub and ecosyste.ms about each candidate. The server reports progress, so clients that reset their timeout on progress keep waiting. Run it again; the second search is instant from the cache. Narrow filters (one language, a star cap) also speed it up.
 - **Rate limited**: the error says when the limit resets and how to add a token. See [GitHub token](#github-token-optional).
 - **A repository is "not found"**: check the spelling, whether it moved, and that it is public. Private repositories are out of scope.
-- **"not one of the forges gitgoblin reads"**: the tools read github.com only. GitLab, Codeberg and self-hosted forges are planned; until then they are refused, so the tools never answer about a GitHub repository that happens to share the name.
+- **"not one of the forges this tool reads"**: discovery and `explain_repository` look repositories up through GitHub's API, so they take github.com only; analysis and briefings take github.com, gitlab.com and codeberg.org. Self-hosted forges are refused so the server, whose repository your agent chooses, can never be pointed at your own network.
 - **Something printed on stdout broke the connection**: the server routes all its logging to stderr. If you see this, it is a bug; please report it with the client and the command.
 
 The cache lives at `~/.cache/gitgoblin` (`$XDG_CACHE_HOME/gitgoblin`, or `$GITGOBLIN_CACHE_DIR`). Deleting it is always safe.
