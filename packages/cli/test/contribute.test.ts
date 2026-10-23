@@ -119,3 +119,24 @@ describe("describeRun", () => {
     expect(lines.at(-1)).toBe("Question for you: May the change edit .github/workflows/ci.yml?");
   });
 });
+
+describe("text from issues and the model is shown without control characters", () => {
+  const dirty = "Fix #42: \u001b[31mred\u001b[0m \u202etext";
+
+  it("in the opportunity list", () => {
+    const text = formatOpportunities(sampleReport([sampleOpportunity({ title: dirty, summary: "A\u0007 bell", evidence: [{ id: "e", kind: "issue", locator: "https://example.com/\u001b]8;;x\u0007", observedAt: "2026-10-22T00:00:00Z" }] })]), plain);
+    expect(text).toContain("1. Fix #42: red text");
+    expect(text).toContain("    A bell");
+    expect(text).toContain("evidence: https://example.com/");
+    // Newlines separate the list; nothing else below U+0020 may remain.
+    expect(text).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u202e]/);
+  });
+
+  it("in the status line and the plan", () => {
+    const lines = describeRun({ runId: "r", runDir: "/w/runs/r", status: "escalated", reason: "needs\u001b[2K a human", questions: ["ok\u001b[31m?"], workspace: undefined, branch: undefined, costUsd: 0, durationMs: 0 });
+    expect(lines[0]).toBe("Run escalated: needs a human");
+    expect(lines.at(-1)).toBe("Question for you: ok?");
+    const planText = formatPlan({ goal: "g\u001b[0m", steps: ["s\u0007"], filesToModify: ["a\u200b.ts"], filesToCreate: [], testsToAdd: [], outOfScope: [], risks: [], needsNewDependency: false });
+    expect(planText).toContain("Plan: g\n  1. s\nFiles: a.ts");
+  });
+});

@@ -572,3 +572,20 @@ describe("runs, show and publish", () => {
     expect(siblings.calls).toHaveLength(0);
   });
 });
+
+describe("control characters never reach the terminal", () => {
+  it("are stripped from the chosen opportunity's title and from the pull request text a run produced", async () => {
+    const siblings = fakeSiblings({ report: sampleReport([sampleOpportunity({ title: "Fix #42: \u001b[31mred\u001b[0m" })]) });
+    const { runtime, out } = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/widget", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(out.join("\n")).toContain("Opportunity: Fix #42: red");
+    expect(out.join("\n")).not.toContain("\u001b");
+
+    writeRun(siblings.workdir, "20261022-093000-bbbb");
+    writeFileSync(join(siblings.workdir, "runs", "20261022-093000-bbbb", "pr-title.txt"), "fix: \u001b]8;;https://evil.example\u0007honour --color\u001b]8;;\u0007\n");
+    const pr = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["show", "20261022-093000-bbbb", "--pr", "--workdir", siblings.workdir], pr.runtime)).toBe(0);
+    expect(pr.out.join("\n")).toContain("fix: honour --color");
+    expect(pr.out.join("\n")).not.toContain("\u001b");
+  });
+});
