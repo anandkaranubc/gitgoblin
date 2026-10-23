@@ -357,6 +357,35 @@ describe("runContribution", () => {
     }
   });
 
+  it.skipIf(detectHostSandbox()?.kind !== "sandbox-exec")("limits a strict install to package registries through the engine's proxy", async () => {
+    const repo = await createFixtureRepo();
+    // The install script probes three things: a direct connection (must fail), the proxy variable
+    // (must be set), and a tunnel to a host that is not a registry (must be refused and recorded).
+    const probe = [
+      "const net = require('net');",
+      "const u = new URL(process.env.HTTPS_PROXY);",
+      "console.log('proxy=' + u.hostname);",
+      "const direct = net.connect(443, '93.184.216.34');",
+      "direct.on('connect', () => { console.log('direct=open'); direct.destroy(); });",
+      "direct.on('error', () => console.log('direct=blocked'));",
+      "const s = net.connect(Number(u.port), u.hostname, () => s.write('CONNECT evil.example.com:443 HTTP/1.1\\r\\nHost: evil.example.com:443\\r\\n\\r\\n'));",
+      "s.on('data', (d) => { console.log('tunnel=' + d.toString().split(' ')[1]); s.destroy(); });",
+    ].join(" ");
+    writeFileSync(path.join(repo, "probe.cjs"), probe);
+    await git(["add", "probe.cjs"], repo, env);
+    await git(["commit", "-q", "-m", "probe"], repo, env);
+    const task = { ...fixtureTask(repo), commands: { install: "node probe.cjs", test: "npm test" } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, checkIsolation: "strict", runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(result.status).toBe("awaiting_approval");
+    const log = readFileSync(path.join(result.runDir, "install-output.txt"), "utf8");
+    expect(log).toContain("proxy=127.0.0.1");
+    expect(log).toContain("direct=blocked");
+    expect(log).toContain("tunnel=403");
+    const events = readFileSync(path.join(result.runDir, "events.jsonl"), "utf8");
+    expect(events).toMatch(/"phase":"install","type":"end".*"network":"registries".*"refused":\["evil\.example\.com:443"\]/);
+    expect(readFileSync(path.join(result.runDir, "report.md"), "utf8")).toMatch(/install limited to package registries, refused 1: evil\.example\.com:443/);
+  });
+
   it("records when repository commands ran without an OS sandbox", async () => {
     const repo = await createFixtureRepo();
     const result = await run(happyPath, [], { checkIsolation: "none" })(repo, workdir());
