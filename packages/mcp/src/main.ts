@@ -1,3 +1,5 @@
+// Keep this import first: it hardens git before any other module reads process.env.
+import "./env.ts";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { defaultDeps } from "./deps.ts";
 import { createServer } from "./server.ts";
