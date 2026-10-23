@@ -2,6 +2,8 @@ import { join } from "node:path";
 import type { DiscoveryQuery, DiscoveryResult, Goal, RepoRef } from "@gitgoblin/core";
 import { createDiscovery } from "@gitgoblin/discovery";
 import { type AnalysisOptions, type AnalysisReport, analyzeRepository } from "@gitgoblin/intel";
+import { runInWorker } from "./isolate.ts";
+import type { AnalyzeTask } from "./worker.ts";
 import { defaultCacheDir } from "@gitgoblin/sources";
 
 /** One discovery session: a shared HTTP client and cache, closed when the call ends. */
@@ -11,7 +13,13 @@ export interface DiscoverySession {
   close(): void;
 }
 
-export type AnalyzeOptions = Pick<AnalysisOptions, "maxOpportunities" | "checkLinks" | "dependencyChecks" | "hints" | "log">;
+export type AnalyzeOptions = Pick<AnalysisOptions, "maxOpportunities" | "checkLinks" | "dependencyChecks" | "hints" | "log"> & {
+  /** The client cancelled; stop the analysis. */
+  signal?: AbortSignal | undefined;
+};
+
+/** An analysis that runs longer than this is stopped. A normal one takes seconds to a minute. */
+export const ANALYSIS_TIMEOUT_MS = 5 * 60_000;
 
 /**
  * Clones made by the server live apart from the command line's, so every one of them was checked out
@@ -28,8 +36,12 @@ export interface ServerDeps {
   now?: (() => number) | undefined;
 }
 
-/** Wires the real discovery engine and intel. Tokens and caches resolve exactly as in the command line. */
-export function defaultDeps(): ServerDeps {
+/**
+ * Wires the real discovery engine and intel. Tokens and caches resolve exactly as in the command line.
+ * With `workerEntry` (the server's own entry module), each analysis runs in a worker thread that is
+ * stopped after ANALYSIS_TIMEOUT_MS or when the client cancels; without it, analysis runs in-process.
+ */
+export function defaultDeps(workerEntry?: URL): ServerDeps {
   return {
     async openDiscovery(onProgress) {
       const { engine, sources } = await createDiscovery({ onProgress: (event) => onProgress(`${event.stage}: ${event.message}`) });
@@ -39,6 +51,16 @@ export function defaultDeps(): ServerDeps {
         close: () => sources.close(),
       };
     },
-    analyze: (ref, options) => analyzeRepository(ref, { ...options, cacheDir: mcpCacheDir() }),
+    analyze: (ref, options) => {
+      const { log, signal, ...rest } = options;
+      if (!workerEntry) return analyzeRepository(ref, { ...rest, log, cacheDir: mcpCacheDir() });
+      const task: AnalyzeTask = { kind: "analyze", ref, options: rest, cacheDir: mcpCacheDir() };
+      return runInWorker<AnalysisReport>(workerEntry, task, {
+        timeoutMs: ANALYSIS_TIMEOUT_MS,
+        signal,
+        onLog: log,
+        label: `Analysis of ${ref.owner}/${ref.name}`,
+      });
+    },
   };
 }

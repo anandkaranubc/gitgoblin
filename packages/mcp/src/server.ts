@@ -165,6 +165,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
       dependencyChecks: options.dependencyChecks,
       hints: await hintsFor(ref, options.goal, ctx),
       log: progressReporter(ctx),
+      signal: ctx.mcpReq.signal,
     });
     reports.set(repoId(ref), { report, at: now() });
     return report;
