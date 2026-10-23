@@ -149,7 +149,7 @@ The lifecycle of prepared changes, in the same workdir `contribute` uses
   to the repository) and opens a draft pull request. `--ready` opens it ready for
   review instead. Only a run whose status is `awaiting_approval` can be published.
 
-Read [docs/etiquette.md](../../docs/etiquette.md) before publishing to someone else's project.
+Read [docs/etiquette.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md) before publishing to someone else's project.
 
 ## Exit codes
 
