@@ -156,6 +156,8 @@ export interface PublishOptions {
   /** Print the commands instead of running them. */
   dryRun?: boolean;
   log?: (line: string) => void;
+  /** Replaces the gh calls and the push; tests use it to simulate GitHub. */
+  runner?: { gh(args: string[]): Promise<string>; push(args: string[]): Promise<string> };
 }
 
 export interface PublishResult {
@@ -194,10 +196,12 @@ export async function publishPullRequest(opts: PublishOptions): Promise<PublishR
   const repo = `${task.repo.owner}/${task.repo.name}`;
   const log = opts.log ?? (() => undefined);
   const commands: string[] = [];
+  const ghCall = opts.runner ? opts.runner.gh : (args: string[]) => gh(args, wsPath, env);
   const run = async (file: string, args: string[]): Promise<string> => {
     commands.push([file, ...args].join(" "));
     if (opts.dryRun) return "";
-    return file === "gh" ? gh(args, wsPath, env) : git(args, wsPath, env);
+    if (file === "gh") return ghCall(args);
+    return opts.runner ? opts.runner.push(args) : git(args, wsPath, env);
   };
 
   if (task.repo.host !== "github.com") throw new Error(`publishing to ${task.repo.host} is not supported yet; push ${delivery.branch} by hand`);
@@ -208,8 +212,8 @@ export async function publishPullRequest(opts: PublishOptions): Promise<PublishR
     const dirty = await git(["status", "--porcelain"], wsPath, env);
     if (dirty) throw new Error(`workspace has uncommitted changes:\n${dirty}`);
   }
-  const login = opts.dryRun ? "<login>" : await gh(["api", "user", "--jq", ".login"], wsPath, env);
-  const permission = opts.dryRun ? "NONE" : await gh(["repo", "view", repo, "--json", "viewerPermission", "--jq", ".viewerPermission"], wsPath, env);
+  const login = opts.dryRun ? "<login>" : await ghCall(["api", "user", "--jq", ".login"]);
+  const permission = opts.dryRun ? "NONE" : await ghCall(["repo", "view", repo, "--json", "viewerPermission", "--jq", ".viewerPermission"]);
   const canPush = ["ADMIN", "MAINTAIN", "WRITE"].includes(permission);
 
   let pushUrl = `https://github.com/${repo}.git`;
@@ -224,6 +228,14 @@ export async function publishPullRequest(opts: PublishOptions): Promise<PublishR
   // Reset any repository-local credential helper the agent could have configured, then use gh's.
   await run("git", ["-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential", "push", pushUrl, `${delivery.commitSha}:refs/heads/${delivery.branch}`]);
 
+  // A retry after a partial failure (pushed, but the answer to `gh pr create` was lost) must not fail
+  // on GitHub's "a pull request already exists": find the open one for this branch and return it.
+  const headRef = head.includes(":") ? head : `${task.repo.owner}:${head}`;
+  const existing = (await run("gh", ["api", `repos/${repo}/pulls?head=${headRef}&state=open&per_page=1`, "--jq", ".[0].html_url // empty"])).trim();
+  if (existing) {
+    log(`a pull request for ${headRef} is already open: ${existing}`);
+    return { url: existing, head, pushedTo: pushUrl, commands };
+  }
   const prArgs = ["pr", "create", "--repo", repo, "--base", task.repo.defaultBranch, "--head", head, "--title", delivery.prTitle, "--body-file", opts.bodyFile];
   if (opts.draft !== false) prArgs.push("--draft");
   const url = await run("gh", prArgs);
