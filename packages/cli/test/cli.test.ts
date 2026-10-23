@@ -653,3 +653,36 @@ describe("a failed install is explained where the person is looking", () => {
     expect(none.out.join("\n")).toMatch(/did not run an install command/);
   });
 });
+
+describe("contribute --check-isolation", () => {
+  it("leaves the engine's default alone when the flag is not given", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect((siblings.calls[1]?.args[1] as RunOptions).checkIsolation).toBeUndefined();
+    expect(asked[0]).not.toMatch(/isolation|sandbox/);
+  });
+
+  it("passes strict through and says so in the question the person answers", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--check-isolation", "strict", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect((siblings.calls[1]?.args[1] as RunOptions).checkIsolation).toBe("strict");
+    expect(asked[0]).toContain("the repository's own commands in a strict sandbox that hides your home directory");
+  });
+
+  it("warns plainly when the repository's commands will run without a sandbox", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--check-isolation", "none", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(asked[0]).toContain("the repository's own install and test commands run on this machine WITHOUT a sandbox");
+  });
+
+  it("rejects an unknown mode as a usage error before doing anything", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules, answers: ["y"] });
+    expect(await run(["contribute", "acme/widget", "--check-isolation", "paranoid", "--workdir", siblings.workdir], runtime)).toBe(2);
+    expect(err.join("\n")).toMatch(/auto, sandbox, strict, none/);
+    expect(siblings.calls).toHaveLength(0);
+  });
+});
