@@ -6,7 +6,7 @@ import { type AnalysisContext, type AnalysisOptions, BudgetTracker, resolveOptio
 import { AnalysisReport, type ContributionOpportunity, RepoRef, type RepoRefInput, type RepositoryProfile } from "./contracts.ts";
 import { evaluate } from "./evaluate/index.ts";
 import { scanRepo } from "./fs/scan.ts";
-import { ensureClone, openRepo } from "./git/repo.ts";
+import { ensureClone, openRepo, looksLikeSha } from "./git/repo.ts";
 import { FetchGitHubApi, type GitHubApi, discoverToken } from "./github/client.ts";
 import { sharedGitHubApi } from "./github/sources-adapter.ts";
 import { detectForge, fetchForge } from "./forge/index.ts";
@@ -46,13 +46,13 @@ export async function analyzeRepository(input: string | RepoRefInput, options: A
   const github: GitHubApi = opts.github ?? shared ?? new FetchGitHubApi({ token: await discoverToken(), cache: new DiskCache(join(opts.cacheDir, "api")), cacheTtlMs: opts.cacheTtlMs });
   log(shared ? "using the shared GitHub client from @gitgoblin/sources" : opts.github ? "using the injected GitHub client" : "using the built-in GitHub client");
   try {
-    return await run(ref, github, opts);
+    return await run(ref, github, opts, options);
   } finally {
     shared?.close();
   }
 }
 
-async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof resolveOptions>): Promise<AnalysisReport> {
+async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof resolveOptions>, options: AnalysisOptions): Promise<AnalysisReport> {
   const log = opts.log;
   const onGitHub = ref.host === "github.com";
   const budget = new BudgetTracker(onGitHub ? github : undefined);
@@ -100,6 +100,14 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
   if (!(await repo.headSha().catch(() => undefined))) throw new EmptyRepositoryError(`${ref.owner}/${ref.name} has no commits; nothing to analyze`);
   meta ??= await metaFromGit(ref, repo);
 
+  // Analyzing a past commit: unless the caller fixed the clock, ages are relative to that commit's date.
+  if (ref.ref && looksLikeSha(ref.ref) && options.now === undefined) {
+    const head = await repo.log({ maxCount: 1 });
+    if (head[0]) {
+      opts.now = new Date(head[0].date);
+      budget.note(`clock set to the analyzed commit (${head[0].date.slice(0, 10)}); issue, PR and CI samples are live, not historical`);
+    }
+  }
   const now = opts.now;
 
   log("inventorying files and history");
@@ -120,6 +128,9 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
   if (closedEarly) {
     budget.note(`issue and PR sampling skipped: ${closedEarly}`);
     samples = undefined;
+  } else if (opts.skipSamples) {
+    budget.note("issue, PR and CI sampling skipped by request; clone-based analysis only");
+    samples = undefined;
   } else if (onGitHub) {
     try {
       log("sampling issues and pull requests");
@@ -128,8 +139,8 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
       budget.note(`issue and PR samples unavailable: ${(error as Error).message.split("\n")[0]}`);
     }
   }
-  let runs: WorkflowRun[] = forgeRuns;
-  if (onGitHub && inventory.files.some((f) => f.path.startsWith(".github/workflows/"))) {
+  let runs: WorkflowRun[] = opts.skipSamples ? [] : forgeRuns;
+  if (onGitHub && !opts.skipSamples && inventory.files.some((f) => f.path.startsWith(".github/workflows/"))) {
     runs = await fetchWorkflowRuns(github, ref.owner, ref.name, meta.defaultBranch).catch((error: Error) => {
       budget.note(`workflow runs unavailable: ${error.message.split("\n")[0]}`);
       return [];
@@ -163,7 +174,7 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
   }
 
   if (llm && llm.usage.calls > 0) budget.note(`llm: ${llm.usage.calls} calls, ${llm.usage.inputTokens} input and ${llm.usage.outputTokens} output tokens (${llm.model})`);
-  const { opportunities, skipped } = evaluate(findings, profile, opts.maxOpportunities);
+  const { opportunities, skipped } = evaluate(findings, profile, opts.maxOpportunities, opts.noKindCaps ? {} : undefined);
   const report: AnalysisReport = { version: "1", profile, opportunities, skipped, budget: budget.toBudget() };
   return AnalysisReport.parse(report);
 }
