@@ -2,7 +2,11 @@
 
 gitgoblin runs as a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server, so the agent you already use can find open-source projects worth your time, understand what a repository needs, and hand you an evidence-backed piece of work to start on. Claude Code, Codex, Cursor, Gemini CLI, Copilot in VS Code and every other MCP client speak to the same server.
 
-> **Where this stands (October 2026).** The server is built, tested and verified against the clients listed at the end of this page, but the `@gitgoblin/mcp` package has not been published to npm yet. Until the first release lands, replace `npx -y @gitgoblin/mcp` in every command below with `node /path/to/gitgoblin/packages/mcp/bin/gitgoblin-mcp.mjs`, pointing at a clone where you ran `npm install`. Nothing else changes.
+> **Where this stands (October 2026).** The server ships from [GitHub release `mcp-v0.1.0`](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.0) as an npm tarball and a Claude Desktop bundle. The `@gitgoblin/mcp` package is not on npm yet, so until it is, replace `npx -y @gitgoblin/mcp` in every command below with `npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.0/gitgoblin-mcp-0.1.0.tgz`. Nothing else changes; for Claude Code that is:
+>
+> ```sh
+> claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.0/gitgoblin-mcp-0.1.0.tgz
+> ```
 
 You need [Node.js](https://nodejs.org) 24 or newer and git. No account, no token, no configuration. A GitHub token is optional and explained below.
 
@@ -93,7 +97,7 @@ Or in JSON: `"env": { "GITHUB_TOKEN": "ghp_..." }`. If you are logged in with th
 
 ### Claude Desktop
 
-Settings → Developer → Edit Config opens `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude\` on Windows). Paste the standard block and restart Claude Desktop. The Anthropic directory distributes local servers as Claude Code plugins, which is why gitgoblin ships one.
+Download [`gitgoblin.mcpb`](https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.0/gitgoblin.mcpb) from the release and open it; Claude Desktop shows the install dialog (or use Settings → Extensions → Advanced settings → Install Extension). The bundle asks for an optional GitHub token and declares Node.js 24 or newer. Alternatively, Settings → Developer → Edit Config opens `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude\` on Windows); paste the standard block and restart. The Anthropic directory distributes local servers as Claude Code plugins, which is why gitgoblin ships one.
 
 ### Codex
 
@@ -112,9 +116,11 @@ Codex gives servers ten seconds to start by default. If the first `npx` download
 
 Project: `.cursor/mcp.json`; everywhere: `~/.cursor/mcp.json`; both take the standard block. Cursor expands `${env:GITHUB_TOKEN}` inside `env`. The install button above opens Cursor with the server pre-filled. [Cursor MCP docs](https://cursor.com/docs/context/mcp).
 
-### Gemini CLI
+### Gemini CLI and Antigravity
 
 `gemini mcp add` writes to the project's `.gemini/settings.json` unless you pass `-s user` for `~/.gemini/settings.json`. The `mcpServers` entry takes the standard block. Check the connection with `/mcp` inside a session: in Gemini CLI 0.64, `gemini mcp list` labels every configured server "Disabled" without trying to start it, so that label says nothing about the server. [Gemini CLI MCP docs](https://geminicli.com/docs/tools/mcp-server/).
+
+Google moved individual accounts from Gemini CLI to the Antigravity CLI in June 2026. There, `agy mcp add gitgoblin npx -y @gitgoblin/mcp` writes `~/.gemini/config/mcp_config.json` (or a project's `.agents/mcp_config.json`) with the same `mcpServers` block; `agy mcp list` shows it. [Antigravity MCP docs](https://antigravity.google/docs/mcp).
 
 ### VS Code
 
@@ -156,7 +162,7 @@ If your client is not listed, it almost certainly accepts the standard block too
 
 ## From a clone
 
-For development, or until the npm release, run the server from the repository:
+For development, run the server from the repository:
 
 ```sh
 git clone https://github.com/anandkaranubc/gitgoblin.git
@@ -178,16 +184,20 @@ The cache lives at `~/.cache/gitgoblin` (`$XDG_CACHE_HOME/gitgoblin`, or `$GITGO
 
 ## What has been verified
 
-Checked on macOS on 22 October 2026 with the server run from a clone:
+Checked on macOS on 22 October 2026. "Release" means the tarball or bundle attached to `mcp-v0.1.0`; "clone" means the launcher run from the repository.
 
 | Client | Checked | Result |
 | --- | --- | --- |
-| Claude Code 2.1.309 | `claude mcp add`, `claude mcp list` | Connected; all four tools listed |
-| Codex 0.163.0 | `codex mcp add`, `codex mcp list`, `codex mcp get` | Registered in `config.toml`; connection not exercised from the shell |
-| Gemini CLI 0.64.0 | `gemini mcp add -s user`, `gemini mcp list` | Registered in user settings; `mcp list` labels every server Disabled without connecting (a nonexistent command gets the same label), so the connection was not exercised |
+| `npx` from the release URL | Cold run in an empty directory | Installs in under two seconds, answers `initialize` and `tools/list`, nothing but JSON-RPC on stdout |
+| Claude Code 2.1.309 | `claude mcp add` with the release URL and with a clone, `claude mcp list` | Connected, four tools listed |
+| Codex 0.163.0 | `codex mcp add` with the release URL and with a clone, then a headless `codex exec` turn | Codex called `explain_repository` through the server and answered from its result |
+| Cursor CLI (`agent`) | `.cursor/mcp.json` with a clone, `agent mcp enable`, `agent mcp list-tools` | All four tools listed with their arguments; `agent mcp list` reports the server ready |
 | VS Code 1.139.1 | `code --add-mcp` | Entry written to the user profile `mcp.json`; connection not exercised |
-| Cursor | install link | Encoded and decoded correctly; not opened in Cursor |
-| `npx` from a packed tarball | `npm pack`, install into an empty project, `npx gitgoblin-mcp` | Initializes and lists the tools |
-| Claude Code plugin and skill | `claude plugin validate` | Manifest, marketplace and skill pass |
+| Gemini CLI 0.64.0 | `gemini mcp add -s user`, `gemini mcp list` | Registered. `mcp list` labels every server Disabled without connecting, and this machine's account can no longer run Gemini CLI, so the connection was not exercised |
+| Antigravity CLI 1.4.5 | `agy mcp add` with the release URL, `agy mcp list` | Registered and enabled; the headless turn hit the account's quota, so the connection was not exercised |
+| Agent Skills | `npx skills add anandkaranubc/gitgoblin --list` | Finds the `gitgoblin` skill in the public repository |
+| Claude Code plugin | `claude plugin validate`, install from a local marketplace | Installs with the skill and the server inventoried |
+| MCPB bundle | `mcpb validate`, `mcpb pack`, unpack and run the launcher | Initializes and lists the tools; not installed in Claude Desktop itself |
+| Cursor and VS Code one-click links | Encoded and decoded | Point at `@gitgoblin/mcp`, so they work once the npm package exists |
 
-Anything not in this table has not been tried here. The Agent Skills install (`npx skills add`) and the one-click Cursor and VS Code links depend on the npm package existing, so they are documented from their specifications and will be checked at release.
+Anything not in this table has not been tried here.
