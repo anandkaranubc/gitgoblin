@@ -121,7 +121,8 @@ export function describeRun(result: RunResult): string[] {
  * reads only the fields it shows and older engines that pass nothing still work.
  */
 export interface PlanContextLike {
-  install?: { exitCode: number; logPath: string } | undefined;
+  /** exitCode is null when the install was killed or timed out. */
+  install?: { exitCode: number | null; logPath: string } | undefined;
   baseline?: { name: string; status: string }[] | undefined;
 }
 
@@ -132,7 +133,11 @@ export function describeEnvironment(context: PlanContextLike | undefined): strin
   const failing = (context.baseline ?? []).filter((check) => check.status !== "pass").map((check) => plain(check.name));
   if (!installFailed && failing.length === 0) return undefined;
   const lines: string[] = [];
-  if (installFailed) lines.push(`Warning: the repository's install failed (exit ${context.install!.exitCode}); log: ${plain(context.install!.logPath)}.`);
+  if (installFailed) {
+    const { exitCode, logPath } = context.install!;
+    const what = exitCode === null ? "did not finish (killed or timed out)" : `failed (exit ${exitCode})`;
+    lines.push(`Warning: the repository's install ${what}; log: ${plain(logPath)}.`);
+  }
   if (failing.length > 0) lines.push(`Failing before any change: ${failing.join(", ")}.`);
   lines.push(installFailed ? "A change implemented now cannot be verified against the project's own checks." : "Verification can only catch new failures, not these.");
   return lines.join(" ");
