@@ -60,9 +60,10 @@ a pull request a maintainer would want to merge.
 
 Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the CLI
 (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude Code
-login; each run costs money, capped by `--max-cost`. `discover`, `contribute` and `publish` work with
-GitHub only. Opportunity scores are still being calibrated. `contribute` has so far prepared pull
-requests on one real repository, on macOS, so treat what it prepares as a draft to review.
+login, and runs on macOS or Linux only (on Windows, `discover` and `analyze` work); each run costs
+money, capped by `--max-cost`. `discover`, `contribute` and `publish` work with GitHub only.
+Opportunity scores are still being calibrated. `contribute` has so far prepared pull requests on one
+real repository, on macOS, so treat what it prepares as a draft to review.
 
 ## @gitgoblin/mcp 0.1.6 - 2026-10-23
 

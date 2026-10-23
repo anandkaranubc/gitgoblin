@@ -233,7 +233,9 @@ class LocalGitRepo implements GitRepo {
       if (!file || file.size > maxBytes) return undefined; // the size is checked before reading, never after
       const buf = await readFile(file.real);
       if (looksBinary(buf)) return undefined;
-      return buf.toString("utf8");
+      // LF everywhere: a Windows checkout (or a repository committed with CRLF) would otherwise leave \r on every
+      // line, and analyzers that anchor on `$` after splitting on "\n" would miss matches. Line numbers are unchanged.
+      return buf.toString("utf8").replace(/\r\n/g, "\n");
     } catch {
       return undefined;
     }
@@ -315,7 +317,7 @@ class LocalGitRepo implements GitRepo {
     try {
       const { stdout } = await execFileAsync("git", ["show", `${rev}:${path}`], { cwd: this.dir, env: GIT_ENV, timeout: 60_000, maxBuffer: maxBytes, encoding: "buffer" });
       if (looksBinary(stdout)) return undefined;
-      return stdout.toString("utf8");
+      return stdout.toString("utf8").replace(/\r\n/g, "\n");
     } catch {
       return undefined; // missing path, unknown revision, or larger than maxBytes
     }
