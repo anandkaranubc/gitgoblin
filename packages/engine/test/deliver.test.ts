@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { commitMessage, publishPullRequest, pullRequestBody, pullRequestTitle, type DeliveryInput } from "../src/deliver.ts";
+import { commitMessage, neutralizeForGitHub, publishPullRequest, pullRequestBody, pullRequestTitle, type DeliveryInput } from "../src/deliver.ts";
 import { git } from "../src/workspace.ts";
 import { subjectFor, usesConventionalCommits } from "../src/naming.ts";
 import { TaskSchema, type Task } from "../src/types.ts";
@@ -97,5 +97,47 @@ describe("publishPullRequest", () => {
   it("refuses hosts other than GitHub", async () => {
     const task = { ...base, repo: { ...base.repo, host: "gitlab.com" } };
     await expect(publishPullRequest({ task, delivery: { branch: "b", commitSha: "", commitMessage: "", prTitle: "", prBody: "" }, wsPath: process.cwd(), bodyFile: "x", env: {}, dryRun: true })).rejects.toThrow(/gitlab.com/);
+  });
+});
+
+describe("neutralizeForGitHub", () => {
+  it("turns mentions into code so nobody is pinged by text the model wrote", () => {
+    expect(neutralizeForGitHub("thanks @octocat and @acme/maintainers")).toBe("thanks `@octocat` and `@acme/maintainers`");
+    expect(neutralizeForGitHub("mail me at dev@example.com")).toBe("mail me at dev@example.com");
+    expect(neutralizeForGitHub("already `@quoted`")).toBe("already `@quoted`");
+  });
+  it("keeps closing keywords from closing issues the change was not about", () => {
+    expect(neutralizeForGitHub("Closes #12 and fixes #40")).toBe("Closes `#12` and fixes `#40`");
+    expect(neutralizeForGitHub("resolves acme/other#3")).toBe("resolves `acme/other#3`");
+    expect(neutralizeForGitHub("fixed: https://github.com/acme/widgets/issues/9")).toBe("fixed: `https://github.com/acme/widgets/issues/9`");
+    expect(neutralizeForGitHub("see #12 for context")).toBe("see #12 for context");
+  });
+  it("leaves ordinary prose alone", () => {
+    expect(neutralizeForGitHub("Changed `<` to `<=` in the slice bound.")).toBe("Changed `<` to `<=` in the slice bound.");
+  });
+});
+
+describe("pull request text from untrusted sources", () => {
+  const hostile = (task: Task): DeliveryInput => {
+    const i = input(task);
+    return {
+      ...i,
+      notes: { ...i.notes, summary: "Fixed it. Closes #1, closes #2. cc @maintainer", knownGaps: ["ask @someone"] },
+      review: { ...i.review, prNotes: "fixes #3", findings: [{ severity: "minor", file: "a", line: null, summary: "ping @bob", failureScenario: "", suggestion: "" }] },
+    };
+  };
+  it("keeps the engine's own issue link working and neutralizes everything the model wrote", () => {
+    const body = pullRequestBody(hostile(base));
+    expect(body).toContain("Fixes #42");
+    expect(body).not.toMatch(/(^|[^`])#1\b/);
+    expect(body).toContain("closes `#2`");
+    expect(body).toContain("`@maintainer`");
+    expect(body).toContain("`@someone`");
+    expect(body).toContain("`@bob`");
+    expect(body).toContain("fixes `#3`");
+    const message = commitMessage(hostile(base));
+    expect(message).toContain("Refs #42");
+    expect(message).toContain("Closes `#1`");
+    expect(message).not.toMatch(/(^|[^`])@maintainer/);
   });
 });

@@ -26,6 +26,14 @@ describe("RunJournal", () => {
     expect(() => RunJournal.open(workdir, "/etc")).toThrow(/run id/);
     expect(() => RunJournal.open(workdir, "")).toThrow(/run id/);
   });
+  it("never reuses an existing run directory", () => {
+    const workdir = mkdtempSync(path.join(os.tmpdir(), "gg-j-"));
+    RunJournal.create(workdir, "run-2");
+    expect(() => RunJournal.create(workdir, "run-2")).toThrow(/EEXIST/);
+    const a = RunJournal.create(workdir);
+    const b = RunJournal.create(workdir);
+    expect(a.dir).not.toBe(b.dir);
+  });
   it("makes sortable run ids", () => {
     expect(newRunId(new Date("2026-10-22T18:30:00Z"))).toMatch(/^20261022-183000-[a-z0-9]{4}$/);
   });
