@@ -8,7 +8,7 @@ import { type Analyzer, type Finding, evidence, textFiles } from "./types.ts";
 
 const CODE_LANGS = new Set(["Python", "JavaScript", "TypeScript", "Go", "Rust", "Java", "Kotlin", "Ruby", "PHP", "C#", "Swift", "Dart", "Elixir", "Scala", "C", "C++"]);
 const GENERIC_STEMS = new Set(["utils", "util", "helpers", "helper", "main", "index", "app", "base", "core", "types", "_types", "typing", "_typing", "const", "constants", "config", "cli", "lib", "mod", "common", "errors", "exceptions", "models", "version", "__version__", "_version", "settings", "setup", "conftest", "__init__", "__main__", "init", "enums", "compat", "_compat"]);
-const NOT_WORTH_TESTING = /^\.|(^|\/)(examples?|samples?|scripts?|benchmarks?|docs?|migrations|fixtures|__snapshots__|testdata|tools?|vendor|contrib|playground|sandbox|demos?|\w*build\w*|ci|packaging|release|dist|deploy\w*|infra\w*|hack|utils?)(\/|$)|(^|\/)(setup|conftest|settings|wsgi|asgi|manage|version|_version|__about__)\.py$|(^|\/)main\.go$|\.d\.ts$|\.config(\.\w+)*\.[cm]?[jt]s$|\.stories\.[jt]sx?$|(^|\/)test[-_]?(utils?|helpers?|support|setup)\.\w+$|(Interface|Trait|Exception|Abstract\w*)\.php$|(^|\/)(exceptions?|interfaces?|protocols?)\.py$/;
+const NOT_WORTH_TESTING = /^\.|(^|\/)(examples?|samples?|scripts?|benchmarks?|docs?|migrations|fixtures|__snapshots__|testdata|tools?|vendor|contrib|playground|sandbox|demos?|\w*build\w*|ci|packaging|release|dist|deploy\w*|infra\w*|hack|utils?)(\/|$)|(^|\/)(setup|conftest|settings|wsgi|asgi|manage|version|_version|__about__)\.py$|(^|\/)main\.go$|\.d\.ts$|\.config(\.\w+)*\.[cm]?[jt]s$|\.stories\.[jt]sx?$|(^|\/)test[-_]?(utils?|helpers?|support|setup)\.\w+$|(^|\/)([Gg]ulpfile|[Gg]runtfile|[Jj]akefile|Makefile)(\.[\w-]+)*\.[cm]?[jt]s$|(Interface|Trait|Exception|Abstract\w*)\.php$|(^|\/)(exceptions?|interfaces?|protocols?)\.py$/;
 
 /** Base name a test file is most likely testing: test_foo.py -> foo, foo.test.ts -> foo, FooTest.java -> Foo. */
 export function testedStem(testPath: string): string | undefined {
@@ -77,8 +77,25 @@ export function looksUntested(path: string, text: string, index: TestIndex): boo
   if (camel !== stem && index.mentions.has(camel.toLowerCase())) return false;
   // test_file_palm.py covers PalmImagePlugin.py: a distinctive word shared with a test file name counts.
   const words = stemWords(basename(path).replace(/\.[^.]+$/, ""));
+  // Nothing distinctive left to match on (redis's t_set.c is just "set", covered by tests/unit/type/set.tcl): too ambiguous to claim.
+  if (words.length === 0) return false;
   if (words.some((w) => index.nameWords.has(w))) return false;
   return true;
+}
+
+/** How many modules have a test file named after them, among modules whose names are distinctive enough to judge. Go and Rust organise tests differently and are not counted. */
+export function perModuleShare(sources: Pick<FileEntry, "path">[], index: TestIndex): { named: number; eligible: number } {
+  let named = 0;
+  let eligible = 0;
+  for (const f of sources) {
+    if (/\.(go|rs|h|hpp|hh|hxx)$/.test(f.path)) continue;
+    const stem = sourceStem(f.path);
+    if (stem.length < 4 || GENERIC_STEMS.has(stem)) continue;
+    eligible++;
+    const words = stemWords(basename(f.path).replace(/\.[^.]+$/, ""));
+    if (index.stems.has(stem) || words.some((w) => index.nameWords.has(w))) named++;
+  }
+  return { named, eligible };
 }
 
 export interface SkippedTest {
@@ -165,7 +182,8 @@ export const testGapsAnalyzer: Analyzer = {
       churn.set(f, s);
     }
     // C and C++ suites are often data-driven (jq's .test files, shell scripts); only judge them when C/C++ unit tests exist.
-    const hasCUnitTests = tests.some((t) => t.language === "C" || t.language === "C++");
+    // Fuzz harnesses (jq's tests/jq_fuzz_*.c) are C files under tests/ but not unit tests.
+    const hasCUnitTests = tests.some((t) => (t.language === "C" || t.language === "C++") && !/fuzz/i.test(t.path));
     const candidates = sources
       .filter((f) => hasCUnitTests || (f.language !== "C" && f.language !== "C++"))
       .filter((f) => ![".h", ".hpp", ".hh", ".hxx"].includes(f.ext)) // headers declare; tests target the implementation
@@ -181,8 +199,13 @@ export const testGapsAnalyzer: Analyzer = {
     const specFiles = tests.filter((t) => isTestSpecFile(t.path)).length;
     const snapshotDriven = snapshotFiles >= 50 && snapshotFiles >= Math.max(1, specFiles) * 0.5;
     if (snapshotDriven) ctx.budget.note(`test suite is snapshot-driven (${snapshotFiles} snapshot files); untested-file heuristics skipped`);
+    // "Add tests for X" presumes a suite organised by module. When almost no module has a test named after it,
+    // the suite is end-to-end or data-driven, and a per-file gap is not a gap.
+    const convention = perModuleShare(sources, index);
+    const perModule = convention.eligible < 10 || convention.named / convention.eligible >= 0.1;
+    if (!perModule && !snapshotDriven) ctx.budget.note(`tests are not organised by module (${convention.named} of ${convention.eligible} modules have a test named after them); untested-file heuristics skipped`);
     let emitted = 0;
-    for (const file of snapshotDriven ? [] : candidates) {
+    for (const file of snapshotDriven || !perModule ? [] : candidates) {
       if (emitted >= 5) break;
       const text = await ctx.read(file.path);
       if (!text || text.split("\n").length < 60) continue;
