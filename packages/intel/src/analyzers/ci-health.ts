@@ -52,6 +52,7 @@ export const ciHealthAnalyzer: Analyzer = {
         const stable = wf.redStreak >= 3 || wf.redStreak === wf.runs.length;
         const firstRed = wf.runs[wf.redStreak - 1]!;
         const jobs = await fetchFailedJobs(ctx.github, ctx.ref.owner, ctx.ref.name, latest.id).catch(() => []);
+        const peripheral = jobs.length > 0 && jobs.every((j) => /bench|nightly|canary|experimental|optional|allow.?fail|coverage|docs?\b|lint|publish|release|deploy/i.test(j.name));
         const ev = [evidence(ctx, "workflow_run", latest.url, { note: `${wf.name} (${wf.path}) ${latest.conclusion} on ${latest.event} to ${profile.defaultBranch}, ${latest.updatedAt.slice(0, 10)}; ${wf.redStreak} of the last ${wf.runs.length} runs failed` })];
         for (const job of jobs.slice(0, 4)) ev.push(evidence(ctx, "workflow_run", job.url, { excerpt: job.failedSteps.join(" / ") || undefined, note: `job "${job.name}" failed${job.failedSteps.length ? " at step" : ""}` }));
         findings.push({
@@ -74,8 +75,8 @@ export const ciHealthAnalyzer: Analyzer = {
           etiquette: ["Check recent issues and PRs for someone already working on CI before starting.", ...(fixInFlight ? [`PR #${fixInFlight.number} may already address it.`] : [])],
           risks: ["The failure may be an external service outage or a secret-only job that forks cannot run.", ...(stable ? [] : ["A single failure may be flaky; re-run or check the next run before investing."])],
           signals: {
-            value: stable ? 0.8 : 0.55,
-            valueReason: stable ? "default branch has been red for multiple runs; every contributor is blocked from trusting CI" : "one failed run; could be transient",
+            value: (stable ? 0.8 : 0.55) * (peripheral ? 0.75 : 1),
+            valueReason: `${stable ? "default branch has been red for multiple runs; every contributor is blocked from trusting CI" : "one failed run; could be transient"}${peripheral ? "; only auxiliary jobs (benchmark, nightly, docs) are failing" : ""}`,
             feasibility: jobs.length ? 0.65 : 0.5,
             feasibilityReason: jobs.length ? "failing job and step identified from the run" : "cause unknown until the log is read",
             confidence: stable ? 0.9 : 0.65,

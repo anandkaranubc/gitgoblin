@@ -123,6 +123,9 @@ export const dependenciesAnalyzer: Analyzer = {
       }
       const worst = details.reduce<Vulnerability["severity"]>((acc, d) => (RANK[d.severity] > RANK[acc] ? d.severity : acc), "UNKNOWN");
       const isDirect = direct.has(pkg.name);
+      // A library's lockfile pins its development environment, not what users install.
+      const runtimeDeps = new Set([...(ctx.manifests.python?.dependencies ?? []), ...(ctx.manifests.node?.dependencies ?? []), ...(ctx.manifests.rust?.dependencies ?? [])].filter((d) => !d.dev).map((d) => d.name));
+      if (["library", "framework", "plugin"].includes(profile.nature) && !runtimeDeps.has(pkg.name) && pkg.ecosystem !== "Go") pkg.dev = true;
       const fixed = details.map((d) => d.fixed).filter((f): f is string => Boolean(f)).sort().pop();
       const bot = profile.welcomeness.rules.dependencyBot;
       findings.push({

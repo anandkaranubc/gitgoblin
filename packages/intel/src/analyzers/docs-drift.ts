@@ -78,8 +78,8 @@ export function cliFlagsInDocs(code: string, commands: string[]): { flag: string
 }
 
 const FLAG_DEFINITIONS = [
-  /add_argument\(\s*(?:["'][^"']+["']\s*,\s*)?["']--([a-zA-Z][\w-]*)["']/g, // argparse
-  /@(?:click|typer|app)\.(?:option|argument)\(\s*(?:["'][^"']+["']\s*,\s*)?["']--([a-zA-Z][\w-]*)/g, // click
+  /add_argument\(\s*(?:["'][^"']+["']\s*,\s*)*["']--([a-zA-Z][\w-]*)["']/g, // argparse, any number of short aliases first
+  /(?:click|typer|app|cli|group|command)\.(?:option|argument)\(\s*(?:["'][^"']+["']\s*,\s*)*["']--([a-zA-Z][\w-]*)/g, // click, decorator or assigned, flag on any line
   /\.(?:option|requiredOption)\(\s*["'](?:-\w,\s*)?--([a-zA-Z][\w-]*)/g, // commander
   /\.(?:option|options)\(\s*["']([a-zA-Z][\w-]*)["']/g, // yargs
   /Flags\(\)\.\w+(?:VarP?|P)?\([^,]*,\s*"([a-zA-Z][\w-]*)"/g, // cobra/pflag (name is 2nd arg for Var forms)

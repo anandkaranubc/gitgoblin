@@ -3,6 +3,7 @@ import type { AnalysisContext } from "../context.ts";
 import { GitHubError } from "../github/client.ts";
 import { compareVersions } from "../manifests/python.ts";
 import { daysAgo } from "../util/time.ts";
+import { maskCodeLiterals, maskLangFor } from "../util/mask.ts";
 import { type Analyzer, type Finding, evidence, textFiles } from "./types.ts";
 
 export interface DebtMarker {
@@ -21,10 +22,14 @@ const SOURCE_EXT = /\.(py|pyi|js|mjs|cjs|jsx|ts|tsx|go|rs|java|kt|rb|php|cs|c|h|
 export function findDebtMarkers(path: string, text: string): DebtMarker[] {
   const out: DebtMarker[] = [];
   const lines = text.split("\n");
+  // Strings are blanked (an error message saying "TODO" is not debt) while comments, where markers live, are kept.
+  const stringsMasked = maskCodeLiterals(text, maskLangFor(path), { comments: false }).split("\n");
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
+    const line = stringsMasked[i] ?? "";
     const m = MARKER.exec(line);
     if (!m || !COMMENT_TOKEN.test(line) || /^\s*(import|from|def|class|function|const|let|var)\b/.test(line)) continue;
+    // Rust `///` and `//!` doc comments and Sphinx `#:` lines are documentation; a TODO quoted there is an example, not debt.
+    if (/^\s*(\/\/[\/!]|#:)/.test(line)) continue;
     const after = line.slice(m.index + m[0].length).replace(/\*\/\s*$|-->\s*$/, "").trim();
     const issues = [...line.matchAll(/(?:#|GH-|issues\/|issue\s)(\d{1,6})\b/gi)].map((x) => Number(x[1])).slice(0, 3);
     out.push({ path, line: i + 1, marker: m[1]!.toUpperCase(), text: after, issues });
@@ -73,10 +78,12 @@ export const techDebtAnalyzer: Analyzer = {
     // (a) TODOs that cite an issue which has since been closed.
     const withIssues = markers.filter((m) => m.issues.length > 0).slice(0, 15);
     const issueState = new Map<number, { state: string; reason: string | undefined; url: string; title: string; closedAt: string | undefined }>();
-    if (ctx.github && withIssues.length > 0) {
+    // Projects that track work elsewhere (Django's Trac) write #N too; only GitHub issue numbers count, and never PRs.
+    if (ctx.github && ctx.meta.hasIssues && withIssues.length > 0) {
       for (const n of [...new Set(withIssues.flatMap((m) => m.issues))].slice(0, 20)) {
         try {
           const issue = await ctx.github.rest<{ state: string; state_reason: string | null; html_url: string; title: string; closed_at: string | null; pull_request?: unknown }>(`/repos/${ctx.ref.owner}/${ctx.ref.name}/issues/${n}`);
+          if (issue.pull_request) continue;
           issueState.set(n, { state: issue.state, reason: issue.state_reason ?? undefined, url: issue.html_url, title: issue.title, closedAt: issue.closed_at ?? undefined });
         } catch (error) {
           if (!(error instanceof GitHubError)) throw error;
