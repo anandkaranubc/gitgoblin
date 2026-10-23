@@ -40,3 +40,14 @@ describe("untrusted text in prompts keeps its delimiters", () => {
     expect(reviewPrompt(task, plan, notes, v, `+${breakout.replace(/\n/g, "\n+")}`)).toMatch(/````diff\n/);
   });
 });
+
+describe("issue body size", () => {
+  it("quotes at most 20,000 characters of the issue body, and says when it cut", () => {
+    const long = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n" }, title: "Bug", issue: { number: 1, body: `start ${"x".repeat(50_000)} end` } });
+    const body = between(orientPrompt(long, undefined), "<issue_body>", "</issue_body>");
+    expect(body.length).toBeLessThan(20_200);
+    expect(body).toContain("start");
+    expect(body).not.toContain(" end");
+    expect(body).toMatch(/issue text truncated/);
+  });
+});
