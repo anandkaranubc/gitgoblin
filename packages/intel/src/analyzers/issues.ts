@@ -49,7 +49,7 @@ const CLAIM = /\b(?:i('|’)?ll|i will|i'?d like to|i would like to|can i|could 
 const MAINTAINER_HANDLING = /\b(i('|’)?ll|i will|i'?m|i am|we'?ll|we are|we're|i have a|i've got a|working on (a |the )?(fix|patch|pr)|fix (is )?(incoming|coming|in progress)|pr (incoming|coming)|fixed in|should be fixed (by|in) #|on my list)\b/i;
 const REPRO = /steps to reproduce|reproduc|expected (behaviou?r|result|output)|actual (behaviou?r|result|output)|minimal (example|repro|reproduction)|how to reproduce|to reproduce/i;
 const TRACE = /traceback \(most recent|^[ \t]+at [^\n()]{1,300}\([^\n()]{1,300}:\d+:\d+\)|panic:|goroutine \d+|exception in thread|segmentation fault|^\w{0,80}(Error|Exception)(:| )/im;
-const PATH_TOKEN = /(?<![\w/])((?:[\w.-]+\/)+[\w.-]+\.(?:py|js|jsx|ts|tsx|go|rs|rb|java|kt|php|cs|c|h|cpp|md|rst|yml|yaml|toml|json|html|css|scss|vue|svelte)|[\w-]+\.(?:py|go|rs|rb|java|md))\b/g;
+const PATH_TOKEN = /(?<![\w/])((?:[\w.-]{1,100}\/){1,15}[\w.-]{1,100}\.(?:py|js|jsx|ts|tsx|go|rs|rb|java|kt|php|cs|c|h|cpp|md|rst|yml|yaml|toml|json|html|css|scss|vue|svelte)|[\w-]{1,100}\.(?:py|go|rs|rb|java|md))\b/g;
 
 /** GitHub `/pull/`, GitLab `/-/merge_requests/` and Gitea `/pulls/` URLs under this repository. */
 export function isSameRepoPr(url: string, repoUrl: string): boolean {
