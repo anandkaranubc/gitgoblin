@@ -25,6 +25,9 @@ The first release of the `gitgoblin` command.
   `bwrap` on Linux when installed).
 - Works without configuration. A GitHub token, or a `gh` login, raises rate limits and adds
   starter-issue data.
+- Errors say what to do next: an unreachable network names the host and the cause, a TLS
+  certificate failure points at `NODE_EXTRA_CA_CERTS`, and a repository that does not exist is
+  reported as not found rather than as an HTTP status.
 
 Needs Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the
 CLI (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude
