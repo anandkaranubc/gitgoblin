@@ -25,7 +25,8 @@ The first release of the `gitgoblin` command.
   money, and needs an Anthropic API key; the model can demote or rescue an issue but never
   overrides facts such as a merged pull request.
 - Analysis treats repository content as untrusted: reads never follow symlinks out of the clone,
-  and link checks only contact public addresses on standard ports.
+  link checks only contact public addresses on standard ports, and every parser of issue, README
+  and source text runs in linear time, so a crafted file or issue cannot stall it.
 - `contribute` (experimental) has an AI agent investigate, plan, implement and verify one
   opportunity in a local clone, gets an independent review, and prepares a pull request. It asks
   before running the agent, before implementing the plan, and before publishing; nothing is pushed
@@ -43,11 +44,15 @@ The first release of the `gitgoblin` command.
 - Prepared pull requests are written for the maintainers who will read them: the title describes
   the fix, the summary says what changed and why, checks that already failed before the change are
   marked as such, and notes about gitgoblin's own environment stay in your run report.
+- `publish` can be run again after a partial failure: if a pull request for the branch is already
+  open (the push worked but the answer to creating it was lost), it is found and returned instead of
+  failing.
 - Works without configuration. A GitHub token, or a `gh` login, raises rate limits and adds
   starter-issue data.
 - Errors say what to do next: an unreachable network names the host and the cause, a TLS
   certificate failure points at `NODE_EXTRA_CA_CERTS`, and a repository that does not exist is
-  reported as not found rather than as an HTTP status.
+  reported as not found rather than as an HTTP status. When GitHub refuses the issue sample, `analyze`
+  and `contribute` say that issues were not analyzed and why, instead of showing a shorter list.
 - The response cache, shared with the MCP server, never fails a command: when it is locked by
   another process, full or damaged, the answer comes from the network and the cache entry is skipped.
 

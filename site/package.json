@@ -4,7 +4,7 @@
   "type": "module",
   "description": "The public website for gitgoblin",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "predev": "node scripts/sync-brand.mjs",
@@ -23,7 +23,6 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
-    "fontkit": "^2.0.4",
     "sharp": "^0.35.5",
     "typescript": "^5.9.3"
   }

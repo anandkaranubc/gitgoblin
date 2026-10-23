@@ -44,18 +44,18 @@ npm run typecheck
 
 | Path | What it is |
 | --- | --- |
-| `packages/core` | Shared types: repository identity, discovery goals, results and signals. Working and tested. |
-| `packages/sources` | Clients for GitHub and package registries, with a local cache. In progress. |
-| `packages/discovery` | Ranking repositories for a goal, with reasons. In progress. |
-| `packages/cli` | The `gitgoblin` command line: `discover`, `explain`, `analyze`, `contribute`, `runs`, `show`, `publish`. Working from a clone. |
-| `packages/intel` | Profiling one repository and finding evidence-backed opportunities. Working from a clone; scores still being calibrated. |
-| `packages/engine` | Turning one opportunity into a reviewable pull request. Pipeline and the `gitgoblin-engine` command written; see [its README](https://github.com/anandkaranubc/gitgoblin/blob/main/packages/engine/README.md). |
-| `packages/mcp` | The MCP server that gives Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents gitgoblin's discovery and analysis. Released on GitHub; see [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md). |
+| `packages/core` | Shared types: repository identity, discovery goals, results and signals. |
+| `packages/sources` | Clients for GitHub and package registries, with a local cache. |
+| `packages/discovery` | Ranking repositories for a goal, with reasons. |
+| `packages/cli` | The `gitgoblin` command line: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish`. |
+| `packages/intel` | Profiling one repository and finding evidence-backed opportunities. |
+| `packages/engine` | Turning one opportunity into a reviewable pull request; see [its README](https://github.com/anandkaranubc/gitgoblin/blob/main/packages/engine/README.md). |
+| `packages/mcp` | The MCP server that gives Claude Code, Codex, Cursor, Gemini CLI, VS Code and other agents gitgoblin's discovery and analysis; see [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md). |
 | `docs/` | [Architecture](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/architecture.md) and [etiquette](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md). |
 | `brand/` | The mark, banners, favicons and social image. |
 | `site/` | This website. |
 
-The README's [status table](https://github.com/anandkaranubc/gitgoblin#what-works-today) is updated as pieces land.
+The README's [status table](https://github.com/anandkaranubc/gitgoblin#what-works-today) says what works today.
 
 ## Work on the website
 

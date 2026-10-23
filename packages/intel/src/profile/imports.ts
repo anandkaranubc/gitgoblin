@@ -51,8 +51,8 @@ export async function centralFiles(inventory: FileInventory, read: Reader, goMod
 export function pythonTargets(fromPath: string, text: string, paths: Set<string>): string[] {
   const out = new Set<string>();
   const fromDir = dirname(fromPath);
-  for (const m of text.matchAll(/^\s*(?:from\s+([\w.]+)\s+import\b|import\s+([\w.]+(?:\s*,\s*[\w.]+)*))/gm)) {
-    const modules = m[1] ? [m[1]] : (m[2] ?? "").split(",").map((s) => s.trim().split(/\s+as\s+/)[0]!);
+  for (const m of text.matchAll(/^[ \t]*(?:from[ \t]+([\w.]+)[ \t]+import\b|import[ \t]+([\w.]+(?:[ \t]*,[ \t]*[\w.]+)*))/gm)) {
+    const modules = m[1] ? [m[1]] : (m[2] ?? "").split(",").map((s) => s.trim().split(/[ \t]{1,20}as[ \t]{1,20}/)[0]!);
     for (const mod of modules) {
       let base: string;
       let rest: string;
@@ -107,7 +107,7 @@ export function goTargets(fromPath: string, text: string, goModule: string | und
 export function rustTargets(fromPath: string, text: string, paths: Set<string>): string[] {
   const out = new Set<string>();
   const crateRoot = fromPath.replace(/\/src\/.*$/, "/src").replace(/^src\/.*$/, "src");
-  for (const m of text.matchAll(/^\s*(?:pub(?:\([^)]*\))?\s+)?(?:use\s+crate::([\w:]+)|mod\s+(\w+)\s*;)/gm)) {
+  for (const m of text.matchAll(/^[ \t]*(?:pub(?:\([^)\n]{0,40}\))?[ \t]+)?(?:use[ \t]+crate::([\w:]+)|mod[ \t]+(\w+)[ \t]*;)/gm)) {
     const segments = m[1] ? m[1].split("::").filter((s) => s !== "self" && s !== "super" && !/^[A-Z{*]/.test(s)) : [m[2]!];
     const candidates: string[] = [];
     if (m[2]) candidates.push(`${dirname(fromPath)}/${m[2]}.rs`, `${dirname(fromPath)}/${m[2]}/mod.rs`);

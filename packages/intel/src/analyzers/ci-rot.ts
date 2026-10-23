@@ -31,7 +31,7 @@ export function matchCiRules(path: string, text: string, rules: CiRule[] = CI_RU
 
 /** True when a workflow uses pull_request_target and checks out the PR head. */
 export function hasPwnRequest(text: string): { line: number; text: string } | undefined {
-  if (!/^\s*(-\s*)?pull_request_target\b|pull_request_target\s*:/m.test(text)) return undefined;
+  if (!/^[ \t]*(-[ \t]*)?pull_request_target\b|pull_request_target[ \t]*:/m.test(text)) return undefined;
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
