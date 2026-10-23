@@ -50,6 +50,8 @@ continue, retry, escalate (needs a human) or stop:
 
 - intake: an issue already in flight or a triage (reply-only) task -> stop; a stale pull request to
   revive, or a hygiene item naming no files -> escalate, because those start with a conversation.
+- setup: the install command failed and no baseline check passes -> escalate before any model
+  spend, pointing at install-output.txt; nothing the agent did could be verified.
 - orient says `stop` (not feasible, wrong premise, already fixed) -> stop with the reasons.
 - orient says `needs_human` or the plan touches more files than the limit or protected paths
   (CI workflows, release config, secrets) -> escalate with questions.

@@ -100,8 +100,11 @@ async function main(argv: string[]): Promise<void> {
       ...(cloneDepth ? { cloneDepth } : {}),
       ...(values["confirm-plan"]
         ? {
-            approvePlan: async (plan) => {
+            approvePlan: async (plan, context) => {
               process.stderr.write(`\nPlan: ${plan.goal}\n${plan.steps.map((s) => `  - ${s}`).join("\n")}\nFiles: ${[...plan.filesToModify, ...plan.filesToCreate].join(", ")}\n`);
+              if (context?.install) process.stderr.write(`Install ${context.install.timedOut ? "timed out" : `failed (exit ${context.install.exitCode})`}; the change may not be verifiable. Log: ${context.install.logPath}\n`);
+              const failing = (context?.baseline ?? []).filter((c) => c.status !== "pass");
+              if (failing.length) process.stderr.write(`Baseline checks not passing before any change: ${failing.map((c) => `${c.name} (${c.status})`).join(", ")}\n`);
               return confirm("Implement this plan?");
             },
           }

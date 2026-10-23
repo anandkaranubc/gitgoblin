@@ -75,6 +75,12 @@ describe("installsNewPackage", () => {
   it("distinguishes bare installs from adding packages", () => {
     expect(installsNewPackage("npm install")).toBe(false);
     expect(installsNewPackage("npm install --no-audit")).toBe(false);
+    // Redirections and pipes are not package names.
+    expect(installsNewPackage("pnpm install --frozen-lockfile 2>&1 | tail -20")).toBe(false);
+    expect(installsNewPackage("npm ci 2>/dev/null")).toBe(false);
+    expect(installsNewPackage("yarn install --immutable > /tmp/log 2>&1")).toBe(false);
+    expect(bashDenyReason("pnpm install --frozen-lockfile 2>&1")).toBeNull();
+    expect(bashDenyReason("npm install lodash")).toMatch(/adding packages is a maintainer decision/);
     expect(installsNewPackage("npm install --save-dev vitest")).toBe(true);
     expect(installsNewPackage("uv pip install numpy")).toBe(true);
     expect(installsNewPackage("uv add numpy")).toBe(true);
