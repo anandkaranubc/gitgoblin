@@ -100,12 +100,20 @@ const CACHE_DIRS = [
   ".julia", ".swiftpm", ".ivy2", ".sbt", "Library/Caches",
 ];
 
-/** The spec for commands in `workspace`: temp dir and tool caches writable, credential paths hidden. */
-export function specFor(workspace: string, network: boolean, home = os.homedir(), tmpdir = os.tmpdir()): HostSandboxSpec {
+export interface SpecOptions {
+  /** Further writable directories, for example the run's toolchain prefix. */
+  extraWrite?: string[];
+  home?: string;
+  tmpdir?: string;
+}
+
+/** The spec for commands in `workspace`: temp dir, tool caches and the given extras writable, credential paths hidden. */
+export function specFor(workspace: string, network: boolean, options: SpecOptions = {}): HostSandboxSpec {
+  const home = options.home ?? os.homedir();
   const existing = (rels: string[]) => rels.map((rel) => path.join(home, rel)).filter((p) => existsSync(p));
   return {
     workspace,
-    extraWrite: [tmpdir, ...existing(CACHE_DIRS)],
+    extraWrite: [options.tmpdir ?? os.tmpdir(), ...(options.extraWrite ?? []), ...existing(CACHE_DIRS)],
     denyRead: CREDENTIAL_PATHS.map((rel) => path.join(home, rel)),
     network,
   };
