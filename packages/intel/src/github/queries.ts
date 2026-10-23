@@ -119,6 +119,26 @@ ${ISSUE_FIELDS}
 ${ACTOR}
 ${COMMENT_META}`;
 
+/** Issues in the given states with their close reason and the pull request (if any) that closed them, for outcome backtests. */
+export const BACKTEST_ISSUES_QUERY = /* GraphQL */ `
+query BacktestIssues($owner: String!, $name: String!, $first: Int!, $after: String, $states: [IssueState!]) {
+  repository(owner: $owner, name: $name) {
+    issues(first: $first, after: $after, states: $states, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      pageInfo { endCursor hasNextPage }
+      nodes {
+        ...IssueFields
+        stateReason
+        closedBy: timelineItems(last: 1, itemTypes: [CLOSED_EVENT]) {
+          nodes { ... on ClosedEvent { createdAt closer { __typename ... on PullRequest { number url merged mergedAt authorAssociation author { ...ActorFields } } } } }
+        }
+      }
+    }
+  }
+}
+${ISSUE_FIELDS}
+${ACTOR}
+${COMMENT_META}`;
+
 export interface SampleSizes {
   openIssues: number;
   closedIssues: number;
