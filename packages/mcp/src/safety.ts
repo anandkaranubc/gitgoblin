@@ -5,16 +5,17 @@
  */
 
 /**
- * Hosts the tools read. Two reasons it is GitHub alone: intel clones `https://<host>/<owner>/<name>.git`
- * as given, so an open list would let a model point the server at the person's own network; and
- * discovery and intel read metadata from GitHub's API by owner and name, so any other forge would be
- * answered with whatever GitHub repository shares the name. Other forges return when both read them.
+ * Hosts the discovery tools read. Discovery and explain look repositories up through GitHub's API by
+ * owner and name, so any other host would be answered about whatever GitHub repository shares the name.
  */
-export const DEFAULT_HOSTS = ["github.com"] as const;
+export const DISCOVERY_HOSTS = ["github.com"] as const;
 
-export function allowedHosts(): Set<string> {
-  return new Set<string>(DEFAULT_HOSTS);
-}
+/**
+ * Hosts the analysis tools read. Intel reads GitLab and Gitea/Forgejo through their public APIs, but it
+ * also clones `https://<host>/<owner>/<name>.git` as given, so the list stays a fixed set of public
+ * forges: an open list would let a model point the server at the person's own network.
+ */
+export const ANALYSIS_HOSTS = ["github.com", "gitlab.com", "codeberg.org"] as const;
 
 /** Git settings applied to every git command the server runs. */
 export const GIT_SETTINGS: ReadonlyArray<readonly [string, string]> = [
