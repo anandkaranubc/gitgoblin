@@ -96,7 +96,15 @@ export function installsNewPackage(command: string): boolean {
   return false;
 }
 
+/**
+ * Longest command the hooks will check. Some deny patterns are polynomial in the input, and the hooks
+ * run in the engine's own process on every command the model issues, so a longer one is refused
+ * rather than matched; real commands are far shorter.
+ */
+const MAX_CHECKED_COMMAND = 16 * 1024;
+
 export function bashDenyReason(command: string): string | null {
+  if (command.length > MAX_CHECKED_COMMAND) return `command is too long to check (${command.length} characters); split it into smaller commands`;
   for (const rule of BASH_DENY_RULES) {
     if (rule.pattern.test(command)) return rule.reason;
   }
@@ -196,6 +204,8 @@ function hasPathOutsideWorkspace(token: string): boolean {
  * those.
  */
 export function isSafeCommand(command: string): boolean {
+  // A check command is one short line; anything long is not adopted (and is not worth matching).
+  if (command.length > 512) return false;
   const trimmed = command.trim();
   if (!trimmed || /[|;&$`<>\\\n]/.test(trimmed)) return false;
   const tokens = trimmed.split(/\s+/);
