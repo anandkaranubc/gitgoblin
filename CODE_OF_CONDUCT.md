@@ -66,9 +66,10 @@ help avoid conflicts and minimize harm.
 
 When an incident does occur, it is important to report it promptly. To report
 a possible violation, contact the maintainer, [@anandkaranubc](https://github.com/anandkaranubc),
-privately: by email at the address on that GitHub profile, or through a
-private message. Do not open a public issue about a conduct report. If the
-report concerns the maintainer, say so and we will look for a neutral third
+privately. If you have no private way to reach them, open an issue that only
+asks for a private contact, with no details of what happened, and the
+maintainer will reply with one. Do not describe a conduct report in public. If
+the report concerns the maintainer, say so and we will look for a neutral third
 party to handle it.
 
 The maintainer takes reports of violations seriously and will make every
