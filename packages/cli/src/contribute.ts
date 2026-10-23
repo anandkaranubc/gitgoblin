@@ -47,7 +47,8 @@ export function recommendedRank(report: AnalysisReport): number {
 export function formatOpportunities(report: AnalysisReport, style: Style): string {
   const paint = (tone: "bold" | "dim" | "yellow", text: string) => (style.color ? styleText(tone, text) : text);
   const repo = `${report.profile.repo.owner}/${report.profile.repo.name}`;
-  if (report.opportunities.length === 0) return `No contribution opportunities found in ${repo}.`;
+  const gap = issueGap(report);
+  if (report.opportunities.length === 0) return `No contribution opportunities found in ${repo}.${gap ? ` ${gap}` : ""}`;
   const blocks = report.opportunities.map((o, index) => {
     const lines = [`${String(index + 1).padStart(2)}. ${paint("bold", plain(o.title))}`];
     lines.push(`    ${paint("dim", `${o.kind} · score ${o.score.toFixed(2)} · ${o.effort} effort · id ${o.id}`)}`);
@@ -61,7 +62,8 @@ export function formatOpportunities(report: AnalysisReport, style: Style): strin
     return lines.join("\n");
   });
   const footer = report.skipped.length > 0 ? `\n\n${paint("dim", `${report.skipped.length} more findings were dropped; the analyze report lists them under Skipped.`)}` : "";
-  return `Opportunities in ${repo}, best first:\n\n${blocks.join("\n")}${footer}`;
+  const warning = gap ? `${paint("yellow", "!")} ${gap}\n\n` : "";
+  return `${warning}Opportunities in ${repo}, best first:\n\n${blocks.join("\n")}${footer}`;
 }
 
 /**
@@ -159,4 +161,23 @@ export function describeEnvironment(context: PlanContextLike | undefined): strin
   if (failing.length > 0) lines.push(`Failing before any change: ${failing.join(", ")}.`);
   lines.push(installFailed ? "A change implemented now cannot be verified against the project's own checks." : "Verification can only catch new failures, not these.");
   return lines.join(" ");
+}
+
+/** Intel's notes for an issue sample that failed (worth retrying) or was skipped on purpose. */
+const SAMPLE_FAILED = /^issue and PR samples unavailable: /;
+const SAMPLE_SKIPPED = /^issue(?:,| and) PR(?: and CI)? sampling skipped(?: by request)?:? ?/;
+
+/**
+ * Issues are where most opportunities come from. When intel read none although the repository has
+ * open issues, the list is missing its main source, and the person choosing should know why.
+ */
+export function issueGap(report: AnalysisReport): string | undefined {
+  const activity = report.profile.activity;
+  if (activity.sampleSizes.issues > 0 || activity.openIssues === 0) return undefined;
+  const failed = report.budget.notes.find((n) => SAMPLE_FAILED.test(n));
+  const skipped = failed ? undefined : report.budget.notes.find((n) => SAMPLE_SKIPPED.test(n));
+  const reason = failed ? failed.replace(SAMPLE_FAILED, "") : skipped ? skipped.replace(SAMPLE_SKIPPED, "") : "";
+  const why = reason ? ` (${plain(reason)})` : "";
+  const advice = failed ? " Try again in a minute, or check your token with `gh auth status`." : "";
+  return `Issues and pull requests were not analyzed${why}, so opportunities from them are missing.${advice}`;
 }

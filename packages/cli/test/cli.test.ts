@@ -796,3 +796,25 @@ describe("errors a first-time user meets", () => {
     expect(err.join("\n")).toBe("error: HTTP 404 for https://api.github.com/repos/acme/widget/actions/runs");
   });
 });
+
+describe("analyze and contribute say when issues were not read", () => {
+  it("analyze ends with the warning on stderr", async () => {
+    const report = sampleReport();
+    report.profile.activity.sampleSizes = { issues: 0, pullRequests: 0, externalPullRequests: 0 };
+    report.budget.notes = ["issue and PR samples unavailable: The GitHub GraphQL API needs a token"];
+    const siblings = fakeSiblings({ report });
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["analyze", "acme/widget"], runtime)).toBe(0);
+    expect(err.join("\n")).toContain("Issues and pull requests were not analyzed (The GitHub GraphQL API needs a token)");
+  });
+
+  it("contribute explains an empty result instead of only saying nothing was found", async () => {
+    const report = sampleReport([]);
+    report.profile.activity.sampleSizes = { issues: 0, pullRequests: 0, externalPullRequests: 0 };
+    report.budget.notes = ["issue and PR samples unavailable: fetch failed"];
+    const siblings = fakeSiblings({ report });
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["contribute", "acme/widget", "--workdir", siblings.workdir], runtime)).toBe(1);
+    expect(err.join("\n")).toMatch(/No contribution opportunities found in acme\/widget\. Issues and pull requests were not analyzed \(fetch failed\)/);
+  });
+});

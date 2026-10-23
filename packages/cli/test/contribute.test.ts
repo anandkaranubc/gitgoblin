@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "../src/contribute.ts";
+import { describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "../src/contribute.ts";
 import { sampleOpportunity, sampleReport } from "./fixtures.ts";
 
 const plain = { color: false };
@@ -188,5 +188,39 @@ describe("when intel doubts a finding", () => {
   it("is not the default choice when a finding intel trusts is available", () => {
     expect(recommendedRank(sampleReport([doubtful(), confident("opp-aaaa0001")]))).toBe(2);
     expect(recommendedRank(sampleReport([doubtful()]))).toBe(1);
+  });
+});
+
+describe("when issues could not be read", () => {
+  const withoutIssues = (note: string | undefined) => {
+    const report = sampleReport([sampleOpportunity({ id: "opp-ci", kind: "ci_rot", title: "CI workflow has been failing", issue: undefined })]);
+    report.profile.activity.openIssues = 31;
+    report.profile.activity.sampleSizes = { issues: 0, pullRequests: 0, externalPullRequests: 0 };
+    report.budget.notes = note ? ["checked npm deprecation for 30 of 31 dependencies", note] : [];
+    return report;
+  };
+
+  it("says so, with intel's reason and what to do, when sampling failed", () => {
+    const gap = issueGap(withoutIssues("issue and PR samples unavailable: GitHub rate limit nearly exhausted (0 left); stopping API use"));
+    expect(gap).toBe("Issues and pull requests were not analyzed (GitHub rate limit nearly exhausted (0 left); stopping API use), so opportunities from them are missing. Try again in a minute, or check your token with `gh auth status`.");
+  });
+
+  it("gives the reason without advice when sampling was skipped on purpose", () => {
+    expect(issueGap(withoutIssues("issue and PR sampling skipped: the README says the project does not accept contributions"))).toBe(
+      "Issues and pull requests were not analyzed (the README says the project does not accept contributions), so opportunities from them are missing.",
+    );
+  });
+
+  it("falls back to a plain sentence without a matching note, and says nothing when issues were read or there are none", () => {
+    expect(issueGap(withoutIssues(undefined))).toMatch(/^Issues and pull requests were not analyzed, so opportunities/);
+    expect(issueGap(sampleReport())).toBeUndefined();
+    const none = withoutIssues(undefined);
+    none.profile.activity.openIssues = 0;
+    expect(issueGap(none)).toBeUndefined();
+  });
+
+  it("puts the warning at the top of the opportunity list", () => {
+    const text = formatOpportunities(withoutIssues("issue and PR samples unavailable: fetch failed"), plain);
+    expect(text.split("\n")[0]).toMatch(/^! Issues and pull requests were not analyzed \(fetch failed\)/);
   });
 });
