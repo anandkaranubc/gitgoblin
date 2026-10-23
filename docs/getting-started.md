@@ -182,6 +182,7 @@ Every run lives under `~/.gitgoblin/runs/<id>/` (or `$GITGOBLIN_WORKDIR`). To co
 npx gitgoblin runs                       # every run, newest first, with its status
 npx gitgoblin show <runId>               # the report; --diff for the patch, --pr for the PR text, --install for the install log
 npx gitgoblin publish <runId>            # asks, then pushes with your gh login and opens a draft PR
+npx gitgoblin clean --finished           # frees the clones finished runs keep (reports and diffs stay)
 ```
 
 [packages/cli/README.md](../packages/cli/README.md) documents every option. The engine's own command, `gitgoblin-engine`, can drive the same runs directly when given the same directory (`--workdir ~/.gitgoblin`); [packages/engine/README.md](../packages/engine/README.md) covers that and the design behind the pipeline.
