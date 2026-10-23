@@ -125,10 +125,24 @@ export interface SpecOptions {
 
 /** The spec for commands in `workspace`: temp dir, tool caches and the given extras writable, credential paths hidden. */
 export function specFor(workspace: string, network: boolean, options: SpecOptions = {}): HostSandboxSpec {
+  return dedupe(realSpec(buildSpec(workspace, network, options)));
+}
+
+function dedupe(spec: HostSandboxSpec): HostSandboxSpec {
+  return { ...spec, extraWrite: [...new Set(spec.extraWrite)], ...(spec.allowRead ? { allowRead: [...new Set(spec.allowRead)] } : {}) };
+}
+
+/**
+ * The per-user temp directory and the shared /tmp are both writable: tools differ in which they use
+ * (pnpm takes its store lock under /tmp), and on macOS /tmp is /private/tmp, which only a real-path
+ * rule matches.
+ */
+function buildSpec(workspace: string, network: boolean, options: SpecOptions): HostSandboxSpec {
   const home = options.home ?? os.homedir();
   const tmpdir = options.tmpdir ?? os.tmpdir();
   const existing = (rels: string[]) => rels.map((rel) => path.join(home, rel)).filter((p) => existsSync(p));
-  const extraWrite = [tmpdir, ...(options.extraWrite ?? []), ...existing(CACHE_DIRS)];
+  const systemTmp = existsSync("/tmp") ? ["/tmp"] : [];
+  const extraWrite = [tmpdir, ...systemTmp, ...(options.extraWrite ?? []), ...existing(CACHE_DIRS)];
   const credentials = CREDENTIAL_PATHS.map((rel) => path.join(home, rel));
   if (!options.strict) return { workspace, extraWrite, denyRead: credentials, network };
   // The running node binary may itself live under the home directory (nvm, volta, fnm).
