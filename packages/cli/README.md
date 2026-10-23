@@ -121,8 +121,11 @@ Without `--opportunity` or `--issue` it lists the opportunities, best first, wit
 kind, score, effort, id and the first piece of evidence, and marks the ones the
 engine will refuse at intake: an issue someone is already working on, a triage
 item that needs a reply rather than a patch, a pull request that needs its
-author's consent first. Press Enter to take the first one it would accept (or the
-first one, when it would refuse them all); a typo gets you asked again.
+author's consent first. When intel has a specific reason to doubt a finding (its
+confidence is below 0.5, for example because code an issue quotes is gone from the
+default branch), a `?` line shows that reason. Press Enter to take the first
+opportunity the engine would accept and intel does not doubt; a typo gets you
+asked again.
 
 While the engine works, its phases and tool calls stream to stderr. When it
 finishes you see the run's report (verification against the project's own

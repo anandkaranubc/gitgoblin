@@ -10,7 +10,7 @@ if (major < 24) {
 
 const arg = process.argv[2];
 if (arg === "--version" || arg === "-v") {
-  process.stdout.write("0.1.4\n");
+  process.stdout.write("0.1.5\n");
   process.exit(0);
 }
 if (arg === "--help" || arg === "-h") {
