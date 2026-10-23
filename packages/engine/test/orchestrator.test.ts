@@ -386,6 +386,14 @@ describe("runContribution", () => {
     expect(readFileSync(path.join(result.runDir, "report.md"), "utf8")).toMatch(/install limited to package registries, refused 1: evil\.example\.com:443/);
   });
 
+  it.skipIf(!detectHostSandbox())("says at setup that strict isolation limits the install to package registries", async () => {
+    const repo = await createFixtureRepo();
+    const infos: string[] = [];
+    const reporter = { phase() {}, info: (m: string) => infos.push(m), warn() {} };
+    await runContribution({ task: fixtureTask(repo) }, { workdir: workdir(), env, reporter, checkIsolation: "strict", runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(infos.join("\n")).toMatch(/\(strict\).*install limited to package registries/);
+  });
+
   it("records when repository commands ran without an OS sandbox", async () => {
     const repo = await createFixtureRepo();
     const result = await run(happyPath, [], { checkIsolation: "none" })(repo, workdir());

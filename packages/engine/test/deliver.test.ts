@@ -355,3 +355,20 @@ describe("pull request text, run 6 findings", () => {
     expect(body).toContain("Name the token helper");
   });
 });
+
+describe("pull request text, run 7 findings", () => {
+  const task = TaskSchema.parse({
+    id: "x", repo: { owner: "o", name: "n" }, kind: "issue", title: "t", issue: { number: 3 },
+    risks: ["No maintainer has confirmed the issue yet."],
+  });
+  it("keeps the task's risks, which are for the operator, out of the pull request", () => {
+    const i = input(task);
+    const body = pullRequestBody({
+      ...i,
+      notes: { ...i.notes, knownGaps: ["No maintainer has confirmed the issue yet.", "Tabs in the moved line are kept as they were."] },
+      review: { ...i.review, prNotes: "Nobody from the maintainers has confirmed this issue so far." },
+    });
+    expect(body).not.toMatch(/confirmed/i);
+    expect(body).toContain("Tabs in the moved line");
+  });
+});
