@@ -55,7 +55,7 @@ One package, several doors:
 - **Claude Code plugin**: `.claude-plugin/plugin.json` at the repository root bundles the MCP server with the agent skill, so one `/plugin install` gives both.
 - **Agent skill**: `skills/gitgoblin/SKILL.md` follows the Agent Skills format that Claude Code, Codex, Cursor, Gemini CLI and others read. It teaches the agent when to reach for gitgoblin, how to read scores and evidence, and how to behave in someone else's repository, which is the part a tool list cannot carry.
 - **GitHub release**: `mcp-v<version>` carries the npm tarball and the MCPB bundle, so the server is installable from the day of a release, with or without npm.
-- **Registries**: `server.json` is ready for `mcp-publisher publish`, which needs the maintainer's GitHub login; directory submissions follow.
+- **Registries**: the `MCP Registry` workflow (`.github/workflows/mcp-registry.yml`, started by hand) publishes `server.json` with the repository's GitHub Actions OIDC token, which the registry accepts for `io.github.anandkaranubc/*`; no personal token is involved. Directories that ingest the registry (Glama, PulseMCP) pick the entry up from there; the ones with submission forms are a maintainer's task.
 
 ## Non-goals
 
