@@ -24,12 +24,14 @@ export function computeActivity(input: ActivityInput): Activity {
   const externalClosed = (samples?.closedPrs ?? []).filter((p) => isExternal(p) && !p.author?.isBot);
   const merged = externalClosed.filter((p) => p.merged).length;
 
+  // Items known to have comments whose text was not fetched (forge APIs cost one call per item) are unknown, not silent.
+  const fetched = (commentCount: number, comments: unknown[]) => commentCount === 0 || comments.length > 0;
   const prResponses = [...(samples?.closedPrs ?? []), ...(samples?.openPrs ?? [])]
-    .filter((p) => isExternal(p) && !p.author?.isBot)
+    .filter((p) => isExternal(p) && !p.author?.isBot && fetched(p.firstComments.length + p.reviews.length === 0 ? 0 : 1, [...p.firstComments, ...p.reviews]))
     .map((p) => firstResponseHours(p.createdAt, p.author?.login, [...p.firstComments, ...p.reviews], now))
     .filter((h): h is number => h !== undefined);
   const issueResponses = [...(samples?.openIssues ?? []), ...(samples?.closedIssues ?? [])]
-    .filter((i) => isExternal(i) && !i.author?.isBot)
+    .filter((i) => isExternal(i) && !i.author?.isBot && fetched(i.commentCount, i.firstComments))
     .map((i) => firstResponseHours(i.createdAt, i.author?.login, i.firstComments, now))
     .filter((h): h is number => h !== undefined);
 

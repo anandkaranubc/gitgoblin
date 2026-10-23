@@ -42,7 +42,7 @@ export function workflowHealth(runs: WorkflowRun[]): WorkflowHealth[] {
 export const ciHealthAnalyzer: Analyzer = {
   name: "ci-health",
   async run(ctx: AnalysisContext, profile: RepositoryProfile): Promise<Finding[]> {
-    if (ctx.runs.length === 0 || !ctx.github) return [];
+    if (ctx.runs.length === 0 || (!ctx.github && !ctx.failedJobs)) return [];
     const findings: Finding[] = [];
     const fixInFlight = (ctx.samples?.openPrs ?? []).find((p) => /\b(ci|workflow|build|tests?)\b/i.test(p.title) && /\b(fix|repair|unbreak|green)\b/i.test(p.title) && daysAgo(p.updatedAt, ctx.now) < 30);
 
@@ -51,7 +51,7 @@ export const ciHealthAnalyzer: Analyzer = {
         const latest = wf.runs[0]!;
         const stable = wf.redStreak >= 3 || wf.redStreak === wf.runs.length;
         const firstRed = wf.runs[wf.redStreak - 1]!;
-        const jobs = await fetchFailedJobs(ctx.github, ctx.ref.owner, ctx.ref.name, latest.id).catch(() => []);
+        const jobs = await (ctx.failedJobs ? ctx.failedJobs(latest.id) : ctx.github ? fetchFailedJobs(ctx.github, ctx.ref.owner, ctx.ref.name, latest.id) : Promise.resolve([])).catch(() => []);
         const peripheral = jobs.length > 0 && jobs.every((j) => /bench|nightly|canary|experimental|optional|allow.?fail|coverage|docs?\b|lint|publish|release|deploy/i.test(j.name));
         const ev = [evidence(ctx, "workflow_run", latest.url, { note: `${wf.name} (${wf.path}) ${latest.conclusion} on ${latest.event} to ${profile.defaultBranch}, ${latest.updatedAt.slice(0, 10)}; ${wf.redStreak} of the last ${wf.runs.length} runs failed` })];
         for (const job of jobs.slice(0, 4)) ev.push(evidence(ctx, "workflow_run", job.url, { excerpt: job.failedSteps.join(" / ") || undefined, note: `job "${job.name}" failed${job.failedSteps.length ? " at step" : ""}` }));

@@ -14,7 +14,7 @@ export function renderMarkdown(report: AnalysisReport): string {
   if (p.description) out.push(`_${t(p.description, 300)}_`, "");
   out.push(`**Nature:** ${p.nature.replace("_", " ")} (${t(p.natureReason)})  `);
   out.push(`**Languages:** ${p.languages.slice(0, 4).map((l) => `${l.name} ${Math.round(l.share * 100)}%`).join(", ") || "n/a"}  `);
-  out.push(`**Stars:** ${p.stars} · **Forks:** ${p.forks} · **License:** ${p.license ?? "none detected"}${p.archived ? " · **ARCHIVED**" : ""}  `);
+  out.push(`${p.repo.host === "github.com" ? `**Stars:** ${p.stars} · **Forks:** ${p.forks} · ` : `**Host:** ${p.repo.host} · `}**License:** ${p.license ?? "none detected"}${p.archived ? " · **ARCHIVED**" : ""}  `);
   const a = p.activity;
   out.push(`**Activity:** ${a.commits90d} commits / ${a.authors90d} authors in 90 days; bus factor ${a.busFactor}; last push ${a.lastPushAt?.slice(0, 10) ?? "unknown"}  `);
   out.push(`**Responsiveness:** ${fmtHours(a.medianIssueResponseHours)} to first reply on issues, ${fmtHours(a.medianPrResponseHours)} on PRs (unanswered items count as still waiting); ${a.externalPrMergeRate !== undefined ? `${Math.round(a.externalPrMergeRate * 100)}% of outside PRs merged (n=${a.sampleSizes.externalPullRequests})` : "outside PR merge rate unknown"}  `);
