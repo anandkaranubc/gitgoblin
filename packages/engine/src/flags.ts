@@ -41,3 +41,10 @@ export function parseCloneDepth(value: string | undefined): number | undefined {
 export function unsandboxedAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
   return env["GITGOBLIN_UNSAFE_NO_SANDBOX"] === "1";
 }
+
+/** `--install-network`: "registries" (the default when an OS sandbox is in use) or "open". */
+export function parseInstallNetwork(value: string | undefined): "registries" | "open" | undefined {
+  if (value === undefined) return undefined;
+  if (value === "registries" || value === "open") return value;
+  throw new Error(`--install-network must be registries or open, got ${JSON.stringify(value)}`);
+}

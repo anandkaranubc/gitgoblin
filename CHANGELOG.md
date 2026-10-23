@@ -45,8 +45,9 @@ a pull request a maintainer would want to merge.
   public addresses, and every parser of issue, README and source text runs in linear time, so a
   crafted file cannot stall it.
 - The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
-  `bwrap` on Linux when installed). `--check-isolation strict`, for repositories you do not trust,
-  also hides your home directory from them and limits the install to package registries.
+  `bwrap` on Linux when installed): tests run offline, and the install reaches package registries
+  only, through your `HTTPS_PROXY` if you use one. `--check-isolation strict`, for repositories you
+  do not trust, also hides your home directory from them.
 
 **Everyday use**
 
