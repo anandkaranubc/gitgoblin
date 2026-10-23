@@ -126,6 +126,12 @@ export async function diffPatch(wsPath: string, baseSha: string, env: Record<str
   return git(["diff", "--cached", baseSha], wsPath, env);
 }
 
+/** Content of `file` at `sha`, or undefined when it did not exist there. */
+export async function showAtBase(wsPath: string, sha: string, file: string, env: Record<string, string>): Promise<string | undefined> {
+  const result = await execFile("git", [...HARDENING, "show", `${sha}:${file}`], { cwd: wsPath, env, timeoutMs: 60_000, maxOutputBytes: 4 * 1024 * 1024 });
+  return result.exitCode === 0 ? result.output : undefined;
+}
+
 export async function hasGitIdentity(wsPath: string, env: Record<string, string>): Promise<boolean> {
   const name = await git(["config", "user.name"], wsPath, env).catch(() => "");
   const email = await git(["config", "user.email"], wsPath, env).catch(() => "");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterDiff, afterOrient, atIntake, afterPlan, afterReview, afterVerify, checkBudget, DEFAULT_LIMITS, failureSignature, findSecrets, isProtectedPath } from "../src/policy.ts";
+import { afterDiff, afterOrient, atIntake, afterPlan, afterReview, afterVerify, checkBudget, controlsChecks, DEFAULT_LIMITS, failureSignature, findSecrets, isProtectedPath, packageJsonControlChanged } from "../src/policy.ts";
 import type { ChangePlan, Investigation, Review, Task, Verification } from "../src/types.ts";
 import { TaskSchema } from "../src/types.ts";
 
@@ -155,5 +155,87 @@ describe("atIntake", () => {
     expect(atIntake({ ...task, kind: "stale_pr" }).action).toBe("escalate");
     expect(atIntake({ ...task, kind: "hygiene", files: [] }).action).toBe("escalate");
     expect(atIntake({ ...task, kind: "hygiene", files: [".editorconfig"] })).toEqual({ action: "continue" });
+  });
+});
+
+describe("controlsChecks", () => {
+  it.each([
+    "package.json",
+    "packages/a/package.json",
+    "Makefile",
+    "GNUmakefile",
+    "justfile",
+    "Rakefile",
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "tox.ini",
+    "noxfile.py",
+    "conftest.py",
+    "tests/conftest.py",
+    "pytest.ini",
+    "Cargo.toml",
+    "build.rs",
+    ".cargo/config.toml",
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle.kts",
+    "gradlew",
+    "pom.xml",
+    "mvnw",
+    ".mvn/wrapper/maven-wrapper.properties",
+    "CMakeLists.txt",
+    "meson.build",
+    "BUILD.bazel",
+    ".npmrc",
+    ".yarnrc.yml",
+    ".pnpmfile.cjs",
+    "vitest.config.ts",
+    "jest.config.js",
+    "jest.config.mjs",
+    ".mocharc.cjs",
+    "eslint.config.js",
+    ".eslintrc.js",
+    "babel.config.js",
+    ".babelrc",
+    "vite.config.mts",
+    "webpack.config.js",
+    "rollup.config.mjs",
+    "playwright.config.ts",
+    "tsup.config.ts",
+    ".husky/pre-commit",
+    ".pre-commit-config.yaml",
+    "lefthook.yml",
+    ".envrc",
+    "composer.json",
+    "phpunit.xml",
+    "phpunit.xml.dist",
+    "mix.exs",
+    "Package.swift",
+    "build.zig",
+    "build.sbt",
+  ])("knows %s decides what the check commands run", (file) => expect(controlsChecks(file)).toBe(true));
+
+  it.each(["src/paginate.js", "test/paginate.test.js", "README.md", "tsconfig.json", "package-lock.json", "docs/config.md", "src/Makefile.md", "config/settings.json"])(
+    "leaves %s alone",
+    (file) => expect(controlsChecks(file)).toBe(false),
+  );
+});
+
+describe("packageJsonControlChanged", () => {
+  const base = JSON.stringify({ name: "x", version: "1.0.0", scripts: { test: "vitest run" }, dependencies: { a: "1" } });
+  it("ignores edits that do not touch what the commands execute", () => {
+    expect(packageJsonControlChanged(base, JSON.stringify({ name: "x", version: "1.0.1", scripts: { test: "vitest run" }, dependencies: { a: "2" }, description: "d" }))).toBe(false);
+  });
+  it("flags script, workspace, lifecycle and package-manager changes", () => {
+    expect(packageJsonControlChanged(base, JSON.stringify({ name: "x", scripts: { test: "node -e 1" } }))).toBe(true);
+    expect(packageJsonControlChanged(base, JSON.stringify({ name: "x", scripts: { test: "vitest run", pretest: "node x.js" } }))).toBe(true);
+    expect(packageJsonControlChanged(base, JSON.stringify({ name: "x", scripts: { test: "vitest run" }, workspaces: ["../evil"] }))).toBe(true);
+    expect(packageJsonControlChanged(base, JSON.stringify({ name: "x", scripts: { test: "vitest run" }, packageManager: "pnpm@9" }))).toBe(true);
+  });
+  it("treats unparsable or missing content as a change", () => {
+    expect(packageJsonControlChanged(base, "{ not json")).toBe(true);
+    expect(packageJsonControlChanged(undefined, base)).toBe(true);
+    expect(packageJsonControlChanged(base, undefined)).toBe(true);
   });
 });
