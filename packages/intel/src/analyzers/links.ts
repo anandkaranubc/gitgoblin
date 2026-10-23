@@ -1,8 +1,10 @@
+import { trimEnd } from "../util/text.ts";
 import { dirname, normalize, posix } from "node:path";
 
 import type { RepositoryProfile } from "../contracts.ts";
 import type { AnalysisContext } from "../context.ts";
 import { mapLimit } from "../util/limit.ts";
+import { atxHeading } from "./issue-text.ts";
 import { type Lookup, classifyHost, defaultLookup, requestStatus } from "../util/net.ts";
 import { type Analyzer, type Finding, evidence, textFiles } from "./types.ts";
 
@@ -35,7 +37,7 @@ export function extractLinks(path: string, text: string): DocLink[] {
     }
     if (inFence || /^ {4,}\S/.test(line) && !/^\s*[-*]|^\s*\d+\./.test(lines[i - 1] ?? "")) continue;
     const push = (target: string, label: string) => {
-      const t = target.trim().replace(/[.,;:!?)]+$/, "");
+      const t = trimEnd(target.trim(), ".,;:!?)");
       if (!t || SKIP_URL.test(t) || BADGE_HOST.test(t)) return;
       // Only http(s) and repository-relative links are checkable; irc:, ftp:, slack: and friends are not.
       if (/^[a-z][a-z0-9+.-]*:/i.test(t) && !/^https?:/i.test(t)) return;
@@ -57,9 +59,10 @@ export function extractLinks(path: string, text: string): DocLink[] {
       continue;
     }
     // Images are badges and screenshots; their rot is low value and often blocked for bots. Inline code is not a link.
-    const withoutImages = line.replace(/`[^`]*`/g, "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/<img[^>]*>/gi, "");
-    for (const m of withoutImages.matchAll(/\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) if (!m[1]!.startsWith("^")) push(m[2]!, m[1]!); // [^1] is a footnote
-    for (const m of withoutImages.matchAll(/^\s*\[([^\]^][^\]]*)\]:\s*(\S+)/g)) push(m[2]!, m[1]!); // [^1]: is a footnote definition
+    // Every span is bounded: an unclosed `[` on a 64 KB line must not make each later `[` rescan the rest of it.
+    const withoutImages = line.replace(/`[^`]{0,500}`/g, "").replace(/!\[[^\]]{0,500}\]\([^)]{0,2000}\)/g, "").replace(/<img[^>]{0,2000}>/gi, "");
+    for (const m of withoutImages.matchAll(/\[([^\]]{0,500})\]\([ \t]{0,20}<?([^)\s>]{1,2000})>?(?:[ \t]{1,20}"[^"]{0,500}")?[ \t]{0,20}\)/g)) if (!m[1]!.startsWith("^")) push(m[2]!, m[1]!); // [^1] is a footnote
+    for (const m of withoutImages.matchAll(/^[ \t]{0,20}\[([^\]^][^\]]{0,500})\]:[ \t]*(\S+)/g)) push(m[2]!, m[1]!); // [^1]: is a footnote definition
     for (const m of withoutImages.matchAll(/<a\s[^>]*href=["']([^"']+)["']/gi)) push(m[1]!, "");
     for (const m of withoutImages.matchAll(/<(https?:\/\/[^>\s]+)>/g)) push(m[1]!, "");
     // Bare URLs not already inside a markdown link.
@@ -81,7 +84,7 @@ export function slugify(heading: string): string {
     .replace(/<[^>]+>/g, "")
     .replace(/[`*~]/g, "")
     // Underscores are emphasis only at word boundaries; intraword ones (allow_redirects) stay in the anchor.
-    .replace(/(^|\s)_+|_+(?=\s|$)/g, "$1")
+    .replace(/(^|\s)_{1,3}|_{1,3}(?=\s|$)/g, "$1")
     .replace(/[^\p{L}\p{N}\s_-]/gu, "")
     .replace(/ /g, "-");
 }
@@ -102,16 +105,16 @@ export function anchorsIn(markdown: string): Set<string> {
   const anchors = new Set<string>();
   const counts = new Map<string, number>();
   for (const line of markdown.split("\n")) {
-    const heading = /^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/.exec(line)?.[1];
+    const heading = atxHeading(line) || undefined;
     if (heading) {
-      const text = heading.replace(/\s*\{:?\s*#[^}]+\}\s*$/, "");
+      const text = heading.replace(/[ \t]{0,10}\{:?[ \t]{0,10}#[^}\n]{1,500}\}[ \t]*$/, "");
       const base = slugify(text);
       const n = counts.get(base) ?? 0;
       counts.set(base, n + 1);
       anchors.add(n === 0 ? base : `${base}-${n}`);
       anchors.add(siteSlugify(text));
       // `{#id}` (Pandoc, VitePress) and `{: #id }` / `{ #id }` (MkDocs attribute lists)
-      const explicit = /\{:?\s*#([^\s}]+)[^}]*\}/.exec(heading)?.[1];
+      const explicit = /\{:?[ \t]{0,10}#([^\s}]{1,200})[^}\n]{0,500}\}/.exec(heading)?.[1];
       if (explicit) anchors.add(explicit);
     }
     // Any tag may carry an id or name anchor, e.g. ripgrep's <h3 name="complete">.

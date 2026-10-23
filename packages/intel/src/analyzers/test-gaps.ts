@@ -42,7 +42,7 @@ const GENERIC_WORDS = new Set(["test", "tests", "spec", "file", "files", "image"
 export function stemWords(stem: string): string[] {
   return stem
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/([A-Z]{1,40})([A-Z][a-z])/g, "$1 $2")
     .toLowerCase()
     .split(/[^a-z]+/)
     .filter((w) => w.length >= 3 && !GENERIC_WORDS.has(w));

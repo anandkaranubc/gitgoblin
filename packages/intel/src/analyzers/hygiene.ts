@@ -4,6 +4,11 @@ import { type Analyzer, type Finding, evidence } from "./types.ts";
 
 const SOFTWARE = new Set(["library", "cli", "framework", "application", "plugin"]);
 
+/** A Python module with return annotations or typing imports. Bounded patterns: module text is untrusted. */
+export function looksAnnotated(text: string): boolean {
+  return /\)[ \t]{0,10}->[ \t]{0,10}[\w[\].,|"' ]{1,200}:/.test(text) || /^from typing import/m.test(text);
+}
+
 export const hygieneAnalyzer: Analyzer = {
   name: "hygiene",
   async run(ctx: AnalysisContext, profile: RepositoryProfile): Promise<Finding[]> {
@@ -65,7 +70,7 @@ export const hygieneAnalyzer: Analyzer = {
         const text = await ctx.read(f.path, 100 * 1024);
         if (!text) continue;
         checked++;
-        if (/\)\s*->\s*[\w[\]., |"']+\s*:/.test(text) || /^from typing import/m.test(text)) annotated++;
+        if (looksAnnotated(text)) annotated++;
       }
       if (checked >= 3 && annotated / checked >= 0.5) {
         findings.push({
