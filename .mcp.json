@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gitgoblin": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@gitgoblin/mcp"]
+    }
+  }
+}

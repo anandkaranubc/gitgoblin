@@ -1,0 +1,60 @@
+{
+  "name": "@gitgoblin/mcp",
+  "version": "0.1.0",
+  "description": "gitgoblin as an MCP server: discover open-source repositories worth your time, understand them, and find evidence-backed contribution opportunities from Claude Code, Codex, Cursor, Gemini CLI, VS Code and any other MCP client",
+  "mcpName": "io.github.anandkaranubc/gitgoblin",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "open-source",
+    "github",
+    "contributing",
+    "good-first-issue",
+    "repository-discovery",
+    "claude-code",
+    "codex",
+    "cursor",
+    "gemini-cli"
+  ],
+  "homepage": "https://github.com/anandkaranubc/gitgoblin/tree/main/packages/mcp#readme",
+  "bugs": "https://github.com/anandkaranubc/gitgoblin/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anandkaranubc/gitgoblin.git",
+    "directory": "packages/mcp"
+  },
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "gitgoblin-mcp": "./bin/gitgoblin-mcp.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bundle": "node scripts/bundle.mjs",
+    "prepack": "node scripts/bundle.mjs"
+  },
+  "devDependencies": {
+    "@gitgoblin/core": "0.1.0",
+    "@gitgoblin/discovery": "0.1.0",
+    "@gitgoblin/intel": "0.1.0",
+    "@gitgoblin/sources": "0.1.0",
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/server": "^2.3.1",
+    "@types/node": "^24",
+    "esbuild": "^0.27.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.5",
+    "zod": "^4.6.7"
+  }
+}
