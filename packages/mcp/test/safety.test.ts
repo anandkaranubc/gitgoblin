@@ -52,9 +52,13 @@ describe("hardenGitEnvironment", () => {
 });
 
 describe("allowedHosts", () => {
-  it("accepts the public forges and adds the person's own", () => {
-    expect([...allowedHosts({})]).toEqual(["github.com", "gitlab.com", "codeberg.org"]);
-    expect(allowedHosts({ GITGOBLIN_MCP_HOSTS: " git.example.org , GitHub " }).has("git.example.org")).toBe(true);
+  it("reads GitHub alone, whatever the environment says", () => {
+    process.env.GITGOBLIN_MCP_HOSTS = "gitlab.com";
+    try {
+      expect([...allowedHosts()]).toEqual(["github.com"]);
+    } finally {
+      delete process.env.GITGOBLIN_MCP_HOSTS;
+    }
   });
 });
 
