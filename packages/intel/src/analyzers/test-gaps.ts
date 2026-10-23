@@ -1,4 +1,7 @@
-import { basename, dirname, extname } from "node:path";
+import { posix } from "node:path";
+
+// Repository paths are POSIX on every OS.
+const { basename, dirname, extname } = posix;
 
 import type { RepositoryProfile } from "../contracts.ts";
 import type { AnalysisContext } from "../context.ts";
