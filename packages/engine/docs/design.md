@@ -88,7 +88,9 @@ Escalations and stops still write a full report so a human can pick up where the
   install phase. Python projects get a virtualenv and Ruby projects a `BUNDLE_PATH` under the run
   directory (`toolchain.ts`), on PATH for the repository commands and the agent alike, so installs
   land there instead of in the operator's interpreter. `checkIsolation: "sandbox"` fails the run
-  when no OS sandbox exists; `"none"` runs bare, and the report says which happened. Commands the model discovers during orientation are
+  when no OS sandbox exists; `"strict"` also hides the home directory from repository commands
+  except toolchain and cache directories, the temp directory and the run's prefix (credential
+  paths stay denied even inside those); `"none"` runs bare. The report says which happened. Commands the model discovers during orientation are
   accepted only as plain invocations of known tool runners: no shell operators, no inline code or
   preload flags, no paths outside the checkout, no installs or download-and-run forms. The install
   phase still runs the repository's own scripts with network access: use a container for

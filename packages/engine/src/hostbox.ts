@@ -11,13 +11,20 @@ import path from "node:path";
  * localhost, and on for the install phase only.
  */
 
-export type CheckIsolation = "auto" | "sandbox" | "none";
+/**
+ * "auto": OS sandbox when available, else bare with a warning. "sandbox": required. "strict": required,
+ * and the operator's home directory is unreadable except for toolchain and cache directories, the
+ * temp directory and the run's own prefix. "none": bare.
+ */
+export type CheckIsolation = "auto" | "sandbox" | "strict" | "none";
 
 export interface HostSandboxSpec {
   workspace: string;
   /** Further writable directories, for example tool caches under the home directory. */
   extraWrite: string[];
   denyRead: string[];
+  /** Carved back out of `denyRead`, in order: a denied parent with allowed children. Credential paths win last. */
+  allowRead?: string[];
   network: boolean;
 }
 
@@ -46,7 +53,7 @@ function real(p: string): string {
 }
 
 function realSpec(spec: HostSandboxSpec): HostSandboxSpec {
-  return { ...spec, workspace: real(spec.workspace), extraWrite: spec.extraWrite.map(real), denyRead: spec.denyRead.map(real) };
+  return { ...spec, workspace: real(spec.workspace), extraWrite: spec.extraWrite.map(real), denyRead: spec.denyRead.map(real), ...(spec.allowRead ? { allowRead: spec.allowRead.map(real) } : {}) };
 }
 
 function onPath(name: string): string | undefined {
@@ -79,7 +86,7 @@ export function hostSandboxFor(isolation: CheckIsolation, detect: () => HostSand
   if (isolation === "none") return { kind: "none" };
   const found = detect();
   if (found) return found;
-  if (isolation === "sandbox") {
+  if (isolation === "sandbox" || isolation === "strict") {
     throw new Error("no OS sandbox is available for repository commands on this machine (macOS: sandbox-exec; Linux: bwrap). Install bubblewrap, run the engine in a container, or pass checkIsolation \"none\" knowingly.");
   }
   return { kind: "none" };
@@ -100,9 +107,18 @@ const CACHE_DIRS = [
   ".julia", ".swiftpm", ".ivy2", ".sbt", "Library/Caches",
 ];
 
+/** Where language toolchains live under a home directory; readable in strict mode so builds still find their compilers. */
+const TOOLCHAIN_DIRS = [
+  ".nvm", ".volta", ".fnm", ".n", ".asdf", ".pyenv", ".rbenv", ".goenv", ".jenv", ".sdkman", ".rustup", ".cargo", ".local", ".poetry", ".pixi", ".conda",
+  "miniconda3", "anaconda3", "go", ".bun", ".deno", ".yarn", ".pnpm", ".nuget", ".dotnet", ".gem", ".rvm", ".m2", ".gradle", ".ivy2", ".sbt", ".swiftpm",
+  ".config/nvm", ".config/pip", ".config/uv", ".config/git", ".gitconfig", ".npmrc.d", ".bashrc", ".zshrc", ".profile",
+];
+
 export interface SpecOptions {
   /** Further writable directories, for example the run's toolchain prefix. */
   extraWrite?: string[];
+  /** Hide the home directory except toolchains, caches, the temp dir and the extras. */
+  strict?: boolean;
   home?: string;
   tmpdir?: string;
 }
@@ -110,13 +126,17 @@ export interface SpecOptions {
 /** The spec for commands in `workspace`: temp dir, tool caches and the given extras writable, credential paths hidden. */
 export function specFor(workspace: string, network: boolean, options: SpecOptions = {}): HostSandboxSpec {
   const home = options.home ?? os.homedir();
+  const tmpdir = options.tmpdir ?? os.tmpdir();
   const existing = (rels: string[]) => rels.map((rel) => path.join(home, rel)).filter((p) => existsSync(p));
-  return {
-    workspace,
-    extraWrite: [options.tmpdir ?? os.tmpdir(), ...(options.extraWrite ?? []), ...existing(CACHE_DIRS)],
-    denyRead: CREDENTIAL_PATHS.map((rel) => path.join(home, rel)),
-    network,
-  };
+  const extraWrite = [tmpdir, ...(options.extraWrite ?? []), ...existing(CACHE_DIRS)];
+  const credentials = CREDENTIAL_PATHS.map((rel) => path.join(home, rel));
+  if (!options.strict) return { workspace, extraWrite, denyRead: credentials, network };
+  // The running node binary may itself live under the home directory (nvm, volta, fnm).
+  const nodeHome = path.dirname(path.dirname(process.execPath));
+  // Only paths under the home directory need carving out; everything else was never denied.
+  const underHome = (p: string) => p === home || p.startsWith(home + path.sep);
+  const allowRead = [...new Set([...existing(TOOLCHAIN_DIRS), ...existing(CACHE_DIRS), ...extraWrite, workspace, nodeHome].filter(underHome).filter((p) => p !== home))];
+  return { workspace, extraWrite, denyRead: [home, ...credentials], allowRead, network };
 }
 
 function sbpl(value: string): string {
@@ -145,7 +165,13 @@ export function sandboxExecProfile(spec: HostSandboxSpec): string {
     '(allow file-write* (regex #"^/dev/fd/") (regex #"^/dev/ttys") (regex #"^/dev/pty") (regex #"^/private/var/run/"))',
     `(deny file-write* (subpath ${sbpl(path.join(spec.workspace, ".git"))}))`,
   );
-  for (const p of spec.denyRead) lines.push(`(deny file-read* (subpath ${sbpl(p)}))`);
+  // Order matters (last match wins): deny the home directory, allow the toolchains back, then deny
+  // credential paths again so an allowed parent cannot expose them.
+  const home = spec.allowRead ? spec.denyRead[0] : undefined;
+  const credentials = spec.allowRead ? spec.denyRead.slice(1) : spec.denyRead;
+  if (home) lines.push(`(deny file-read* (subpath ${sbpl(home)}))`);
+  for (const p of spec.allowRead ?? []) lines.push(`(allow file-read* (subpath ${sbpl(p)}))`);
+  for (const p of credentials) lines.push(`(deny file-read* (subpath ${sbpl(p)}))`);
   return lines.join("\n") + "\n";
 }
 
@@ -156,11 +182,23 @@ export function bwrapArgs(spec: HostSandboxSpec, command: string): string[] {
   for (const dir of [spec.workspace, ...spec.extraWrite]) if (existsSync(dir)) args.push("--bind", dir, dir);
   const gitDir = path.join(spec.workspace, ".git");
   if (existsSync(gitDir)) args.push("--ro-bind", gitDir, gitDir);
-  for (const p of spec.denyRead) {
-    if (!existsSync(p)) continue;
+  const hide = (p: string) => {
+    if (!existsSync(p)) return;
     if (statSync(p).isDirectory()) args.push("--tmpfs", p);
     else args.push("--ro-bind", "/dev/null", p);
+  };
+  // Mounts apply in order: an empty tmpfs over the home directory, the toolchains bound back (read-only
+  // unless also writable), then credential paths hidden again.
+  const home = spec.allowRead ? spec.denyRead[0] : undefined;
+  const credentials = spec.allowRead ? spec.denyRead.slice(1) : spec.denyRead;
+  if (home) {
+    hide(home);
+    for (const p of spec.allowRead ?? []) {
+      if (!existsSync(p) || !p.startsWith(home + path.sep)) continue;
+      args.push(spec.extraWrite.includes(p) || spec.workspace === p ? "--bind" : "--ro-bind", p, p);
+    }
   }
+  for (const p of credentials) hide(p);
   args.push("--chdir", spec.workspace, "--", "/bin/sh", "-c", command);
   return args;
 }

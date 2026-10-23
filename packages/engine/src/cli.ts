@@ -24,8 +24,9 @@ Run options:
   --skip-install      do not run the repository's install command
   --no-sandbox        rely on hooks only (not recommended; also needs GITGOBLIN_UNSAFE_NO_SANDBOX=1)
   --clone-depth N     shallow clone with N commits of history, for very large repositories
-  --check-isolation   how the repository's own commands run on this machine:
-                      auto (default: OS sandbox when available), sandbox (required), none
+  --check-isolation   how the repository's own commands run on this machine: auto (default: OS
+                      sandbox when available), sandbox (required), strict (required, and your home
+                      directory is hidden except toolchains and caches), none
 
 Publishing never happens during run. It pushes with your gh login and opens a draft PR
 only after you confirm.`;
