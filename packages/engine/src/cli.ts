@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
-import { parseCheckIsolation, parseCloneDepth, parseCostLimit, parseEffort, unsandboxedAllowed } from "./flags.ts";
+import { parseCheckIsolation, parseCloneDepth, parseCostLimit, parseEffort, parseInstallNetwork, unsandboxedAllowed } from "./flags.ts";
 import { RunJournal } from "./journal.ts";
 import { cleanRun, publishRun, runContribution } from "./orchestrator.ts";
 
@@ -25,6 +25,8 @@ Run options:
   --skip-install      do not run the repository's install command
   --no-sandbox        rely on hooks only (not recommended; also needs GITGOBLIN_UNSAFE_NO_SANDBOX=1)
   --clone-depth N     shallow clone with N commits of history, for very large repositories
+  --install-network   registries (default under an OS sandbox: the install reaches package
+                      registries only) or open (any host, for repositories that need it)
   --check-isolation   how the repository's own commands run on this machine: auto (default: OS
                       sandbox when available), sandbox (required), strict (required, and your home
                       directory is hidden except toolchains and caches), none
@@ -69,6 +71,7 @@ async function main(argv: string[]): Promise<void> {
         "skip-install": { type: "boolean" },
         "no-sandbox": { type: "boolean" },
         "check-isolation": { type: "string" },
+        "install-network": { type: "string" },
         "clone-depth": { type: "string" },
       },
     });
@@ -86,6 +89,7 @@ async function main(argv: string[]): Promise<void> {
     const effort = parseEffort(values.effort);
     const checkIsolation = parseCheckIsolation(values["check-isolation"]);
     const cloneDepth = parseCloneDepth(values["clone-depth"]);
+    const installNetwork = parseInstallNetwork(values["install-network"]);
     if (values["no-sandbox"]) {
       if (!unsandboxedAllowed()) fail("--no-sandbox runs the agent's commands on this machine with only text-matching hooks in the way; set GITGOBLIN_UNSAFE_NO_SANDBOX=1 as well if that is really what you want");
       process.stderr.write("warning: --no-sandbox: the agent's commands run on this machine with only text-matching hooks between them and your files\n");
@@ -99,6 +103,7 @@ async function main(argv: string[]): Promise<void> {
       ...(values["no-sandbox"] ? { isolation: "none" as const } : {}),
       ...(checkIsolation ? { checkIsolation } : {}),
       ...(cloneDepth ? { cloneDepth } : {}),
+      ...(installNetwork ? { installNetwork } : {}),
       ...(values["confirm-plan"]
         ? {
             approvePlan: async (plan, context) => {
