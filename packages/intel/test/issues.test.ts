@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assessIssue, plainText } from "../src/analyzers/issues.ts";
 import { assessStalePr } from "../src/analyzers/stale-prs.ts";
-import type { CommentSample, IssueSample, PrSample } from "../src/github/types.ts";
+import type { CommentSample, IssueSample, PrSample, ReviewSample } from "../src/github/types.ts";
 
 const now = new Date("2026-10-22T00:00:00Z");
 const REPO = "https://github.com/o/r";
@@ -90,7 +90,7 @@ describe("assessStalePr", () => {
     };
   }
   it("revives approved or update-requested PRs whose authors went quiet", () => {
-    const approved = [{ state: "APPROVED", createdAt: "2026-04-01T00:00:00Z", author: { login: "m", isBot: false }, association: "MEMBER" }];
+    const approved: ReviewSample[] = [{ state: "APPROVED", createdAt: "2026-04-01T00:00:00Z", author: { login: "m", isBot: false }, association: "MEMBER" }];
     expect(assessStalePr(pr({ reviews: approved }), now)).toMatchObject({ eligible: true, approved: true, reason: "approved but now conflicting" });
     expect(assessStalePr(pr({ reviews: approved, mergeable: "MERGEABLE" }), now)).toMatchObject({ eligible: false, reason: expect.stringContaining("waiting on maintainers") });
     expect(assessStalePr(pr({ lastComments: [comment("Needs a rebase, could you update?", { association: "OWNER", author: { login: "owner", isBot: false } })] }), now).eligible).toBe(true);
