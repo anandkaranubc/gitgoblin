@@ -128,6 +128,35 @@ seed 3. V2's weights ship if both criteria above are met on that date. Its
 pool overlaps the other two dates' pools in part; the windows do not overlap.
 Whatever the result, it is reported in the results note.
 
+Outcome, 2026-10-23 20:08 UTC. On 2025-10-15 (329 covered repositories, 73 with three or
+more decided newcomer pull requests): newcomer odds +0.015 [-0.092, +0.112]
+and nDCG@10 -0.012 [-0.084, +0.082]. Neither criterion is met. V2's weights
+do not ship and the candidate is retired; the next attempt starts from a new
+design date.
+
+Third candidate, 2026-10-23 21:19 UTC, written before any data for its dates is fetched.
+Looking back, the -0.05 margin above was below what one date can resolve: one
+date's paired nDCG@10 interval is about +/-0.12 wide, so even a change with no
+effect would usually fail it. V2's retirement stands; this note only changes
+how the next candidate is tested.
+
+Candidate "C1": the contribute score multiplied by 0.5 + 0.5 x acceptance
+(0.75 when acceptance is unknown), so a project that merges none of its pull
+requests keeps half its score and one that merges all keeps all of it. It was
+chosen on the three dates already seen (2026-06-20, 2026-02-15, 2025-10-15),
+among three gate shapes, as the most conservative on nDCG@10; there it changed
+newcomer odds by +0.26, +0.14 and +0.06 and nDCG@10 by +0.02, +0.03 and -0.02.
+
+Test: two new dates, 2025-06-15 (seed 4) and 2025-02-15 (seed 5), the same pool
+design, 120-day windows, up to 10 pages of pull requests per repository (the
+older the date, the more history a repository needs), covered repositories
+only, as before. The two dates are pooled: odds are compared on all
+repositories with three or more decided newcomer pull requests from both
+dates, nDCG@10 is averaged over the eight date-language pools, and both
+intervals resample repositories. C1 ships if (1) the newcomer-odds correlation
+improves with a 95% interval above zero, and (2) the nDCG@10 interval's lower
+bound is above -0.08. Whatever the result, it is reported.
+
 ### E2. Intel opportunities against later changes
 
 For the calibration and held-out repositories, analyze the default-branch
