@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GitHubClient, HttpClient, MemoryCache, MissingTokenError, STARTER_ISSUE_LABELS } from "../src/index.ts";
+import { GitHubClient, HttpClient, MemoryCache, MissingTokenError, RateLimitError, STARTER_ISSUE_LABELS } from "../src/index.ts";
 import { fetchStub, fixture, jsonResponse } from "./helpers.ts";
 
 function makeGitHub(handler: Parameters<typeof fetchStub>[0], token?: string) {
@@ -106,6 +106,40 @@ describe("GitHubClient.graphql", () => {
   it("throws GraphQLError only when no data came back", async () => {
     const { github } = makeGitHub(() => jsonResponse({ errors: [{ message: "Bad credentials" }] }), "t0k");
     await expect(github.graphql("query { viewer { login } }")).rejects.toMatchObject({ name: "GraphQLError", errors: [{ message: "Bad credentials" }] });
+  });
+
+  it("does not keep an errors-only answer in the cache, so the next call asks again", async () => {
+    // GitHub answers an exhausted GraphQL budget with HTTP 200 and no data; one such body, cached for an
+    // hour as a success, made every later identical query fail without touching the network.
+    let n = 0;
+    const { github, calls } = makeGitHub(() => {
+      n += 1;
+      return n === 1 ? jsonResponse({ errors: [{ type: "SOME_ERROR", message: "transient" }] }) : jsonResponse({ data: { ok: true } });
+    }, "t0k");
+    await expect(github.graphql("query { ok }")).rejects.toMatchObject({ name: "GraphQLError" });
+    expect(await github.graphql("query { ok }")).toEqual({ ok: true });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("reports a GraphQL rate limit as a RateLimitError with the reset time", async () => {
+    const { github } = makeGitHub(
+      () =>
+        jsonResponse(
+          { errors: [{ type: "RATE_LIMITED", message: "API rate limit exceeded for user ID 1." }] },
+          { headers: { "x-ratelimit-limit": "5000", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1700000600", "x-ratelimit-resource": "graphql" } },
+        ),
+      "t0k",
+    );
+    const error = await github.graphql("query { ok }").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RateLimitError);
+    expect((error as RateLimitError).resetAt?.toISOString()).toBe("2023-11-14T22:23:20.000Z");
+  });
+
+  it("still returns partial data with errors, and keeps it cached", async () => {
+    const { github, calls } = makeGitHub(() => jsonResponse({ data: { r0: { name: "kept" } }, errors: [{ type: "RESOURCE_LIMITS_EXCEEDED", message: "too heavy" }] }), "t0k");
+    expect(await github.graphql("query { r0 }")).toEqual({ r0: { name: "kept" } });
+    expect(await github.graphql("query { r0 }")).toEqual({ r0: { name: "kept" } });
+    expect(calls).toHaveLength(1);
   });
 });
 

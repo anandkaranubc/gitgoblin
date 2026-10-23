@@ -46,7 +46,7 @@ reports a `cache-fallback` event rather than failing. Tokens are never stored.
 ## GitHubClient
 
 - `rest(path, { params, ttlMs })`: any REST endpoint, parsed as JSON.
-- `graphql(query, variables, { ttlMs })`: GraphQL, returns `data`, throws `GraphQLError`. Needs a token.
+- `graphql(query, variables, { ttlMs })`: GraphQL, returns `data` (partial data with errors included), throws `GraphQLError` when nothing came back and `RateLimitError` when the GraphQL budget is exhausted; an errors-only answer is never kept in the cache. Needs a token.
 - `searchRepositories(q, { sort, order, perPage, page })` → `RepoFacts[]` plus total.
 - `getRepository(ref)` → `RepoFacts | undefined`.
 - `repoDetails(refs)`: one GraphQL request per 20 repositories returning contributing guide, code of conduct, templates, open starter issues (with samples), merged pull requests, commit count and last commit, releases. Needs a token.

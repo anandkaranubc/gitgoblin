@@ -130,6 +130,11 @@ export class HttpClient {
     return this.#rateLimits;
   }
 
+  /** Drops one cached response, for callers that learn after the fact that a 200 body was not an answer. */
+  forget(method: string, url: string, body?: string): void {
+    this.cache.delete(cacheKey(method, url, body));
+  }
+
   /**
    * Fetches JSON, serving from cache when fresh. Throws HttpError for non-2xx responses. A cached
    * body that no longer parses is discarded and fetched again, so a damaged cache heals itself.
