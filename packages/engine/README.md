@@ -50,8 +50,9 @@ caches, credential files hidden, network only during install. Python projects ge
 under the run directory (so `pip install -e .` never touches your interpreter) and Ruby projects a
 per-run `BUNDLE_PATH`. `--check-isolation sandbox` makes the run fail when no OS sandbox is
 available; `strict` additionally hides your home directory from those commands except toolchain
-and cache directories (nvm, pyenv, cargo, npm and the like), which is the setting for repositories
-you do not trust; `none` turns the sandbox off, for example when a tool needs to write outside
+and cache directories (nvm, pyenv, cargo, npm and the like) and, with `sandbox-exec`, lets the
+install reach only package registries through a proxy the engine runs (`RunOptions.installHosts`
+adds a private registry), which is the setting for repositories you do not trust; `none` turns the sandbox off, for example when a tool needs to write outside
 those places. The install command still runs the repository's own scripts: for
 repositories you do not trust, run the engine itself inside a container.
 
