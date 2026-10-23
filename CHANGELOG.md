@@ -17,6 +17,15 @@ The first release of the `gitgoblin` command.
   contributors, its install and test commands, its conventions) and lists contribution
   opportunities, each with evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo
   repositories (Codeberg among them), and gives any other git host a clone-only analysis.
+- `analyze` checks its own findings: an issue whose quoted code is gone from the default branch, or
+  that a later commit cites, is marked as possibly fixed; a dependency update an open pull request
+  already makes is skipped; code that only quotes a pattern (rule tables, test fixtures) and
+  generated files are not reported. A missing repository gets a plain "not found" message.
+- `analyze --llm` asks Claude for a second opinion on issue triage. It is off by default, costs
+  money, and needs an Anthropic API key; the model can demote or rescue an issue but never
+  overrides facts such as a merged pull request.
+- Analysis treats repository content as untrusted: reads never follow symlinks out of the clone,
+  and link checks only contact public addresses on standard ports.
 - `contribute` (experimental) has an AI agent investigate, plan, implement and verify one
   opportunity in a local clone, gets an independent review, and prepares a pull request. It asks
   before running the agent, before implementing the plan, and before publishing; nothing is pushed
