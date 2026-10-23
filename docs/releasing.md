@@ -15,9 +15,9 @@ Versions follow [Semantic Versioning](https://semver.org). Before 1.0, a patch r
 
 Pushing a tag starts [.github/workflows/release.yml](../.github/workflows/release.yml). Every step that makes something public waits for a person.
 
-1. **Build and check.** The workflow checks that the tag matches the package's version and that CHANGELOG.md has a dated section for it. Then it runs the type check, tests and docs check, packs the package (plus the `.mcpb` bundle for the MCP server), installs the tarball into an empty prefix and runs it, writes `SHA256SUMS`, and signs a [build provenance attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations) for every file.
+1. **Build and check.** The workflow checks that the tag is on `main`, that it matches the package's version, and that CHANGELOG.md has a dated section for it. Then it runs the type check, tests and docs check, packs the package (plus the `.mcpb` bundle for the MCP server), installs the tarball into an empty prefix and runs it (the MCP server must answer an `initialize` request), and writes `SHA256SUMS`. A separate job, which runs no third-party code, signs a [build provenance attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations) for every file.
 2. **Draft release.** It creates a draft GitHub release with those files, using the CHANGELOG section as the notes. Nobody sees a draft until the maintainer publishes it.
-3. **npm.** It publishes the same tarball it built and checked, after the maintainer approves the job in the `npm` environment. npm records provenance that links the package to the workflow run.
+3. **npm.** After the draft exists and the maintainer approves the job in the `npm` environment, it checks the files against `SHA256SUMS` and publishes the same tarball it built. npm records provenance that links the package to the workflow run.
 
 To rehearse without a tag, run the workflow by hand: **Actions → Release → Run workflow**, then pick the package. It builds and checks from any branch, and attests, drafts and publishes nothing.
 
@@ -36,12 +36,13 @@ To rehearse without a tag, run the workflow by hand: **Actions → Release → R
 
 3. **Watch the run.** If a check fails, fix it on `main` and tag again with a new patch version. A tag that has been pushed is never moved or reused.
 4. **Read the draft release**, then approve the **Publish to npm** job.
-5. **Verify** what was published:
+5. **Verify** what was published: that npm serves the bytes the workflow attested, and that it runs.
 
    ```sh
-   npm view gitgoblin@0.2.0 version
+   npm pack gitgoblin@0.2.0
+   gh attestation verify gitgoblin-0.2.0.tgz --repo anandkaranubc/gitgoblin \
+     --signer-workflow anandkaranubc/gitgoblin/.github/workflows/release.yml
    npx -y gitgoblin@0.2.0 --version
-   gh attestation verify gitgoblin-0.2.0.tgz --repo anandkaranubc/gitgoblin
    ```
 
 6. **Publish the draft release.**
@@ -55,13 +56,20 @@ To rehearse without a tag, run the workflow by hand: **Actions → Release → R
 
 The maintainer does this once, before the first release. None of it can be done from a pull request.
 
-1. **npm.** Use an npm account with two-factor authentication. Create the free npm organization `gitgoblin`, which owns the `@gitgoblin` scope, and claim the `gitgoblin` package name by publishing to it (step 4). Until both exist, anyone could register them, and the docs must not tell people to run `npx -y` against a name nobody owns.
-2. **The `npm` environment.** In **Settings → Environments**, create `npm`. Add yourself as a required reviewer and limit deployment to tags matching `v*` and `mcp-v*`.
-3. **Turn publishing on.** In **Settings → Secrets and variables → Actions → Variables**, set `NPM_PUBLISH` to `true`. Until then, the workflow drafts releases and never publishes. This makes sure step 2 is done first.
-4. **First publish of each package.** npm can only set up trusted publishing for a package that already exists, so the first version of each package needs a token. Either:
-   - create a granular access token with publish rights and the shortest expiry npm offers, add it as the secret `NPM_TOKEN` *on the `npm` environment* (not the repository), push the tag, approve, and delete the secret and the token afterwards; or
-   - run `npm login`, download the tarball from the draft release, and run `npm publish <tarball> --access public` yourself. This version has no provenance.
-5. **Trusted publishing.** For each package on npmjs.com, open **Settings → Trusted publishing** and add GitHub Actions with owner `anandkaranubc`, repository `gitgoblin`, workflow `release.yml` and environment `npm`. Then set **Publishing access** to "Require two-factor authentication and disallow tokens". From then on, releases need no secret at all.
+1. **npm.** Use an npm account with two-factor authentication. Create the free npm organization `gitgoblin`, which owns the `@gitgoblin` scope. Until the scope and the `gitgoblin` name are claimed, anyone could register them, which is why the docs never tell people to run `npx -y` against either name yet.
+2. **Tags.** Add a tag ruleset (**Settings → Rules → Rulesets → New tag ruleset**) for `refs/tags/v*` and `refs/tags/mcp-v*` that restricts creations, updates and deletions, with only the maintainer allowed to bypass. Releases can then only start from the maintainer, and a published tag cannot move. The workflow also refuses a tag that is not on `main`.
+3. **The `npm` environment.** In **Settings → Environments**, create `npm`. Add yourself as a required reviewer and limit deployment to tags matching `v*` and `mcp-v*`.
+4. **Turn publishing on.** In **Settings → Secrets and variables → Actions → Variables**, set `NPM_PUBLISH` to `true`. Until then, the workflow drafts releases and never publishes. This makes sure step 3 is done first.
+5. **First publish of each package.** npm can only set up trusted publishing for a package that already exists, so the first version of each package needs a token. The first npm release of `@gitgoblin/mcp` has to be 0.1.4 or later, because the `mcp-v0.1.3` tag already exists. Either:
+   - create a granular access token with read and write access to all packages (a package that does not exist yet cannot be selected), tick **Bypass two-factor authentication** so a workflow can use it, and pick the shortest expiry. Add it as the secret `NPM_TOKEN` *on the `npm` environment*, not the repository. Push the tag, approve, then delete the secret and revoke the token; or
+   - reject the waiting npm job, run `npm login`, download the tarball from the draft release, check it against `SHA256SUMS`, and run `npm publish ./<file>.tgz --access public` yourself. This version has no provenance.
+6. **Trusted publishing.** Add one for each package no more than two days before the next release: a trusted publisher whose first publish does not come within two days expires and has to be recreated. On npmjs.com, open the package's **Settings → Trusted publishing** and add GitHub Actions with owner `anandkaranubc`, repository `gitgoblin`, workflow `release.yml` and environment `npm`. Allow `npm publish`, which the workflow runs; new configurations only allow `npm stage publish` by default. Or from the command line (`npm trust` needs a recent npm; 11.19 has it):
+
+   ```sh
+   npm trust github gitgoblin --file release.yml --repo anandkaranubc/gitgoblin --env npm --allow-publish
+   ```
+
+   Then set **Publishing access** to "Require two-factor authentication and disallow tokens". From then on, releases need no secret at all.
 
 ## When a release is bad
 
