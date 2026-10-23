@@ -29,9 +29,21 @@ Design rules for the tools, in order of importance:
 
 Goals and their descriptions live in the tool descriptions rather than in a fifth tool. Resources and prompts are not used: tool support is universal across clients, resource and prompt support is not, and nothing here needs them.
 
+## Untrusted repositories
+
+The repository a tool reads is usually chosen by a model, and a model can be steered by text planted in a README, an issue or an earlier result. The server therefore treats both the repository and the choice of repository as hostile:
+
+- **Git is hardened before anything else loads.** `src/env.ts` (imported first by `main.ts`) appends `core.symlinks=false`, `protocol.allow=never` and `protocol.https.allow=always` to git's environment configuration. A committed symlink such as `README.md -> ~/.git-credentials` or `-> /dev/zero` is checked out as a small file holding the target path, so no read can leave the clone; clones can only use HTTPS. The cost: a repository whose README is itself a symlink is analyzed with the path text in place of the README until intel resolves in-repository links safely.
+- **The server's clones live in their own cache** (`<cache>/mcp`), so every one was made with those settings; a clone made earlier by the command line could still hold a real symlink.
+- **Only public forges are accepted** (github.com, gitlab.com, codeberg.org). Intel fetches `https://<host>/<owner>/<name>.git` as given, so any other host would let a model point the server at the person's own network. `GITGOBLIN_MCP_HOSTS` adds a self-hosted forge.
+- **External links are never fetched.** Intel's link probe follows redirects to any address, so `analyze_repository` has no `check_links` option; relative links inside the repository are still checked.
+- **Output is cleaned and labelled.** Control characters and bidirectional overrides are stripped from every result, and the server instructions tell the agent that quoted repository text is data, never instructions.
+
+These live in this package so they hold regardless of what intel does; intel hardening its own reads and probes makes them defence in depth rather than redundant.
+
 ## Caching
 
-The discovery and intel packages already cache HTTP responses and clones under `~/.cache/gitgoblin`. The server adds one in-memory map of the last `AnalysisReport` per repository, kept for an hour, so `get_opportunity` is instant after `analyze_repository`. When the report is missing (a new server process, or the hour passed) the tool re-runs the analysis, which is fast on a warm cache.
+The discovery and intel packages already cache HTTP responses and clones under `~/.cache/gitgoblin`; the server keeps its clones under `~/.cache/gitgoblin/mcp` (see above). The server adds one in-memory map of the last `AnalysisReport` per repository, kept for an hour, so `get_opportunity` is instant after `analyze_repository`. When the report is missing (a new server process, or the hour passed) the tool re-runs the analysis, which is fast on a warm cache.
 
 ## Packaging
 
