@@ -1,6 +1,6 @@
 {
   "name": "@gitgoblin/mcp",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "gitgoblin as an MCP server: discover open-source repositories worth your time, understand them, and find evidence-backed contribution opportunities from Claude Code, Codex, Cursor, Gemini CLI, VS Code and any other MCP client",
   "mcpName": "io.github.anandkaranubc/gitgoblin",
   "keywords": [
@@ -48,6 +48,7 @@
     "mcpb": "node scripts/mcpb.mjs"
   },
   "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
     "@gitgoblin/core": "0.1.0",
     "@gitgoblin/discovery": "0.1.0",
     "@gitgoblin/intel": "0.1.0",
