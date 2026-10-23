@@ -62,3 +62,21 @@ describe("fetchSamples", () => {
     expect(api.calls).toEqual([80, 40, 40, 60]);
   });
 });
+
+describe("GitHub's secondary rate limit", () => {
+  it("waits once and retries a query GitHub refused as a burst, and says which limit it was", async () => {
+    const { RateLimitError } = await import("../src/github/client.ts");
+    let refusals = 1;
+    const api = fakeApi((query) => {
+      if (query.includes("query OpenIssues") && refusals-- > 0) throw new RateLimitError("/graphql", 4000, { refused: true });
+      if (query.includes("query OpenIssues")) return { repository: { isMirror: false, labels: { nodes: [] }, pullRequests: { totalCount: 0 }, issues: { totalCount: 1, nodes: [issue(1)] } } };
+      return { repository: { issues: { nodes: [] }, pullRequests: { nodes: [] } } };
+    });
+    const samples = await fetchSamples(api, "o", "r", undefined, { burstRetryDelayMs: 1 });
+    expect(samples.openIssues.map((i) => i.number)).toEqual([1]);
+    const burst = new RateLimitError("/graphql", 3967, { refused: true });
+    expect(burst.secondary).toBe(true);
+    expect(burst.message).toBe("GitHub refused requests as rate limited (secondary limit; 3967 of the hourly quota left)");
+    expect(new RateLimitError("/graphql", 0, { refused: true }).message).toMatch(/^GitHub rate limit reached \(0 left/);
+  });
+});

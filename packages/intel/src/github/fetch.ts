@@ -1,4 +1,4 @@
-import { type GitHubApi, GitHubError } from "./client.ts";
+import { type GitHubApi, GitHubError, RateLimitError } from "./client.ts";
 import { CLOSED_ISSUES_QUERY, CLOSED_PRS_QUERY, DEFAULT_SAMPLE_SIZES, OPEN_ISSUES_QUERY, OPEN_PRS_QUERY, type SampleSizes } from "./queries.ts";
 import {
   type Actor,
@@ -112,15 +112,28 @@ export async function fetchFailedJobs(api: GitHubApi, owner: string, name: strin
  * Fetch issue and PR samples in four light queries. When GitHub nulls nodes
  * (RESOURCE_LIMITS_EXCEEDED), keep what came back and retry smaller if most were lost.
  */
-export async function fetchSamples(api: GitHubApi, owner: string, name: string, sizes: SampleSizes = DEFAULT_SAMPLE_SIZES): Promise<GitHubSamples> {
+export async function fetchSamples(api: GitHubApi, owner: string, name: string, sizes: SampleSizes = DEFAULT_SAMPLE_SIZES, options: { burstRetryDelayMs?: number } = {}): Promise<GitHubSamples> {
   const vars = { owner, name };
-  const open = await shrinking(sizes.openIssues, (first) => api.graphql<GqlOpenIssues>(OPEN_ISSUES_QUERY, { ...vars, first }), (d) => d.repository?.issues.nodes);
+  // Several sessions on one token can trip GitHub's secondary (burst) limit while hourly quota remains. It lifts within
+  // a minute, and without these samples most of a repository's opportunities are lost, so wait once and try again.
+  // GITGOBLIN_BURST_RETRY_MS shortens the wait (tests).
+  const delay = options.burstRetryDelayMs ?? Number(process.env.GITGOBLIN_BURST_RETRY_MS ?? 20_000);
+  const graphql = async <T>(query: string, variables: Record<string, unknown>): Promise<T> => {
+    try {
+      return await api.graphql<T>(query, variables);
+    } catch (error) {
+      if (!(error instanceof RateLimitError) || !error.secondary) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return api.graphql<T>(query, variables);
+    }
+  };
+  const open = await shrinking(sizes.openIssues, (first) => graphql<GqlOpenIssues>(OPEN_ISSUES_QUERY, { ...vars, first }), (d) => d.repository?.issues.nodes);
   const repo = open.data.repository;
   if (!repo) throw new GitHubError(`Repository ${owner}/${name} not found via GraphQL`, 404, "/graphql");
   const [closedIssues, openPrs, closedPrs] = await Promise.all([
-    shrinking(sizes.closedIssues, (first) => api.graphql<GqlClosedIssues>(CLOSED_ISSUES_QUERY, { ...vars, first }), (d) => d.repository?.issues.nodes),
-    shrinking(sizes.openPrs, (first) => api.graphql<GqlPrs>(OPEN_PRS_QUERY, { ...vars, first }), (d) => d.repository?.pullRequests.nodes),
-    shrinking(sizes.closedPrs, (first) => api.graphql<GqlPrs>(CLOSED_PRS_QUERY, { ...vars, first }), (d) => d.repository?.pullRequests.nodes),
+    shrinking(sizes.closedIssues, (first) => graphql<GqlClosedIssues>(CLOSED_ISSUES_QUERY, { ...vars, first }), (d) => d.repository?.issues.nodes),
+    shrinking(sizes.openPrs, (first) => graphql<GqlPrs>(OPEN_PRS_QUERY, { ...vars, first }), (d) => d.repository?.pullRequests.nodes),
+    shrinking(sizes.closedPrs, (first) => graphql<GqlPrs>(CLOSED_PRS_QUERY, { ...vars, first }), (d) => d.repository?.pullRequests.nodes),
   ]);
   return {
     isMirror: repo.isMirror,
