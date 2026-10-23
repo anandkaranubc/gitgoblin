@@ -13,7 +13,7 @@ import { Command, InvalidArgumentError } from "commander";
 import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, recommendedRank, selectOpportunity } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
-import { formatRuns, listRuns, readRun } from "./runs.ts";
+import { formatRuns, installSummary, listRuns, readInstall, readRun } from "./runs.ts";
 import { type IntelModule, type ModuleLoader, isNotInstalled, loadEngine, loadIntel } from "./siblings.ts";
 import { plain } from "./text.ts";
 
@@ -447,6 +447,10 @@ export function buildProgram(runtime: Runtime): Command {
 
       runtime.stdout("");
       for (const line of describeRun(result)) runtime.stdout(line);
+      // A failed install explains most failed or escalated runs; show its cause here rather than send the person to a file.
+      const install = readInstall(result.runDir);
+      const installLines = install ? installSummary(install) : undefined;
+      if (installLines) runtime.stdout(`\n${installLines.join("\n")}`);
       const reportText = readText(join(result.runDir, "report.md"));
       if (reportText) runtime.stdout(`\n${plain(reportText)}`);
       if (result.status === "failed") throw new Error(`the run failed: ${result.reason}`);
@@ -482,17 +486,19 @@ export function buildProgram(runtime: Runtime): Command {
 
   program
     .command("show")
-    .description("Show what a run did: its report, or with --diff or --pr the change and the pull request text")
+    .description("Show what a run did: its report, or with --diff, --pr or --install the change, the pull request text or the install log")
     .argument("<runId>", "a run id from `gitgoblin runs`")
     .option("--diff", "print the prepared change as a patch")
     .option("--pr", "print the pull request title and description")
+    .option("--install", "print the output of the repository's install command")
     .option("--workdir <dir>", "where the engine keeps runs (default: $GITGOBLIN_WORKDIR or ~/.gitgoblin)")
-    .action((runId: string, options: { diff?: boolean; pr?: boolean; workdir?: string }) => {
+    .action((runId: string, options: { diff?: boolean; pr?: boolean; install?: boolean; workdir?: string }) => {
       const workdir = resolveWorkdir(runtime, options.workdir);
       const run = readRun(workdir, runId);
       if (!run) throw new Error(`no run "${runId}" under ${workdir}; \`gitgoblin runs\` lists them.`);
       // Everything in a run directory came from the repository or the model; none of it may drive the terminal.
-      if (options.diff) runtime.stdout(plain(run.diff ?? `run ${runId} prepared no change (${run.result.status}: ${run.result.reason})`));
+      if (options.install) runtime.stdout(run.install ? plain(run.install.output ?? `the install log ${run.install.logPath} is missing`) : `run ${runId} did not run an install command`);
+      else if (options.diff) runtime.stdout(plain(run.diff ?? `run ${runId} prepared no change (${run.result.status}: ${run.result.reason})`));
       else if (options.pr) runtime.stdout(plain([run.prTitle, run.prBody].filter(Boolean).join("\n\n") || `run ${runId} prepared no pull request (${run.result.status}: ${run.result.reason})`));
       else runtime.stdout(plain(run.report ?? JSON.stringify(run.result, null, 2)));
     });

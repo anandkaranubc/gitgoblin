@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { formatRuns, listRuns, readRun } from "../src/runs.ts";
+import { formatRuns, installSummary, listRuns, readRun } from "../src/runs.ts";
 import { writeRun } from "./fixtures.ts";
 
 describe("listRuns", () => {
@@ -77,5 +77,31 @@ describe("formatRuns shows task titles without control characters", () => {
     const text = formatRuns(listRuns(workdir), { color: false });
     expect(text).toContain("acme/widget  Fix #42: red");
     expect(text).not.toContain("\u001b");
+  });
+});
+
+describe("the install step", () => {
+  const PNPM = "Error: ERR_PNPM_STORE_DIR_OPEN_OPERATION_LOCK\n\n  × lock the package-manager engine store\n  ╰─▶ Failed to open the store operation lock at \"pnpm-store-operation-locks\":\n      Operation not permitted (os error 1)\n";
+
+  it("is read from the run's events and log", () => {
+    const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-runs-"));
+    writeRun(workdir, "20261023-163018-bnlx", { status: "escalated", install: { exitCode: 1, output: PNPM } });
+    const run = readRun(workdir, "20261023-163018-bnlx");
+    expect(run?.install).toEqual({ exitCode: 1, timedOut: false, logPath: join(workdir, "runs", "20261023-163018-bnlx", "install-output.txt"), output: PNPM });
+    writeRun(workdir, "20261023-163019-none");
+    expect(readRun(workdir, "20261023-163019-none")?.install).toBeUndefined();
+  });
+
+  it("is summarised only when it failed, with the end of the log and where the rest is", () => {
+    const logPath = "/w/runs/r/install-output.txt";
+    expect(installSummary({ exitCode: 0, timedOut: false, logPath, output: "ok" })).toBeUndefined();
+    const lines = installSummary({ exitCode: 1, timedOut: false, logPath, output: PNPM })!;
+    expect(lines[0]).toBe("The repository's install failed (exit 1). End of /w/runs/r/install-output.txt:");
+    expect(lines.some((line) => line.includes("Operation not permitted (os error 1)"))).toBe(true);
+    expect(lines.every((line) => line.trim() !== "")).toBe(true);
+    const long = installSummary({ exitCode: 2, timedOut: false, logPath, output: Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n") }, 5)!;
+    expect(long.slice(1)).toEqual(["  line 35", "  line 36", "  line 37", "  line 38", "  line 39"]);
+    expect(installSummary({ exitCode: null, timedOut: true, logPath, output: "" })![0]).toBe("The repository's install timed out. End of /w/runs/r/install-output.txt:");
+    expect(installSummary({ exitCode: 1, timedOut: false, logPath, output: "\u001b[31mred\u001b[0m" })).toContain("  red");
   });
 });
