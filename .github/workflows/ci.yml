@@ -45,7 +45,9 @@ jobs:
       - run: npm ci
       - name: Tests of everything but the engine
         run: npm test -w @gitgoblin/core -w @gitgoblin/sources -w @gitgoblin/discovery -w @gitgoblin/intel -w gitgoblin -w @gitgoblin/mcp
+      # The steps below run even when tests fail, so one run reports on every part.
       - name: The command, from source and from the npm bundle
+        if: ${{ !cancelled() }}
         shell: bash
         env:
           # Read-only and only in this step, for GitHub's higher rate limit on public data.
@@ -57,5 +59,6 @@ jobs:
           npm run bundle -w gitgoblin
           node packages/cli/dist/gitgoblin.mjs --version
       - name: The MCP server answers an initialize request
+        if: ${{ !cancelled() }}
         shell: bash
         run: node scripts/smoke-mcp.mjs node "$(node -p "require('./packages/mcp/package.json').version")" packages/mcp/bin/gitgoblin-mcp.mjs
