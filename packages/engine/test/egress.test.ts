@@ -84,3 +84,52 @@ describe("egress through a Unix socket and an in-sandbox forwarder", () => {
     }
   });
 });
+
+describe("chaining through the operator's own proxy", () => {
+  // Behind a corporate proxy the egress proxy cannot reach registries directly; it tunnels through it.
+  it("opens allowed tunnels via the upstream proxy and still refuses the rest", async () => {
+    const target = net.createServer((s) => s.end("hello from the registry"));
+    await new Promise<void>((r) => target.listen(0, "127.0.0.1", () => r()));
+    const targetPort = (target.address() as net.AddressInfo).port;
+    const seen: string[] = [];
+    const upstream = net.createServer((client) => {
+      client.once("data", (d) => {
+        const line = d.toString().split("\r\n")[0] ?? "";
+        seen.push(line);
+        const [, hostPort] = line.split(" ");
+        const [, port] = (hostPort ?? "").split(":");
+        const out = net.connect(Number(port), "127.0.0.1", () => {
+          client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+          out.pipe(client);
+          client.pipe(out);
+        });
+      });
+    });
+    await new Promise<void>((r) => upstream.listen(0, "127.0.0.1", () => r()));
+    const upstreamUrl = `http://127.0.0.1:${(upstream.address() as net.AddressInfo).port}`;
+    const proxy = await startEgressProxy(["localhost"], { allowedPorts: [443, targetPort], upstream: upstreamUrl });
+    try {
+      const { hostname, port } = new URL(proxy.url);
+      const reply = await new Promise<string>((resolve, reject) => {
+        const s = net.connect(Number(port), hostname, () => s.write(`CONNECT localhost:${targetPort} HTTP/1.1\r\n\r\n`));
+        let buf = "";
+        s.on("data", (d) => {
+          buf += d.toString();
+          if (buf.includes("hello from the registry")) {
+            resolve(buf);
+            s.destroy();
+          }
+        });
+        s.on("error", reject);
+      });
+      expect(reply).toMatch(/^HTTP\/1\.1 200/);
+      expect(seen).toEqual([`CONNECT localhost:${targetPort} HTTP/1.1`]);
+      expect(await connectThrough(proxy.url, "evil.example.com:443")).toMatch(/^HTTP\/1\.1 403/);
+      expect(seen).toHaveLength(1);
+    } finally {
+      await proxy.close();
+      upstream.close();
+      target.close();
+    }
+  });
+});

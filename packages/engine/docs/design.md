@@ -90,22 +90,23 @@ Escalations and stops still write a full report so a human can pick up where the
   credential, including model keys, and by default inside an OS sandbox of their own (`hostbox.ts`:
   `sandbox-exec` on macOS, bubblewrap on Linux when installed). Inside it, writes are limited to the
   workspace (never its `.git`), the temp directory and tool caches under the home directory;
-  credential paths are unreadable; the network is cut except on localhost, and open only for the
-  install phase. Python projects get a virtualenv and Ruby projects a `BUNDLE_PATH` under the run
+  credential paths are unreadable; the network is cut except on localhost, and during the install
+  phase it reaches package registries only, through an allowlisting CONNECT proxy (`egress.ts`;
+  refused hosts are recorded; `installNetwork: "open"` lifts it; the proxy chains through the
+  operator's `HTTPS_PROXY`). Python projects get a virtualenv and Ruby projects a `BUNDLE_PATH` under the run
   directory (`toolchain.ts`), on PATH for the repository commands and the agent alike, so installs
   land there instead of in the operator's interpreter. `checkIsolation: "sandbox"` fails the run
   when no OS sandbox exists; `"strict"` also hides the home directory from repository commands
   except toolchain and cache directories, the temp directory and the run's prefix (credential
   paths stay denied even inside those; folder metadata stays visible because tools resolve their
-  own paths) and limits the install to package registries through an allowlisting CONNECT proxy
-  (`egress.ts`; refused hosts are recorded). With `sandbox-exec` the proxy listens on the host's
+  own paths). With `sandbox-exec` the install's proxy listens on the host's
   127.0.0.1, which the sandbox allows; bubblewrap gives the install its own network namespace, so
   there the proxy listens on a Unix socket in a folder bound into the sandbox and a small forwarder
   inside offers it on the namespace's 127.0.0.1;
   `"none"` runs bare. The report says which happened. Commands the model discovers during orientation are
   accepted only as plain invocations of known tool runners: no shell operators, no inline code or
-  preload flags, no paths outside the checkout, no installs or download-and-run forms. Outside strict mode the install
-  phase still runs the repository's own scripts with open network access: use strict, or a container, for
+  preload flags, no paths outside the checkout, no installs or download-and-run forms. The install phase still
+  runs the repository's own scripts (reaching registries only, unless opened): use strict, or a container, for
   repositories you do not trust.
 - The agent edits the tree before verification runs on the host, so an edit to the files that decide
   what the check commands execute (package.json scripts, Makefiles, test-runner and linter config
