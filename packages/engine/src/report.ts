@@ -18,6 +18,8 @@ export interface ReportInput {
   verification?: Verification;
   review?: Review;
   prTitle?: string;
+  /** How the repository's own commands were isolated on this machine: sandbox-exec, bwrap or none. */
+  checkIsolation?: string;
 }
 
 /** Human-readable summary written at the end of every run, whatever its outcome. */
@@ -31,6 +33,7 @@ export function renderReport(input: ReportInput): string {
     `- Cost: $${result.costUsd.toFixed(2)}, ${Math.round(result.durationMs / 1000)}s`,
     result.branch ? `- Branch: ${result.branch}` : "",
     result.workspace ? `- Workspace: ${result.workspace}` : "",
+    input.checkIsolation ? `- Repository commands ran ${input.checkIsolation === "none" ? "without an OS sandbox" : `under ${input.checkIsolation}`}` : "",
     "",
   ];
   if (result.questions.length) {

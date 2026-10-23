@@ -1,4 +1,4 @@
-import { execShell, tail } from "./exec.ts";
+import { execShell, tail, type ExecOptions } from "./exec.ts";
 import type { Check, Commands, DiffStats, Verification } from "./types.ts";
 
 export interface CheckSpec {
@@ -26,13 +26,14 @@ export interface RunChecksOptions {
   cwd: string;
   env: Record<string, string>;
   timeoutMs?: number;
+  wrap?: ExecOptions["wrap"];
   onCheck?: (check: Check) => void;
 }
 
 export async function runChecks(specs: CheckSpec[], opts: RunChecksOptions): Promise<Check[]> {
   const checks: Check[] = [];
   for (const spec of specs) {
-    const result = await execShell(spec.command, { cwd: opts.cwd, env: opts.env, ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}) });
+    const result = await execShell(spec.command, { cwd: opts.cwd, env: opts.env, ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}), ...(opts.wrap ? { wrap: opts.wrap } : {}) });
     const check: Check = {
       name: spec.name,
       command: spec.command,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCostLimit, parseEffort } from "../src/flags.ts";
+import { parseCheckIsolation, parseCostLimit, parseEffort } from "../src/flags.ts";
 
 describe("parseCostLimit", () => {
   it("accepts positive numbers", () => {
@@ -16,5 +16,13 @@ describe("parseEffort", () => {
     expect(parseEffort("high")).toBe("high");
     expect(parseEffort(undefined)).toBeUndefined();
     expect(() => parseEffort("turbo")).toThrow(/effort/);
+  });
+});
+
+describe("parseCheckIsolation", () => {
+  it("accepts auto, sandbox and none", () => {
+    expect(parseCheckIsolation("sandbox")).toBe("sandbox");
+    expect(parseCheckIsolation(undefined)).toBeUndefined();
+    expect(() => parseCheckIsolation("maybe")).toThrow(/check-isolation/);
   });
 });
