@@ -55,7 +55,7 @@ The person has picked something and wants to do it. gitgoblin's etiquette toward
 
 ## Connecting the server
 
-One line per agent; all run the same stdio server from the tarball attached to the latest gitgoblin release (https://github.com/anandkaranubc/gitgoblin/releases). The commands below name release 0.1.2; use the newest one listed there.
+One line per agent; all run the same stdio server from the tarball attached to the latest gitgoblin release (https://github.com/anandkaranubc/gitgoblin/releases). The commands below name one release; if a newer `mcp-v` release is listed there, use its tarball instead.
 
 ```sh
 claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz          # Claude Code
