@@ -73,9 +73,9 @@ refusing to do something.
   yourself. Approval is the safety boundary; use it.
 - Keep the sandboxes on. Even inside one, a repository's install script runs
   as you with network access, so for a repository you do not trust, use
-  `--check-isolation strict` (an option of `gitgoblin-engine run`), which also
-  hides your home directory from its commands, or run the engine in a
-  container. `--no-sandbox` and `--check-isolation none` are for platforms
+  `--check-isolation strict` (on `gitgoblin contribute` and `gitgoblin-engine
+  run`), which also hides your home directory from its commands and limits its
+  install to package registries, or run the engine in a container. `--no-sandbox` and `--check-isolation none` are for platforms
   without a sandbox.
 - Run it on repositories you are allowed to contribute to. Discovery and
   analysis use public read-only data, but publishing a pull request is an
