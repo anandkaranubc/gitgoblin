@@ -7,7 +7,7 @@ import { AnalysisReport, type ContributionOpportunity, RepoRef, type RepoRefInpu
 import { evaluate } from "./evaluate/index.ts";
 import { scanRepo } from "./fs/scan.ts";
 import { ensureClone, openRepo, looksLikeSha } from "./git/repo.ts";
-import { FetchGitHubApi, type GitHubApi, discoverToken } from "./github/client.ts";
+import { FetchGitHubApi, type GitHubApi, GitHubError, discoverToken } from "./github/client.ts";
 import { sharedGitHubApi } from "./github/sources-adapter.ts";
 import { detectForge, fetchForge } from "./forge/index.ts";
 import { type LlmClient, createAnthropicLlm } from "./llm/client.ts";
@@ -64,7 +64,11 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
   let failedJobs: ((runId: number) => Promise<FailedJob[]>) | undefined;
   if (onGitHub) {
     log(`fetching metadata for ${ref.owner}/${ref.name}`);
-    meta = await fetchRepoMeta(github, ref.owner, ref.name);
+    meta = await fetchRepoMeta(github, ref.owner, ref.name).catch((error: unknown) => {
+      // 404 for a private repository too: GitHub does not say which, and neither can we.
+      if (error instanceof GitHubError && error.status === 404) throw new RepositoryNotFoundError(ref);
+      throw error;
+    });
   } else {
     const forgeOptions = { fetchImpl: opts.fetchImpl ?? fetch, cache: new DiskCache(join(opts.cacheDir, "forge")), cacheTtlMs: opts.cacheTtlMs };
     const kind = await detectForge(ref.host, forgeOptions);
@@ -92,7 +96,11 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
   } else {
     const large = (meta?.sizeKb ?? 0) > 300_000;
     log(`cloning (blob:none)${large ? ", shallow history" : ""}`);
-    const clone = await ensureClone(ref, { cacheDir: opts.cacheDir, depth: large ? 2000 : undefined });
+    const clone = await ensureClone(ref, { cacheDir: opts.cacheDir, depth: large ? 2000 : undefined }).catch((error: unknown) => {
+      // Other forges have no metadata call to fail first; git's own message is the signal.
+      if (/repository '[^']*' not found|not found|could not read Username|Authentication failed/i.test((error as Error).message ?? "")) throw new RepositoryNotFoundError(ref);
+      throw error;
+    });
     repo = clone.repo;
     budget.cloneMs = clone.cloneMs;
     if (large) budget.note("history limited to 2000 commits because the repository is large");
@@ -177,6 +185,20 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
   const { opportunities, skipped } = evaluate(findings, profile, opts.maxOpportunities, opts.noKindCaps ? {} : undefined);
   const report: AnalysisReport = { version: "1", profile, opportunities, skipped, budget: budget.toBudget() };
   return AnalysisReport.parse(report);
+}
+
+/** No public repository at that address (it does not exist, is private, or was renamed without a redirect). */
+export class RepositoryNotFoundError extends Error {
+  readonly host: string;
+  readonly owner: string;
+  readonly repo: string;
+  constructor(ref: Pick<RepoRef, "host" | "owner" | "name">) {
+    super(`${ref.owner}/${ref.name} was not found on ${ref.host}`);
+    this.name = "RepositoryNotFoundError";
+    this.host = ref.host;
+    this.owner = ref.owner;
+    this.repo = ref.name;
+  }
 }
 
 /** The clone succeeded but HEAD has no commits. */
