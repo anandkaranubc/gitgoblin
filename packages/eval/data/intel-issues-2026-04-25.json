@@ -1,0 +1,2543 @@
+{
+ "experiment": "intel-issues",
+ "source": "2026-10-23T05:13:57.078Z",
+ "fetchedAt": "2026-10-23T05:16:43.573Z",
+ "rows": [
+  {
+   "id": "github.com/expressjs/express",
+   "analyzedAt": "2026-10-23T05:08:12.612Z",
+   "issues": [
+    {
+     "number": 4099,
+     "kind": "feature_request",
+     "rank": 1,
+     "score": 0.694,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5623,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.663,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6809,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.646,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2414,
+     "kind": "feature_request",
+     "rank": 4,
+     "score": 0.622,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4944,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.611,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2281,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.608,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6385,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.606,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/psf/requests",
+   "analyzedAt": "2026-10-23T05:08:47.293Z",
+   "issues": [
+    {
+     "number": 4664,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.624,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedAt": "2023-05-08T06:31:56Z",
+     "fixedBeforeRun": true,
+     "fixedBy": "outsider",
+     "fate": "open_with_merged_pr"
+    },
+    {
+     "number": 4842,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.624,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6735,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.599,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4871,
+     "kind": "issue",
+     "rank": 4,
+     "score": 0.595,
+     "confidence": 0.51,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7634,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.594,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5430,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.591,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6008,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.584,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7341,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.581,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6734,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.581,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7443,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.574,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7223,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.574,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6512,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.574,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6808,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.571,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6885,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.568,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7399,
+     "kind": "issue",
+     "rank": 15,
+     "score": 0.565,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5348,
+     "kind": "issue",
+     "rank": 16,
+     "score": 0.565,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7040,
+     "kind": "issue",
+     "rank": 17,
+     "score": 0.561,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7627,
+     "kind": "issue",
+     "rank": 18,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6890,
+     "kind": "issue",
+     "rank": 19,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6830,
+     "kind": "issue",
+     "rank": 20,
+     "score": 0.555,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4914,
+     "kind": "issue",
+     "rank": 21,
+     "score": 0.551,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6015,
+     "kind": "issue",
+     "rank": 22,
+     "score": 0.55,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7564,
+     "kind": "issue",
+     "rank": 23,
+     "score": 0.548,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7610,
+     "kind": "issue",
+     "rank": 24,
+     "score": 0.548,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6102,
+     "kind": "issue",
+     "rank": 25,
+     "score": 0.548,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7599,
+     "kind": "issue",
+     "rank": 26,
+     "score": 0.548,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6917,
+     "kind": "issue",
+     "rank": 27,
+     "score": 0.548,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5950,
+     "kind": "issue",
+     "rank": 28,
+     "score": 0.547,
+     "confidence": 0.51,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5316,
+     "kind": "issue",
+     "rank": 29,
+     "score": 0.547,
+     "confidence": 0.51,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6026,
+     "kind": "issue",
+     "rank": 30,
+     "score": 0.542,
+     "confidence": 0.51,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6992,
+     "kind": "issue",
+     "rank": 31,
+     "score": 0.537,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6990,
+     "kind": "issue",
+     "rank": 32,
+     "score": 0.53,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7350,
+     "kind": "issue",
+     "rank": 33,
+     "score": 0.53,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7122,
+     "kind": "issue",
+     "rank": 34,
+     "score": 0.53,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6900,
+     "kind": "issue",
+     "rank": 35,
+     "score": 0.53,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5814,
+     "kind": "issue",
+     "rank": 36,
+     "score": 0.525,
+     "confidence": 0.51,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5058,
+     "kind": "issue",
+     "rank": 37,
+     "score": 0.525,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2018,
+     "kind": "issue",
+     "rank": 39,
+     "score": 0.522,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7188,
+     "kind": "issue",
+     "rank": 40,
+     "score": 0.52,
+     "confidence": 0.51,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/junegunn/fzf",
+   "analyzedAt": "2026-10-23T05:08:51.137Z",
+   "issues": [
+    {
+     "number": 3212,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.655,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3135,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.586,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2526,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.586,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4499,
+     "kind": "issue",
+     "rank": 4,
+     "score": 0.586,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4883,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.579,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4837,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.579,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3521,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.579,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4603,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.579,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4547,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.579,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4671,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.568,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4677,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.565,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2059,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.565,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4892,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4784,
+     "kind": "issue",
+     "rank": 15,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4754,
+     "kind": "issue",
+     "rank": 16,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4738,
+     "kind": "issue",
+     "rank": 17,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4674,
+     "kind": "issue",
+     "rank": 18,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4662,
+     "kind": "issue",
+     "rank": 19,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4660,
+     "kind": "issue",
+     "rank": 20,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4640,
+     "kind": "issue",
+     "rank": 21,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4656,
+     "kind": "issue",
+     "rank": 22,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4625,
+     "kind": "issue",
+     "rank": 23,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4851,
+     "kind": "feature_request",
+     "rank": 27,
+     "score": 0.512,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4260,
+     "kind": "issue",
+     "rank": 28,
+     "score": 0.498,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/burntsushi/ripgrep",
+   "analyzedAt": "2026-10-23T05:09:04.553Z",
+   "issues": [
+    {
+     "number": 3494,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.612,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1518,
+     "kind": "feature_request",
+     "rank": 3,
+     "score": 0.571,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3236,
+     "kind": "issue",
+     "rank": 4,
+     "score": 0.564,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3566,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.546,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3479,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.546,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3508,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.546,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3428,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.546,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2873,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.546,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3372,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.544,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3382,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.532,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3289,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.532,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3295,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.532,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2761,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.532,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3035,
+     "kind": "feature_request",
+     "rank": 15,
+     "score": 0.527,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3448,
+     "kind": "issue",
+     "rank": 16,
+     "score": 0.518,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3306,
+     "kind": "issue",
+     "rank": 17,
+     "score": 0.514,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3296,
+     "kind": "issue",
+     "rank": 18,
+     "score": 0.514,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3514,
+     "kind": "issue",
+     "rank": 19,
+     "score": 0.476,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/tqdm/tqdm",
+   "analyzedAt": "2026-10-23T05:09:27.174Z",
+   "issues": [
+    {
+     "number": 1037,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.762,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1160,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.752,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 485,
+     "kind": "issue",
+     "rank": 4,
+     "score": 0.724,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1678,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.669,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1443,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.653,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1339,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.649,
+     "confidence": 0.36,
+     "flaggedAlreadyFixed": true,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1687,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1702,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1856,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.621,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1858,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.621,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/google/gson",
+   "analyzedAt": "2026-10-23T05:09:52.393Z",
+   "issues": [
+    {
+     "number": 2689,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.719,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3122,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.704,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2991,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.704,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2816,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.669,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2769,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.669,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3047,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.664,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2645,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2943,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2658,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2817,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2680,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1994,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.634,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3128,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2539,
+     "kind": "issue",
+     "rank": 16,
+     "score": 0.6,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2563,
+     "kind": "issue",
+     "rank": 17,
+     "score": 0.6,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2520,
+     "kind": "issue",
+     "rank": 18,
+     "score": 0.6,
+     "confidence": 0.51,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2638,
+     "kind": "issue",
+     "rank": 19,
+     "score": 0.588,
+     "confidence": 0.51,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2365,
+     "kind": "issue",
+     "rank": 20,
+     "score": 0.565,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1242,
+     "kind": "issue",
+     "rank": 21,
+     "score": 0.538,
+     "confidence": 0.51,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1632,
+     "kind": "issue",
+     "rank": 22,
+     "score": 0.527,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1920,
+     "kind": "issue",
+     "rank": 23,
+     "score": 0.523,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1511,
+     "kind": "issue",
+     "rank": 24,
+     "score": 0.516,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/sinatra/sinatra",
+   "analyzedAt": "2026-10-23T05:09:54.768Z",
+   "issues": [
+    {
+     "number": 2196,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.627,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1723,
+     "kind": "feature_request",
+     "rank": 2,
+     "score": 0.562,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/jqlang/jq",
+   "analyzedAt": "2026-10-23T05:10:03.265Z",
+   "issues": [
+    {
+     "number": 3156,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.661,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3658,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.654,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3475,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.64,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2486,
+     "kind": "feature_request",
+     "rank": 4,
+     "score": 0.63,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3357,
+     "kind": "feature_request",
+     "rank": 5,
+     "score": 0.628,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 2415,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.612,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3221,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.61,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/vitejs/vite",
+   "analyzedAt": "2026-10-23T05:10:39.713Z",
+   "issues": [
+    {
+     "number": 18977,
+     "kind": "feature_request",
+     "rank": 1,
+     "score": 0.69,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 23757,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.671,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 23362,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 23407,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 23626,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.612,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 21903,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.608,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 23807,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.576,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19214,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.576,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 22918,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.575,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20098,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.559,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 18712,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.559,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20799,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.555,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 23781,
+     "kind": "issue",
+     "rank": 15,
+     "score": 0.54,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/python-pillow/pillow",
+   "analyzedAt": "2026-10-23T05:10:50.950Z",
+   "issues": [
+    {
+     "number": 1888,
+     "kind": "feature_request",
+     "rank": 2,
+     "score": 0.677,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3048,
+     "kind": "feature_request",
+     "rank": 3,
+     "score": 0.53,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/mochajs/mocha",
+   "analyzedAt": "2026-10-23T05:11:05.153Z",
+   "issues": [
+    {
+     "number": 5006,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.729,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4971,
+     "kind": "feature_request",
+     "rank": 2,
+     "score": 0.728,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5641,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.696,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 1855,
+     "kind": "feature_request",
+     "rank": 4,
+     "score": 0.68,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6219,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.665,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5665,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.662,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 4743,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.662,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3627,
+     "kind": "feature_request",
+     "rank": 8,
+     "score": 0.66,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6395,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.659,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 3007,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6428,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.648,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6116,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.632,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5922,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 902,
+     "kind": "feature_request",
+     "rank": 14,
+     "score": 0.627,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 6214,
+     "kind": "issue",
+     "rank": 15,
+     "score": 0.626,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5184,
+     "kind": "issue",
+     "rank": 16,
+     "score": 0.625,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5543,
+     "kind": "feature_request",
+     "rank": 18,
+     "score": 0.61,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/prettier/prettier",
+   "analyzedAt": "2026-10-23T05:11:54.383Z",
+   "issues": [
+    {
+     "number": 20076,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.781,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5287,
+     "kind": "feature_request",
+     "rank": 2,
+     "score": 0.777,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 8640,
+     "kind": "feature_request",
+     "rank": 3,
+     "score": 0.777,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 16080,
+     "kind": "issue",
+     "rank": 4,
+     "score": 0.77,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19427,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.77,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19955,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.762,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19847,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.762,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19530,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.762,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20306,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.743,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20307,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.743,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 8210,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.724,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 12174,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.717,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 18769,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.706,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 7884,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.706,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 5086,
+     "kind": "issue",
+     "rank": 15,
+     "score": 0.706,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19085,
+     "kind": "issue",
+     "rank": 16,
+     "score": 0.677,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 15918,
+     "kind": "issue",
+     "rank": 17,
+     "score": 0.669,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20199,
+     "kind": "issue",
+     "rank": 18,
+     "score": 0.665,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20293,
+     "kind": "issue",
+     "rank": 19,
+     "score": 0.664,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 17690,
+     "kind": "issue",
+     "rank": 20,
+     "score": 0.653,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19420,
+     "kind": "issue",
+     "rank": 21,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 11665,
+     "kind": "issue",
+     "rank": 22,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 17700,
+     "kind": "issue",
+     "rank": 23,
+     "score": 0.648,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 16132,
+     "kind": "issue",
+     "rank": 24,
+     "score": 0.645,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20303,
+     "kind": "issue",
+     "rank": 25,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19533,
+     "kind": "issue",
+     "rank": 26,
+     "score": 0.639,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 12209,
+     "kind": "issue",
+     "rank": 27,
+     "score": 0.637,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20355,
+     "kind": "issue",
+     "rank": 28,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20220,
+     "kind": "issue",
+     "rank": 29,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20174,
+     "kind": "issue",
+     "rank": 30,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20176,
+     "kind": "issue",
+     "rank": 31,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20170,
+     "kind": "issue",
+     "rank": 32,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20169,
+     "kind": "issue",
+     "rank": 33,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20162,
+     "kind": "issue",
+     "rank": 34,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20164,
+     "kind": "issue",
+     "rank": 35,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20048,
+     "kind": "issue",
+     "rank": 36,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 20046,
+     "kind": "issue",
+     "rank": 37,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19485,
+     "kind": "issue",
+     "rank": 39,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19137,
+     "kind": "issue",
+     "rank": 40,
+     "score": 0.611,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/astral-sh/ruff",
+   "analyzedAt": "2026-10-23T05:12:39.118Z",
+   "issues": [
+    {
+     "number": 21581,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.793,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 12287,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.774,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 8232,
+     "kind": "feature_request",
+     "rank": 4,
+     "score": 0.729,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29068,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.696,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29073,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.687,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29449,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.666,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29512,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.665,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29422,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.665,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 28274,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.659,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 27008,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.65,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29169,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.65,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 12611,
+     "kind": "issue",
+     "rank": 15,
+     "score": 0.6,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29452,
+     "kind": "issue",
+     "rank": 16,
+     "score": 0.592,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29375,
+     "kind": "issue",
+     "rank": 17,
+     "score": 0.592,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 28930,
+     "kind": "issue",
+     "rank": 18,
+     "score": 0.586,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 19396,
+     "kind": "issue",
+     "rank": 20,
+     "score": 0.573,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29106,
+     "kind": "issue",
+     "rank": 21,
+     "score": 0.573,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 26766,
+     "kind": "issue",
+     "rank": 22,
+     "score": 0.558,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29087,
+     "kind": "feature_request",
+     "rank": 23,
+     "score": 0.547,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  },
+  {
+   "id": "github.com/hashicorp/terraform",
+   "analyzedAt": "2026-10-23T05:13:53.733Z",
+   "issues": [
+    {
+     "number": 30783,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.743,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 38939,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.723,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29524,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.713,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 37130,
+     "kind": "issue",
+     "rank": 4,
+     "score": 0.706,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 23710,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.702,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 38369,
+     "kind": "issue",
+     "rank": 6,
+     "score": 0.701,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 28477,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.696,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 38577,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.694,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 39431,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.677,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 39337,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.677,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 39214,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.676,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 29212,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.662,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 30951,
+     "kind": "issue",
+     "rank": 15,
+     "score": 0.656,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 39434,
+     "kind": "issue",
+     "rank": 16,
+     "score": 0.652,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 39107,
+     "kind": "issue",
+     "rank": 17,
+     "score": 0.652,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 35703,
+     "kind": "issue",
+     "rank": 18,
+     "score": 0.633,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 32382,
+     "kind": "issue",
+     "rank": 19,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 39399,
+     "kind": "issue",
+     "rank": 20,
+     "score": 0.613,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 38872,
+     "kind": "issue",
+     "rank": 21,
+     "score": 0.586,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 39298,
+     "kind": "feature_request",
+     "rank": 22,
+     "score": 0.58,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 38578,
+     "kind": "issue",
+     "rank": 23,
+     "score": 0.579,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 38720,
+     "kind": "issue",
+     "rank": 24,
+     "score": 0.566,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 39212,
+     "kind": "issue",
+     "rank": 25,
+     "score": 0.565,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 38396,
+     "kind": "issue",
+     "rank": 26,
+     "score": 0.562,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 39409,
+     "kind": "issue",
+     "rank": 27,
+     "score": 0.561,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    },
+    {
+     "number": 30910,
+     "kind": "issue",
+     "rank": 28,
+     "score": 0.559,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false,
+     "fixedBeforeRun": false,
+     "fate": "open"
+    }
+   ]
+  }
+ ]
+}
