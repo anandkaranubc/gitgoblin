@@ -6,7 +6,7 @@
       "owner": "jd",
       "name": "tenacity"
     },
-    "analyzedAt": "2026-10-23T02:42:48.907Z",
+    "analyzedAt": "2026-10-23T02:57:21.490Z",
     "headSha": "32ac68f0941319c0d2f4fb927f96e4ee29bb46c6",
     "defaultBranch": "main",
     "topics": [
@@ -57,9 +57,7 @@
       "workflows": [
         ".github/workflows/ci.yaml",
         ".github/workflows/release.yml"
-      ],
-      "lastRunConclusion": "success",
-      "lastRunAt": "2026-10-12T13:10:58Z"
+      ]
     },
     "structure": {
       "fileCount": 97,
@@ -74,7 +72,29 @@
       "docsDirs": [
         "doc"
       ],
-      "entryPoints": []
+      "entryPoints": [],
+      "centralFiles": [
+        {
+          "path": "tenacity/__init__.py",
+          "importedBy": 9
+        },
+        {
+          "path": "tenacity/_utils.py",
+          "importedBy": 7
+        },
+        {
+          "path": "tenacity/retry.py",
+          "importedBy": 2
+        },
+        {
+          "path": "tenacity/stop.py",
+          "importedBy": 2
+        },
+        {
+          "path": "tenacity/wait.py",
+          "importedBy": 2
+        }
+      ]
     },
     "activity": {
       "commits90d": 29,
@@ -92,8 +112,8 @@
       "lastPushAt": "2026-10-12T13:10:05Z",
       "lastReleaseAt": "2026-10-07T12:12:36Z",
       "releaseCadenceDays": 63,
-      "medianPrResponseHours": 487.9,
-      "medianIssueResponseHours": 2286.8,
+      "medianPrResponseHours": 488,
+      "medianIssueResponseHours": 2287,
       "externalPrMergeRate": 0.44
     },
     "welcomeness": {
@@ -108,7 +128,7 @@
             "kind": "computed",
             "locator": "git log --since=90d",
             "note": "29 commits",
-            "observedAt": "2026-10-23T02:42:48.907Z"
+            "observedAt": "2026-10-23T02:57:21.490Z"
           }
         },
         {
@@ -119,7 +139,7 @@
             "kind": "computed",
             "locator": "GraphQL closed pull requests",
             "note": "44% of 16 recently closed PRs from non-maintainers were merged",
-            "observedAt": "2026-10-23T02:42:48.907Z"
+            "observedAt": "2026-10-23T02:57:21.490Z"
           }
         },
         {
@@ -130,7 +150,7 @@
             "kind": "computed",
             "locator": "GraphQL issue comments",
             "note": "median 2287h to first response on 59 outside issues",
-            "observedAt": "2026-10-23T02:42:48.907Z"
+            "observedAt": "2026-10-23T02:57:21.490Z"
           }
         },
         {
@@ -141,7 +161,7 @@
             "kind": "pull_request",
             "locator": "https://github.com/jd/tenacity/pull/743",
             "note": "7 outside PRs merged recently, e.g. #743",
-            "observedAt": "2026-10-23T02:42:48.907Z"
+            "observedAt": "2026-10-23T02:57:21.490Z"
           }
         },
         {
@@ -152,7 +172,7 @@
             "kind": "api",
             "locator": "/repos/jd/tenacity/labels",
             "note": "help wanted",
-            "observedAt": "2026-10-23T02:42:48.907Z"
+            "observedAt": "2026-10-23T02:57:21.490Z"
           }
         }
       ],
@@ -289,7 +309,7 @@
           "id": "ev-d2eff15a",
           "kind": "issue",
           "locator": "https://github.com/jd/tenacity/issues/763",
-          "observedAt": "2026-10-23T02:42:48.907Z",
+          "observedAt": "2026-10-23T02:57:21.490Z",
           "excerpt": "pyright: @retry on a method that overrides a base method reports reportIncompatibleMethodOverride (since 9.2)",
           "note": "labels: none; 0 comments; 0 reactions; opened 2026-10-21"
         }
@@ -371,7 +391,7 @@
           "id": "ev-ff257eae",
           "kind": "issue",
           "locator": "https://github.com/jd/tenacity/issues/534",
-          "observedAt": "2026-10-23T02:42:48.907Z",
+          "observedAt": "2026-10-23T02:57:21.490Z",
           "excerpt": "Incorrect exception raised with two retrying blocks in function",
           "note": "labels: none; 2 comments; 0 reactions; opened 2025-09-01"
         }
@@ -454,7 +474,7 @@
           "id": "ev-e6035a3a",
           "kind": "issue",
           "locator": "https://github.com/jd/tenacity/issues/511",
-          "observedAt": "2026-10-23T02:42:48.907Z",
+          "observedAt": "2026-10-23T02:57:21.490Z",
           "excerpt": "Unreachable code in `before_log` reached",
           "note": "labels: none; 2 comments; 1 reactions; opened 2025-01-28"
         },
@@ -462,7 +482,7 @@
           "id": "ev-1da6164d",
           "kind": "pull_request",
           "locator": "https://github.com/jd/tenacity/pull/665",
-          "observedAt": "2026-10-23T02:42:48.907Z",
+          "observedAt": "2026-10-23T02:57:21.490Z",
           "note": "linked PR is closed, updated 2026-10-17"
         }
       ],
@@ -545,7 +565,7 @@
           "id": "ev-309807b5",
           "kind": "issue",
           "locator": "https://github.com/jd/tenacity/issues/507",
-          "observedAt": "2026-10-23T02:42:48.907Z",
+          "observedAt": "2026-10-23T02:57:21.490Z",
           "excerpt": "Statistics can be incorrectly initialized inside Temporal contexts",
           "note": "labels: none; 1 comments; 0 reactions; opened 2025-01-14"
         },
@@ -553,14 +573,14 @@
           "id": "ev-6514f373",
           "kind": "pull_request",
           "locator": "https://github.com/jd/tenacity/pull/508",
-          "observedAt": "2026-10-23T02:42:48.907Z",
+          "observedAt": "2026-10-23T02:57:21.490Z",
           "note": "linked PR is open, updated 2025-01-14"
         },
         {
           "id": "ev-7a25bcd6",
           "kind": "pull_request",
           "locator": "https://github.com/jd/tenacity/pull/700",
-          "observedAt": "2026-10-23T02:42:48.907Z",
+          "observedAt": "2026-10-23T02:57:21.490Z",
           "note": "linked PR is closed, updated 2026-10-17"
         }
       ],
@@ -642,7 +662,7 @@
           "id": "ev-dd4807af",
           "kind": "issue",
           "locator": "https://github.com/jd/tenacity/issues/549",
-          "observedAt": "2026-10-23T02:42:48.907Z",
+          "observedAt": "2026-10-23T02:57:21.490Z",
           "excerpt": "set reraise true project wide",
           "note": "0 replies after 267 days; labels: none"
         }
@@ -757,8 +777,8 @@
   "budget": {
     "apiRequests": 8,
     "httpChecks": 0,
-    "cloneMs": 640,
-    "totalMs": 2744,
+    "cloneMs": 567,
+    "totalMs": 677,
     "truncated": false,
     "notes": [
       "issues passed over: #504: feature request without maintainer endorsement or a help label; #644: feature request without maintainer endorsement or a help label; #625: feature request without maintainer endorsement or a help label; #521: reads as a question, not a change request; #517: unclear whether maintainers want this changed (no label, confirmation or repro); #509: feature request without maintainer endorsement or a help label; #506: feature request without maintainer endorsement or a help label; #496: unclear whether maintainers want this changed (no label, confirmation or repro)",

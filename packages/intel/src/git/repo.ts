@@ -47,7 +47,6 @@ export interface GitRepo {
   grep(word: string, paths: string[]): Promise<string[]>;
 }
 
-/** A minimal environment: no tokens, and no GIT_DIR/GIT_WORK_TREE from a calling hook or alias pointing git at another repository. */
 /**
  * A repository path as a regular file inside the checkout: symlinks are followed only while they stay
  * inside it (git checks out a link with any target, so `README.md -> /dev/zero` or `docs -> /` must
@@ -66,6 +65,7 @@ export async function resolveInCheckout(dir: string, path: string): Promise<{ re
   }
 }
 
+/** A minimal environment: no tokens, and no GIT_DIR/GIT_WORK_TREE from a calling hook or alias pointing git at another repository. */
 const GIT_ENV: NodeJS.ProcessEnv = Object.fromEntries(
   ["PATH", "HOME", "USERPROFILE", "TMPDIR", "TEMP", "TMP", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "GIT_SSL_CAINFO", "GIT_EXEC_PATH", "SystemRoot", "SYSTEMROOT", "windir", "COMSPEC", "PATHEXT"]
     .filter((k) => process.env[k] !== undefined)
