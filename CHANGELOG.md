@@ -30,6 +30,9 @@ The first release of the `gitgoblin` command.
   opportunity in a local clone, gets an independent review, and prepares a pull request. It asks
   before running the agent, before implementing the plan, and before publishing; nothing is pushed
   or posted without that last yes. `runs`, `show` and `publish` come back to prepared changes later.
+- When choosing what to work on, `contribute` marks opportunities the engine would refuse (`!`) and
+  those intel doubts (`?`, for example an issue whose quoted code is gone, so it may already be
+  fixed), and pressing Enter skips both.
 - The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
   `bwrap` on Linux when installed).
 - Works without configuration. A GitHub token, or a `gh` login, raises rate limits and adds
