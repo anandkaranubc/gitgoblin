@@ -53,7 +53,7 @@ export function jsNamedImports(code: string, pkg: string): { name: string; line:
   code.split("\n").forEach((line, i) => {
     for (const m of line.matchAll(pattern)) {
       for (const part of (m[1] ?? m[2] ?? "").split(",")) {
-        const name = part.trim().split(/\s+as\s+|\s*:\s*/)[0]!.trim();
+        const name = part.trim().split(/[ \t]{1,20}as[ \t]{1,20}|[ \t]{0,20}:[ \t]{0,20}/)[0]!.trim();
         if (/^[A-Za-z_$][\w$]*$/.test(name) && name !== "default" && name !== "type") out.push({ name, line: i + 1 });
       }
     }
@@ -93,8 +93,13 @@ export function cliFlagsInCode(text: string): Set<string> {
   const flags = new Set<string>();
   for (const re of FLAG_DEFINITIONS) for (const m of text.matchAll(re)) flags.add(m[1]!.toLowerCase().replace(/_/g, "-"));
   // clap derive: `#[arg(long)]` followed by a field name.
-  for (const m of text.matchAll(/#\[(?:arg|clap)\([^)]*\blong\b[^)]*\)\]\s*(?:pub\s+)?(\w+)\s*:/g)) flags.add(m[1]!.toLowerCase().replace(/_/g, "-"));
+  for (const m of text.matchAll(/#\[(?:arg|clap)\([^)\n]{0,200}\blong\b[^)\n]{0,200}\)\][ \t\r\n]{0,200}(?:pub[ \t]+)?(\w+)[ \t]*:/g)) flags.add(m[1]!.toLowerCase().replace(/_/g, "-"));
   return flags;
+}
+
+/** Package install commands shown in a README (pip, npm, cargo, go and friends), with the package named. */
+export function installCommands(readme: string): { tool: string; name: string; index: number }[] {
+  return [...readme.matchAll(/\b(pip|pip3|uv pip|pipx|uv tool|npm|pnpm|yarn|bun|cargo|go)[ \t]{1,10}(?:install|add|get)[ \t]{1,10}(?:-[-\w]{0,40}[ \t]{1,10}){0,10}([@\w][\w./@-]{0,200})/g)].map((m) => ({ tool: m[1]!, name: m[2]!.replace(/\[.*$/, "").replace(/[@=<>~^].*$/, (s) => (s.startsWith("@") && m[2]!.startsWith("@") ? s : "")) , index: m.index! }));
 }
 
 export const docsDriftAnalyzer: Analyzer = {
@@ -168,7 +173,7 @@ export const docsDriftAnalyzer: Analyzer = {
     }
 
     // Install command names the wrong distribution.
-    const installs = [...readme.matchAll(/\b(pip|pip3|uv pip|pipx|uv tool|npm|pnpm|yarn|bun|cargo|go)\s+(?:install|add|get)\s+(?:-[-\w]+\s+)*([@\w][\w./@-]*)/g)].map((m) => ({ tool: m[1]!, name: m[2]!.replace(/\[.*$/, "").replace(/[@=<>~^].*$/, (s) => (s.startsWith("@") && m[2]!.startsWith("@") ? s : "")) , index: m.index! }));
+    const installs = installCommands(readme);
     // Only complain when no install command names the package itself.
     const namesThisPackage = installs.some((ins) => (python?.name && normalizeName(ins.name) === normalizeName(python.name)) || (node?.name && ins.name === node.name));
     for (const ins of namesThisPackage ? [] : installs) {

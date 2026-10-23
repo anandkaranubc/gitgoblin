@@ -25,7 +25,8 @@ The first release of the `gitgoblin` command.
   money, and needs an Anthropic API key; the model can demote or rescue an issue but never
   overrides facts such as a merged pull request.
 - Analysis treats repository content as untrusted: reads never follow symlinks out of the clone,
-  and link checks only contact public addresses on standard ports.
+  link checks only contact public addresses on standard ports, and every parser of issue, README
+  and source text runs in linear time, so a crafted file or issue cannot stall it.
 - `contribute` (experimental) has an AI agent investigate, plan, implement and verify one
   opportunity in a local clone, gets an independent review, and prepares a pull request. It asks
   before running the agent, before implementing the plan, and before publishing; nothing is pushed
