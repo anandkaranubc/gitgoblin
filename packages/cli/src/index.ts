@@ -15,6 +15,7 @@ import { formatExplanation, formatResults } from "./format.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
 import { formatRuns, listRuns, readRun } from "./runs.ts";
 import { type IntelModule, type ModuleLoader, isNotInstalled, loadEngine, loadIntel } from "./siblings.ts";
+import { plain } from "./text.ts";
 
 /** What the CLI needs from the engine; tests inject a fake. */
 export interface Engine {
@@ -410,7 +411,7 @@ export function buildProgram(runtime: Runtime): Command {
           }
         }
       }
-      runtime.stdout(`Opportunity: ${opportunity.title}`);
+      runtime.stdout(`Opportunity: ${plain(opportunity.title)}`);
       const refusal = engineWillRefuse(opportunity);
       if (refusal) runtime.stdout(`The engine will refuse this one at intake: ${refusal}.`);
 
@@ -442,7 +443,7 @@ export function buildProgram(runtime: Runtime): Command {
       runtime.stdout("");
       for (const line of describeRun(result)) runtime.stdout(line);
       const reportText = readText(join(result.runDir, "report.md"));
-      if (reportText) runtime.stdout(`\n${reportText}`);
+      if (reportText) runtime.stdout(`\n${plain(reportText)}`);
       if (result.status === "failed") throw new Error(`the run failed: ${result.reason}`);
       if (result.status !== "awaiting_approval") {
         runtime.stdout("Nothing to publish.");
@@ -451,8 +452,8 @@ export function buildProgram(runtime: Runtime): Command {
 
       const title = readText(join(result.runDir, "pr-title.txt"));
       const body = readText(join(result.runDir, "pr.md"));
-      runtime.stdout(`\nProposed pull request${title ? `: ${title}` : ""}\n`);
-      if (body) runtime.stdout(body);
+      runtime.stdout(`\nProposed pull request${title ? `: ${plain(title)}` : ""}\n`);
+      if (body) runtime.stdout(plain(body));
       runtime.stdout(`\nDiff: ${join(result.runDir, "diff.patch")}`);
       runtime.stdout(`Read the diff and the report before publishing. To decide later: gitgoblin publish ${result.runId}${options.workdir ? ` --workdir ${workdir}` : ""}`);
 
@@ -485,9 +486,10 @@ export function buildProgram(runtime: Runtime): Command {
       const workdir = resolveWorkdir(runtime, options.workdir);
       const run = readRun(workdir, runId);
       if (!run) throw new Error(`no run "${runId}" under ${workdir}; \`gitgoblin runs\` lists them.`);
-      if (options.diff) runtime.stdout(run.diff ?? `run ${runId} prepared no change (${run.result.status}: ${run.result.reason})`);
-      else if (options.pr) runtime.stdout([run.prTitle, run.prBody].filter(Boolean).join("\n\n") || `run ${runId} prepared no pull request (${run.result.status}: ${run.result.reason})`);
-      else runtime.stdout(run.report ?? JSON.stringify(run.result, null, 2));
+      // Everything in a run directory came from the repository or the model; none of it may drive the terminal.
+      if (options.diff) runtime.stdout(plain(run.diff ?? `run ${runId} prepared no change (${run.result.status}: ${run.result.reason})`));
+      else if (options.pr) runtime.stdout(plain([run.prTitle, run.prBody].filter(Boolean).join("\n\n") || `run ${runId} prepared no pull request (${run.result.status}: ${run.result.reason})`));
+      else runtime.stdout(plain(run.report ?? JSON.stringify(run.result, null, 2)));
     });
 
   program
@@ -505,8 +507,8 @@ export function buildProgram(runtime: Runtime): Command {
       const engine = await loadEngine(runtime.loadModule);
       if (!engine) throw new Error("publish needs @gitgoblin/engine, not available in this install.");
 
-      runtime.stdout(`Pull request${run.prTitle ? `: ${run.prTitle}` : ""}\n`);
-      if (run.prBody) runtime.stdout(run.prBody);
+      runtime.stdout(`Pull request${run.prTitle ? `: ${plain(run.prTitle)}` : ""}\n`);
+      if (run.prBody) runtime.stdout(plain(run.prBody));
       runtime.stdout(`\nDiff: ${run.diffPath}\nReport: ${join(run.dir, "report.md")}`);
       const draft = !options.ready;
       const ok = await confirm(runtime, `Push this change and open a ${draft ? "draft" : "ready-for-review"} pull request on GitHub under your account?`);

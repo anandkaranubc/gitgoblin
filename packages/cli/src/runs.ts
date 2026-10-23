@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { styleText } from "node:util";
 import type { RunResult } from "@gitgoblin/engine";
 import type { Style } from "./format.ts";
+import { plain } from "./text.ts";
 
 /**
  * Reads what the engine leaves in `<workdir>/runs/<id>/`: `result.json`, `task.json`, `report.md`,
@@ -91,8 +92,8 @@ export function formatRuns(runs: RunSummary[], style: Style, workdirFlag = ""): 
   const dim = (text: string) => (style.color ? styleText("dim", text) : text);
   return runs
     .map((run) => {
-      const head = [run.runId, run.status.padEnd(17), `$${run.costUsd.toFixed(2)}`, run.repo, run.title].filter((part) => part !== undefined).join("  ");
-      const detail = run.status === "awaiting_approval" ? `publish with: gitgoblin publish ${run.runId}${workdirFlag}` : run.reason;
+      const head = [run.runId, run.status.padEnd(17), `$${run.costUsd.toFixed(2)}`, run.repo, run.title === undefined ? undefined : plain(run.title)].filter((part) => part !== undefined).join("  ");
+      const detail = run.status === "awaiting_approval" ? `publish with: gitgoblin publish ${run.runId}${workdirFlag}` : plain(run.reason);
       return `${head}\n    ${dim(detail)}`;
     })
     .join("\n");
