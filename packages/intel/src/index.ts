@@ -9,8 +9,11 @@ import { scanRepo } from "./fs/scan.ts";
 import { ensureClone, openRepo } from "./git/repo.ts";
 import { FetchGitHubApi, type GitHubApi, discoverToken } from "./github/client.ts";
 import { sharedGitHubApi } from "./github/sources-adapter.ts";
+import { detectForge, fetchForge } from "./forge/index.ts";
 import { fetchLanguages, fetchReleases, fetchRepoMeta, fetchSamples, fetchWorkflowRuns } from "./github/fetch.ts";
-import type { GitHubSamples, Release, WorkflowRun } from "./github/types.ts";
+import type { FailedJob, GitHubSamples, Release, RepoMeta, WorkflowRun } from "./github/types.ts";
+import type { FileInventory } from "./fs/scan.ts";
+import type { GitRepo } from "./git/repo.ts";
 import { detectManifests } from "./manifests/index.ts";
 import { buildProfile } from "./profile/index.ts";
 import { earlyClosedReason } from "./profile/welcomeness.ts";
@@ -50,40 +53,73 @@ export async function analyzeRepository(input: string | RepoRefInput, options: A
 
 async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof resolveOptions>): Promise<AnalysisReport> {
   const log = opts.log;
-  const budget = new BudgetTracker(github);
-  const now = opts.now;
+  const onGitHub = ref.host === "github.com";
+  const budget = new BudgetTracker(onGitHub ? github : undefined);
 
-  log(`fetching metadata for ${ref.owner}/${ref.name}`);
-  const meta = await fetchRepoMeta(github, ref.owner, ref.name);
+  // Other forges: GitLab and Gitea/Forgejo expose public APIs for issues and merge requests; anything else gets the clone alone.
+  let meta: RepoMeta | undefined;
+  let forgeSamples: GitHubSamples | undefined;
+  let forgeRuns: WorkflowRun[] = [];
+  let failedJobs: ((runId: number) => Promise<FailedJob[]>) | undefined;
+  if (onGitHub) {
+    log(`fetching metadata for ${ref.owner}/${ref.name}`);
+    meta = await fetchRepoMeta(github, ref.owner, ref.name);
+  } else {
+    const forgeOptions = { fetchImpl: opts.fetchImpl ?? fetch, cache: new DiskCache(join(opts.cacheDir, "forge")), cacheTtlMs: opts.cacheTtlMs };
+    const kind = await detectForge(ref.host, forgeOptions);
+    if (kind) {
+      try {
+        log(`fetching issues and merge requests from the ${kind} API on ${ref.host}`);
+        const result = await fetchForge(kind, ref.host, ref.owner, ref.name, forgeOptions);
+        meta = result.meta;
+        forgeSamples = result.samples;
+        forgeRuns = result.runs ?? [];
+        failedJobs = result.failedJobs;
+        budget.forgeRequests += result.requests;
+        budget.note(`${ref.host} (${kind}): issues and merge requests sampled without authentication; maintainer status inferred from who merges and closes${forgeRuns.length ? `; ${forgeRuns.length} recent pipelines read` : "; CI runs not read"}`);
+      } catch (error) {
+        budget.note(`${ref.host} (${kind}) API unavailable: ${(error as Error).message.split("\n")[0]}; analysis uses the clone only`);
+      }
+    } else {
+      budget.note(`${ref.host} is not GitHub, GitLab or Gitea: issues, pull requests, CI runs and stars are unavailable; analysis uses the clone only`);
+    }
+  }
 
   let repo;
   if (ref.localPath) {
     repo = openRepo(ref.localPath);
   } else {
-    log(`cloning (blob:none)${meta.sizeKb > 300_000 ? ", shallow history" : ""}`);
-    const clone = await ensureClone(ref, { cacheDir: opts.cacheDir, depth: meta.sizeKb > 300_000 ? 2000 : undefined });
+    const large = (meta?.sizeKb ?? 0) > 300_000;
+    log(`cloning (blob:none)${large ? ", shallow history" : ""}`);
+    const clone = await ensureClone(ref, { cacheDir: opts.cacheDir, depth: large ? 2000 : undefined });
     repo = clone.repo;
     budget.cloneMs = clone.cloneMs;
-    if (meta.sizeKb > 300_000) budget.note("history limited to 2000 commits because the repository is large");
+    if (large) budget.note("history limited to 2000 commits because the repository is large");
   }
   if (!(await repo.headSha().catch(() => undefined))) throw new EmptyRepositoryError(`${ref.owner}/${ref.name} has no commits; nothing to analyze`);
+  meta ??= await metaFromGit(ref, repo);
+
+  const now = opts.now;
 
   log("inventorying files and history");
-  const [inventory, commits, languages, releases] = await Promise.all([
+  const [inventory, commits, apiLanguages, apiReleases] = await Promise.all([
     scanRepo(repo),
     repo.log({ since: isoDaysBefore(now, 365), maxCount: 5000 }),
-    fetchLanguages(github, ref.owner, ref.name).catch(() => ({}) as Record<string, number>),
-    fetchReleases(github, ref.owner, ref.name).catch((): Release[] => []),
+    onGitHub ? fetchLanguages(github, ref.owner, ref.name).catch(() => ({}) as Record<string, number>) : Promise.resolve({} as Record<string, number>),
+    onGitHub ? fetchReleases(github, ref.owner, ref.name).catch((): Release[] => []) : Promise.resolve([] as Release[]),
   ]);
   if (commits.length >= 5000) budget.cut("commit history capped at 5000 for the last year");
+  const languages = Object.keys(apiLanguages).length ? apiLanguages : languagesFromInventory(inventory);
+  const releases = apiReleases.length ? apiReleases : (await repo.tags()).map((t) => ({ tagName: t.name, publishedAt: t.date, prerelease: /alpha|beta|rc|dev|pre/i.test(t.name) }));
 
-  let samples: GitHubSamples | undefined;
+  let samples: GitHubSamples | undefined = forgeSamples;
   const readmePath = inventory.files.find((f) => /^readme(\.\w+)?$/i.test(f.path))?.path;
   const contributingPath = inventory.files.find((f) => /^(\.github\/|docs?\/)?contributing(\.\w+)?$/i.test(f.path))?.path;
   const closedEarly = earlyClosedReason(meta, readmePath ? await repo.readText(readmePath) : undefined, contributingPath ? await repo.readText(contributingPath) : undefined);
   if (closedEarly) {
     budget.note(`issue and PR sampling skipped: ${closedEarly}`);
-  } else {
+    samples = undefined;
+  } else if (onGitHub) {
     try {
       log("sampling issues and pull requests");
       samples = await fetchSamples(github, ref.owner, ref.name);
@@ -91,8 +127,8 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
       budget.note(`issue and PR samples unavailable: ${(error as Error).message.split("\n")[0]}`);
     }
   }
-  let runs: WorkflowRun[] = [];
-  if (inventory.files.some((f) => f.path.startsWith(".github/workflows/"))) {
+  let runs: WorkflowRun[] = forgeRuns;
+  if (onGitHub && inventory.files.some((f) => f.path.startsWith(".github/workflows/"))) {
     runs = await fetchWorkflowRuns(github, ref.owner, ref.name, meta.defaultBranch).catch((error: Error) => {
       budget.note(`workflow runs unavailable: ${error.message.split("\n")[0]}`);
       return [];
@@ -101,8 +137,8 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
   const manifests = await detectManifests(inventory, (p) => repo.readText(p));
 
   const ctx: AnalysisContext = {
-    ref, repo, inventory, meta, languages, samples, releases, runs, manifests, commits, now,
-    nowIso: now.toISOString(), budget, options: opts, github,
+    ref, repo, inventory, meta, languages, samples, releases, runs, failedJobs, manifests, commits, now,
+    nowIso: now.toISOString(), budget, options: opts, github: onGitHub ? github : undefined,
     read: (path, maxBytes) => repo.readText(path, maxBytes),
     log,
   };
@@ -134,6 +170,31 @@ export class EmptyRepositoryError extends Error {
     super(message);
     this.name = "EmptyRepositoryError";
   }
+}
+
+/** Metadata for repositories that are not on GitHub, from the clone alone. */
+async function metaFromGit(ref: RepoRef, repo: GitRepo): Promise<RepoMeta> {
+  const [defaultBranch, head, first] = await Promise.all([repo.defaultBranch(), repo.log({ maxCount: 1 }), repo.firstCommitDate()]);
+  const latest = head[0]?.date ?? new Date().toISOString();
+  return {
+    owner: ref.owner, name: ref.name, defaultBranch, description: undefined, homepage: undefined, topics: [],
+    stars: 0, forks: 0, watchers: 0, openIssuesAndPrs: 0, license: undefined, archived: false, disabled: false,
+    isFork: false, isTemplate: false, hasIssues: false, sizeKb: 0, createdAt: first ?? latest, pushedAt: latest,
+  };
+}
+
+/** Bytes per language from the inventory, used when the GitHub languages call is unavailable. */
+function languagesFromInventory(inventory: FileInventory): Record<string, number> {
+  const bytes: Record<string, number> = {};
+  let headerBytes = 0;
+  for (const f of inventory.files) {
+    if (f.vendored || !f.language || f.category === "docs" || f.category === "config") continue;
+    if (f.ext === ".h") { headerBytes += f.sizeBytes; continue; }
+    bytes[f.language] = (bytes[f.language] ?? 0) + f.sizeBytes;
+  }
+  // .h belongs to whichever of C and C++ the sources are written in.
+  if (headerBytes) { const lang = (bytes["C++"] ?? 0) > (bytes.C ?? 0) ? "C++" : "C"; bytes[lang] = (bytes[lang] ?? 0) + headerBytes; }
+  return bytes;
 }
 
 export type { ContributionOpportunity };

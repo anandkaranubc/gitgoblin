@@ -45,6 +45,12 @@ export interface GitRepo {
   revisionCount(path: string): Promise<number>;
   /** Tracked files under `paths` containing `word` as a whole word, case-insensitive. */
   grep(word: string, paths: string[]): Promise<string[]>;
+  /** Name of the branch origin/HEAD points at, or the current branch. */
+  defaultBranch(): Promise<string>;
+  /** Author date of the oldest reachable commit (bounded by clone depth). */
+  firstCommitDate(): Promise<string | undefined>;
+  /** Tags newest first, with their creation dates. */
+  tags(limit?: number): Promise<{ name: string; date: string }[]>;
 }
 
 /**
@@ -118,7 +124,7 @@ export async function ensureClone(ref: RepoRef, options: CloneOptions): Promise<
   }
 
   await mkdir(join(options.cacheDir, "repos"), { recursive: true });
-  const args = ["clone", "--quiet", "--filter=blob:none", "--single-branch"];
+  const args = ["clone", "--quiet", "--filter=blob:none", "--single-branch", "--tags"];
   if (ref.ref) args.push("--branch", ref.ref);
   if (options.depth) args.push("--depth", String(options.depth));
   args.push(url, dir);
@@ -212,6 +218,35 @@ class LocalGitRepo implements GitRepo {
     if (options.paths?.length) args.push(...options.paths);
     const out = await git(args, this.dir);
     return parseLog(out);
+  }
+
+  async defaultBranch(): Promise<string> {
+    try {
+      const ref = (await git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], this.dir)).trim();
+      if (ref) return ref.replace(/^origin\//, "");
+    } catch {
+      // No origin/HEAD (local checkout); fall through.
+    }
+    const branch = (await git(["rev-parse", "--abbrev-ref", "HEAD"], this.dir)).trim();
+    return branch === "HEAD" ? "main" : branch;
+  }
+
+  async firstCommitDate(): Promise<string | undefined> {
+    try {
+      const out = (await git(["log", "--reverse", "--format=%aI", "--max-parents=0", "HEAD"], this.dir)).trim().split("\n")[0];
+      return out || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async tags(limit = 10): Promise<{ name: string; date: string }[]> {
+    try {
+      const out = await git(["for-each-ref", "--sort=-creatordate", `--count=${limit}`, "--format=%(refname:short)%09%(creatordate:iso-strict)", "refs/tags"], this.dir);
+      return out.split("\n").filter((l) => l.includes("\t")).map((l) => { const [name, date] = l.split("\t"); return { name: name!, date: date! }; });
+    } catch {
+      return [];
+    }
   }
 
   async grep(word: string, paths: string[]): Promise<string[]> {
