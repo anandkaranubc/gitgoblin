@@ -38,6 +38,15 @@ Code login. Each run costs money, capped by `--max-cost`. Known limits: `discove
 `publish` work with GitHub only; opportunity scores are still being calibrated; `contribute` has been
 tested on a small number of real repositories.
 
+## @gitgoblin/mcp 0.1.4 - 2026-10-23
+
+- `analyze_repository` and `get_opportunity` read GitLab and Codeberg repositories again, now that
+  analysis reads those forges through their own public APIs. Discovery and `explain_repository` still
+  read GitHub only, and other hosts are still refused.
+- The bundle is larger, about 3 MB, because analysis now includes the Anthropic SDK for an optional
+  model review of issues. The server never turns that review on and makes no model calls.
+- The tool that packs the `.mcpb` bundle is pinned in the lockfile instead of downloaded on each build.
+
 ## @gitgoblin/mcp 0.1.3 - 2026-10-23
 
 - Reads github.com repositories only. Earlier versions also accepted gitlab.com and codeberg.org,
