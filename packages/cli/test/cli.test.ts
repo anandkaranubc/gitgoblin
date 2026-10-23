@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { formatExplanation, formatResults, highlightReasons } from "../src/format.ts";
 import { type Engine, type Runtime, run } from "../src/index.ts";
 import { toQuery } from "../src/options.ts";
-import { sampleOpportunity, sampleReport, writeRun } from "./fixtures.ts";
+import { sampleOpportunity, sampleReport, writeInstall, writeRun } from "./fixtures.ts";
 
 function sampleResult(overrides: Partial<DiscoveryResult> = {}): DiscoveryResult {
   return {
@@ -94,7 +94,7 @@ const PLAN: ChangePlan = {
  * boundary: intel returns a schema-shaped report; the engine reports progress through the Reporter
  * object, asks for plan approval, and leaves a run directory with the files a person reads.
  */
-function fakeSiblings(options: { status?: RunStatus; report?: AnalysisReport } = {}) {
+function fakeSiblings(options: { status?: RunStatus; report?: AnalysisReport; install?: { exitCode: number | null; output: string } } = {}) {
   const calls: Array<{ fn: string; args: unknown[] }> = [];
   const report = options.report ?? sampleReport();
   const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-cli-"));
@@ -130,6 +130,7 @@ function fakeSiblings(options: { status?: RunStatus; report?: AnalysisReport } =
         mkdirSync(runDir, { recursive: true });
         const status = approved ? (options.status ?? "awaiting_approval") : "stopped";
         writeFileSync(join(runDir, "report.md"), `# gitgoblin run ${runId}\n\n- Status: **${status}**\n\n## Verification\n- test: pass (cargo test, 12s)\n\n## Review: approve\n`);
+        if (options.install) writeInstall(runDir, options.install);
         if (status === "awaiting_approval") {
           writeFileSync(join(runDir, "pr-title.txt"), "fix: honour --color on Windows\n");
           writeFileSync(join(runDir, "pr.md"), "## Summary\n\nFixes #42\n");
@@ -615,5 +616,38 @@ describe("control characters never reach the terminal", () => {
     expect(await run(["show", "20261022-093000-bbbb", "--pr", "--workdir", siblings.workdir], pr.runtime)).toBe(0);
     expect(pr.out.join("\n")).toContain("fix: honour --color");
     expect(pr.out.join("\n")).not.toContain("\u001b");
+  });
+});
+
+describe("a failed install is explained where the person is looking", () => {
+  const LOG = "resolving packages\nError: ERR_PNPM_STORE_DIR_OPEN_OPERATION_LOCK\n  Operation not permitted (os error 1)\n";
+
+  it("contribute prints the end of the install log after the run's status", async () => {
+    const siblings = fakeSiblings({ status: "escalated", install: { exitCode: 1, output: LOG } });
+    const { runtime, out } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    const printed = out.join("\n");
+    expect(printed).toContain("The repository's install failed (exit 1). End of ");
+    expect(printed).toContain("  Error: ERR_PNPM_STORE_DIR_OPEN_OPERATION_LOCK");
+    expect(printed.indexOf("install failed (exit 1)")).toBeLessThan(printed.indexOf("# gitgoblin run"));
+  });
+
+  it("contribute says nothing about an install that worked", async () => {
+    const siblings = fakeSiblings({ status: "escalated", install: { exitCode: 0, output: "Done in 3s" } });
+    const { runtime, out } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(out.join("\n")).not.toContain("install failed");
+  });
+
+  it("show --install prints the whole install log, or says there was none", async () => {
+    const siblings = fakeSiblings();
+    writeRun(siblings.workdir, "20261023-163018-bnlx", { status: "escalated", install: { exitCode: 1, output: LOG } });
+    writeRun(siblings.workdir, "20261023-163019-none", { status: "stopped" });
+    const shown = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["show", "20261023-163018-bnlx", "--install", "--workdir", siblings.workdir], shown.runtime)).toBe(0);
+    expect(shown.out.join("\n")).toContain("resolving packages\nError: ERR_PNPM_STORE_DIR_OPEN_OPERATION_LOCK");
+    const none = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["show", "20261023-163019-none", "--install", "--workdir", siblings.workdir], none.runtime)).toBe(0);
+    expect(none.out.join("\n")).toMatch(/did not run an install command/);
   });
 });

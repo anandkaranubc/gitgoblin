@@ -178,7 +178,7 @@ Every run lives under `~/.gitgoblin/runs/<id>/` (or `$GITGOBLIN_WORKDIR`). To co
 
 ```sh
 npx gitgoblin runs                       # every run, newest first, with its status
-npx gitgoblin show <runId>               # the report; --diff for the patch, --pr for the PR text
+npx gitgoblin show <runId>               # the report; --diff for the patch, --pr for the PR text, --install for the install log
 npx gitgoblin publish <runId>            # asks, then pushes with your gh login and opens a draft PR
 ```
 
