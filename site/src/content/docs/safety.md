@@ -23,7 +23,7 @@ Inside a run, the agent is boxed in:
 - The agent subprocess gets a scrubbed environment: path, home, locale and Anthropic auth only. `GH_TOKEN`, cloud credentials and similar never reach it.
 - Publishing uses the operator's `gh` login from the engine process, never from an agent, and only after a person confirms at a terminal.
 
-The repository's own install, test, lint and build commands run on your machine, so they get a box of their own: an OS sandbox (`sandbox-exec` on macOS, `bwrap` on Linux when installed) that allows writes only to the checkout and tool caches, keeps credential files unreadable, and blocks the network except during install. If a change edits what those commands execute, such as package scripts, Makefiles or test-runner configuration, the engine stops for a person before running them. `--check-isolation strict` also hides your home directory from them.
+The repository's own install, test, lint and build commands run on your machine, so they get a box of their own: an OS sandbox (`sandbox-exec` on macOS, `bwrap` on Linux when installed) that allows writes only to the checkout and tool caches, keeps credential files unreadable, and blocks the network except for package registries during install. If a change edits what those commands execute, such as package scripts, Makefiles or test-runner configuration, the engine stops for a person before running them. `--check-isolation strict` also hides your home directory from them.
 
 A change that makes it easier to break any of this is a bug, and the fix belongs in code, not in a prompt. [SECURITY.md](https://github.com/anandkaranubc/gitgoblin/blob/main/SECURITY.md) says how to report one.
 
