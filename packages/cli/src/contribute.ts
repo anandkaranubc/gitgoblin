@@ -22,9 +22,25 @@ export function engineWillRefuse(o: ContributionOpportunity): string | undefined
   return undefined;
 }
 
-/** The first opportunity the engine would accept, else the first one. 1-based, for the prompt. */
+/**
+ * Intel's confidence that a finding is real, below which its main risk is worth a line in the list.
+ * Across real reports nearly every finding sits at 0.6 or above; the ones below are those intel has
+ * a specific reason to doubt, such as an issue whose quoted code is gone from the default branch.
+ */
+const DOUBT = 0.5;
+
+/** The risk to show when intel doubts a finding, else undefined. */
+export function doubtAbout(o: ContributionOpportunity): string | undefined {
+  const confidence = o.factors.find((f) => f.name === "confidence")?.score;
+  return confidence !== undefined && confidence < DOUBT ? o.risks[0] : undefined;
+}
+
+/** The first opportunity the engine would accept and intel does not doubt, then the first it would accept, else the first. 1-based, for the prompt. */
 export function recommendedRank(report: AnalysisReport): number {
-  const index = report.opportunities.findIndex((o) => engineWillRefuse(o) === undefined);
+  const all = report.opportunities;
+  const accepted = (o: ContributionOpportunity) => engineWillRefuse(o) === undefined;
+  let index = all.findIndex((o) => accepted(o) && doubtAbout(o) === undefined);
+  if (index === -1) index = all.findIndex(accepted);
   return index === -1 ? 1 : index + 1;
 }
 
@@ -38,6 +54,8 @@ export function formatOpportunities(report: AnalysisReport, style: Style): strin
     if (o.summary) lines.push(`    ${oneLine(o.summary, 180)}`);
     const evidence = o.evidence[0];
     if (evidence) lines.push(`    ${paint("dim", `evidence: ${plain(evidence.locator)}${o.evidence.length > 1 ? ` and ${o.evidence.length - 1} more` : ""}`)}`);
+    const doubt = doubtAbout(o);
+    if (doubt) lines.push(`    ${paint("yellow", "?")} ${oneLine(doubt, 180)}`);
     const refusal = engineWillRefuse(o);
     if (refusal) lines.push(`    ${paint("yellow", "!")} ${refusal}`);
     return lines.join("\n");
