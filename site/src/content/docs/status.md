@@ -19,7 +19,7 @@ Last updated 2026-10-23.
 | Prepare a contribution with an AI agent, then publish it after you approve | `contribute`, `runs`, `show`, `publish` | Experimental; needs an Anthropic API key or Claude Code login, and each run costs money |
 | MCP server and agent skill for Claude Code, Codex, Cursor, Gemini CLI, VS Code and others | | Released on GitHub and listed in the MCP Registry; [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) says which clients were checked |
 
-GitHub repositories only. Developed on macOS and tested on Linux in CI; Windows is untested.
+`analyze` reads GitHub, GitLab and Gitea or Forgejo repositories (Codeberg among them); discovery and publishing are GitHub-only. Developed on macOS and tested on Linux in CI; Windows is untested.
 
 ## Being built now
 
@@ -31,7 +31,7 @@ GitHub repositories only. Developed on macOS and tested on Linux in CI; Windows 
 
 ## Deliberately later
 
-- GitLab, Codeberg and self-hosted forges. Repository identity already allows them; the data sources do not yet.
+- Discovery and publishing on GitLab, Codeberg and self-hosted forges. Analysis already reads them; ranking and pull requests still go through GitHub.
 - Running many tasks in parallel, or on a schedule.
 - Container or VM isolation for the engine. Today the model runs in the Agent SDK sandbox with hooks, and the repository's own commands run in an OS sandbox (`sandbox-exec` on macOS, `bwrap` on Linux); the interface allows stronger isolation later.
 - Reacting to CI results or maintainer review after a pull request is open.
