@@ -192,40 +192,43 @@ describe("when intel doubts a finding", () => {
 });
 
 describe("when issues could not be read", () => {
-  const withoutIssues = (note: string | undefined) => {
+  // Intel's notes are the contract for this: the sample counts in the profile measure response times,
+  // not whether issues were read, and the open-issue count can include pull requests.
+  const withNote = (note: string | undefined) => {
     const report = sampleReport([sampleOpportunity({ id: "opp-ci", kind: "ci_rot", title: "CI workflow has been failing", issue: undefined })]);
-    report.profile.activity.openIssues = 31;
-    report.profile.activity.sampleSizes = { issues: 0, pullRequests: 0, externalPullRequests: 0 };
-    report.budget.notes = note ? ["checked npm deprecation for 30 of 31 dependencies", note] : [];
+    report.budget.notes = note ? ["checked npm deprecation for 30 of 31 dependencies", note] : ["checked npm deprecation for 30 of 31 dependencies"];
     return report;
   };
 
   it("says so, with intel's reason and what to do, when sampling failed", () => {
-    const gap = issueGap(withoutIssues("issue and PR samples unavailable: GitHub rate limit nearly exhausted (0 left); stopping API use"));
-    expect(gap).toBe("Issues and pull requests were not analyzed (GitHub rate limit nearly exhausted (0 left); stopping API use), so opportunities from them are missing. Try again in a minute, or check your token with `gh auth status`.");
+    const gap = issueGap(withNote("issue and PR samples unavailable: GitHub rate limit reached (0 left, resets 19:25 UTC)"));
+    expect(gap).toBe("Issues and pull requests were not analyzed (GitHub rate limit reached (0 left, resets 19:25 UTC)), so opportunities from them are missing. Try again in a minute, or check your token with `gh auth status`.");
   });
 
   it("does not repeat the advice when intel's note already carries it", () => {
-    const gap = issueGap(withoutIssues("issue and PR samples unavailable: GitHub refused requests as rate limited (secondary limit; 3967 of the hourly quota left); issues and pull requests were not analyzed, try again in a minute"));
+    const gap = issueGap(withNote("issue and PR samples unavailable: GitHub refused requests as rate limited (secondary limit; 3967 of the hourly quota left); issues and pull requests were not analyzed, try again in a minute"));
     expect(gap).toBe("Issues and pull requests were not analyzed (GitHub refused requests as rate limited (secondary limit; 3967 of the hourly quota left)), so opportunities from them are missing. Try again in a minute, or check your token with `gh auth status`.");
   });
 
   it("gives the reason without advice when sampling was skipped on purpose", () => {
-    expect(issueGap(withoutIssues("issue and PR sampling skipped: the README says the project does not accept contributions"))).toBe(
+    expect(issueGap(withNote("issue and PR sampling skipped: the README says the project does not accept contributions"))).toBe(
       "Issues and pull requests were not analyzed (the README says the project does not accept contributions), so opportunities from them are missing.",
+    );
+    expect(issueGap(withNote("issue, PR and CI sampling skipped by request; clone-based analysis only"))).toBe(
+      "Issues and pull requests were not analyzed (clone-based analysis only), so opportunities from them are missing.",
     );
   });
 
-  it("falls back to a plain sentence without a matching note, and says nothing when issues were read or there are none", () => {
-    expect(issueGap(withoutIssues(undefined))).toMatch(/^Issues and pull requests were not analyzed, so opportunities/);
+  it("says nothing without such a note, even when no issue response time could be measured", () => {
+    const report = withNote(undefined);
+    report.profile.activity.sampleSizes = { issues: 0, pullRequests: 0, externalPullRequests: 0 };
+    report.profile.activity.openIssues = 31;
+    expect(issueGap(report)).toBeUndefined();
     expect(issueGap(sampleReport())).toBeUndefined();
-    const none = withoutIssues(undefined);
-    none.profile.activity.openIssues = 0;
-    expect(issueGap(none)).toBeUndefined();
   });
 
   it("puts the warning at the top of the opportunity list", () => {
-    const text = formatOpportunities(withoutIssues("issue and PR samples unavailable: fetch failed"), plain);
+    const text = formatOpportunities(withNote("issue and PR samples unavailable: fetch failed"), plain);
     expect(text.split("\n")[0]).toMatch(/^! Issues and pull requests were not analyzed \(fetch failed\)/);
   });
 });

@@ -163,21 +163,30 @@ export function describeEnvironment(context: PlanContextLike | undefined): strin
   return lines.join(" ");
 }
 
-/** Intel's notes for an issue sample that failed (worth retrying) or was skipped on purpose. */
-const SAMPLE_FAILED = /^issue and PR samples unavailable: /;
-const SAMPLE_SKIPPED = /^issue(?:,| and) PR(?: and CI)? sampling skipped(?: by request)?:? ?/;
+/**
+ * Intel's notes, stable by contract, for a GitHub issue and pull request sample that was not read:
+ * because the request failed (worth retrying), or because it was skipped on purpose.
+ */
+const SAMPLE_FAILED = "issue and PR samples unavailable: ";
+const SAMPLE_SKIPPED = ["issue and PR sampling skipped: ", "issue, PR and CI sampling skipped by request"];
 
 /**
- * Issues are where most opportunities come from. When intel read none although the repository has
- * open issues, the list is missing its main source, and the person choosing should know why.
+ * Issues are where most opportunities come from. When intel says it did not read them, the list is
+ * missing its main source, and the person choosing should know why. Only intel's notes decide this:
+ * the profile's sample sizes measure response times, not whether issues were read.
  */
 export function issueGap(report: AnalysisReport): string | undefined {
-  const activity = report.profile.activity;
-  if (activity.sampleSizes.issues > 0 || activity.openIssues === 0) return undefined;
-  const failed = report.budget.notes.find((n) => SAMPLE_FAILED.test(n));
-  const skipped = failed ? undefined : report.budget.notes.find((n) => SAMPLE_SKIPPED.test(n));
-  // Intel may append its own "were not analyzed, try again" clause; this sentence already says both.
-  const reason = (failed ? failed.replace(SAMPLE_FAILED, "") : skipped ? skipped.replace(SAMPLE_SKIPPED, "") : "").replace(/;\s*issues and pull requests were not analyzed.*$/i, "");
+  const failed = report.budget.notes.find((n) => n.startsWith(SAMPLE_FAILED));
+  const skipped = failed ? undefined : report.budget.notes.find((n) => SAMPLE_SKIPPED.some((prefix) => n.startsWith(prefix)));
+  const note = failed ?? skipped;
+  if (!note) return undefined;
+  const prefix = failed ? SAMPLE_FAILED : SAMPLE_SKIPPED.find((p) => note.startsWith(p))!;
+  const reason = note
+    .slice(prefix.length)
+    .replace(/^[;:,\s]+/, "")
+    // Intel may append its own "were not analyzed, try again" clause; this sentence already says both.
+    .replace(/;\s*issues and pull requests were not analyzed.*$/i, "")
+    .trim();
   const why = reason ? ` (${plain(reason)})` : "";
   const advice = failed ? " Try again in a minute, or check your token with `gh auth status`." : "";
   return `Issues and pull requests were not analyzed${why}, so opportunities from them are missing.${advice}`;

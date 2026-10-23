@@ -800,7 +800,6 @@ describe("errors a first-time user meets", () => {
 describe("analyze and contribute say when issues were not read", () => {
   it("analyze ends with the warning on stderr", async () => {
     const report = sampleReport();
-    report.profile.activity.sampleSizes = { issues: 0, pullRequests: 0, externalPullRequests: 0 };
     report.budget.notes = ["issue and PR samples unavailable: The GitHub GraphQL API needs a token"];
     const siblings = fakeSiblings({ report });
     const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
@@ -810,7 +809,6 @@ describe("analyze and contribute say when issues were not read", () => {
 
   it("contribute explains an empty result instead of only saying nothing was found", async () => {
     const report = sampleReport([]);
-    report.profile.activity.sampleSizes = { issues: 0, pullRequests: 0, externalPullRequests: 0 };
     report.budget.notes = ["issue and PR samples unavailable: fetch failed"];
     const siblings = fakeSiblings({ report });
     const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
