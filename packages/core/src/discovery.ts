@@ -27,6 +27,7 @@ export function isGoal(value: string): value is Goal {
 export const SIGNAL_NAMES = [
   "activity",
   "responsiveness",
+  "acceptance",
   "busFactor",
   "newcomerFriendliness",
   "docs",
@@ -42,6 +43,7 @@ export type Signals = Partial<Record<SignalName, number>>;
 export const SIGNAL_DESCRIPTIONS: Record<SignalName, string> = {
   activity: "Recent commits and pushes",
   responsiveness: "How quickly maintainers close issues and pull requests",
+  acceptance: "Share of pull requests the project merges",
   busFactor: "How evenly work is spread across contributors",
   newcomerFriendliness: "Contributing guide, code of conduct, templates and open starter issues",
   docs: "README, homepage and changelog",
@@ -67,6 +69,7 @@ export interface Evidence {
   avgPrCloseDays?: number | undefined;
   mergedPullRequests?: number | undefined;
   pullRequestsLastYear?: number | undefined;
+  mergedPullRequestsLastYear?: number | undefined;
   issuesLastYear?: number | undefined;
   hasContributing?: boolean | undefined;
   hasCodeOfConduct?: boolean | undefined;
