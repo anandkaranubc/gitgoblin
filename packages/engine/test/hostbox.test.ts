@@ -26,7 +26,7 @@ describe("sandboxExecProfile", () => {
     expect(profile).toContain('(allow file-write* (subpath "/ws"))');
     expect(profile).toContain('(allow file-write* (subpath "/caches"))');
     expect(profile).toContain('(deny file-write* (subpath "/ws/.git"))');
-    expect(profile).toContain('(deny file-read* (subpath "/home/x/.ssh"))');
+    expect(profile).toContain('(deny file-read* file-read-data (subpath "/home/x/.ssh"))');
     expect(profile.indexOf("(deny file-write*)")).toBeLessThan(profile.indexOf('(allow file-write* (subpath "/ws"))'));
     expect(profile.indexOf('(allow file-write* (subpath "/ws"))')).toBeLessThan(profile.indexOf('(deny file-write* (subpath "/ws/.git"))'));
     expect(sandboxExecProfile({ workspace: "/ws", extraWrite: [], denyRead: [], network: true })).not.toContain("(deny network*)");
@@ -60,8 +60,8 @@ describe("specFor strict mode", () => {
     expect(spec.allowRead).not.toContain(path.join(home, "Documents"));
     expect(spec.allowRead).not.toContain(home);
     const profile = sandboxExecProfile(spec);
-    expect(profile.indexOf(`(deny file-read* (subpath "${home}"))`)).toBeGreaterThan(-1);
-    expect(profile.indexOf(`(deny file-read* (subpath "${home}"))`)).toBeLessThan(profile.indexOf(`(allow file-read* (subpath "${path.join(home, ".nvm")}"))`));
+    expect(profile.indexOf(`(deny file-read-data (subpath "${home}"))`)).toBeGreaterThan(-1);
+    expect(profile.indexOf(`(deny file-read-data (subpath "${home}"))`)).toBeLessThan(profile.indexOf(`(allow file-read* file-read-data (subpath "${path.join(home, ".nvm")}"))`));
     // Credential paths are denied again after the allows, so ~/.npm/.npmrc-style secrets stay hidden.
     expect(profile.lastIndexOf("(deny file-read*")).toBeGreaterThan(profile.lastIndexOf("(allow file-read*"));
     const relaxed = specFor("/ws", false, { home });
@@ -135,6 +135,12 @@ describe.skipIf(!available)("host sandbox strict mode (OS)", () => {
     // macOS refuses the listing; bubblewrap shows an empty directory. Either way nothing private is visible.
     const listing = await run(`ls -a "${home}"`);
     expect(listing.output).not.toContain("Documents");
+    // Tools resolve their own paths by looking up each folder above them (pnpm locks its store this
+    // way), so metadata of the folders on the way to a carve-out stays visible; contents do not.
+    mkdirSync(path.join(home, "Library", "pnpm", "store"), { recursive: true });
+    const nested = specFor(ws, false, { home, strict: true });
+    const resolve = await execShell(`node -e "console.log(require('fs').realpathSync('${path.join(home, "Library", "pnpm", "store")}'))"`, { cwd: ws, env, wrap: (c) => sandbox.wrap(c, nested) });
+    expect(resolve.exitCode).toBe(0);
   });
 });
 
