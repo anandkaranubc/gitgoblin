@@ -1,3 +1,7 @@
+import { mkdtempSync, statSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { type HttpCache, MemoryCache, SqliteCache, defaultCacheDir, isFresh } from "../src/index.ts";
 
@@ -59,5 +63,64 @@ describe("defaultCacheDir", () => {
     expect(defaultCacheDir({ GITGOBLIN_CACHE_DIR: "/tmp/gg" })).toBe("/tmp/gg");
     expect(defaultCacheDir({ XDG_CACHE_HOME: "/xdg" })).toBe("/xdg/gitgoblin");
     expect(defaultCacheDir({})).toMatch(/\.cache\/gitgoblin$/);
+  });
+});
+
+describe("SqliteCache on disk", () => {
+  const file = () => path.join(mkdtempSync(path.join(os.tmpdir(), "gg-cache-")), "nested", "http-cache.sqlite");
+
+  it.skipIf(process.platform === "win32")("keeps the cache private to the user", () => {
+    const dbPath = file();
+    const cache = new SqliteCache(dbPath);
+    cache.set("k", entry);
+    cache.close();
+    expect(statSync(path.dirname(dbPath)).mode & 0o777).toBe(0o700);
+    expect(statSync(dbPath).mode & 0o777).toBe(0o600);
+  });
+
+  it("drops a row it cannot decode instead of failing every request", () => {
+    const dbPath = file();
+    const cache = new SqliteCache(dbPath);
+    const fresh = { ...entry, fetchedAt: Date.now(), ttlMs: 60_000 };
+    cache.set("good", fresh);
+    cache.close();
+    const db = new DatabaseSync(dbPath);
+    db.prepare("INSERT INTO http_cache (key, status, body, etag, fetched_at, ttl_ms) VALUES (?, ?, ?, ?, ?, ?)").run("bad", 200, new Uint8Array([1, 2, 3]), null, Date.now(), 60_000);
+    db.close();
+    const reopened = new SqliteCache(dbPath);
+    expect(reopened.get("bad")).toBeUndefined();
+    expect(reopened.get("good")).toEqual(fresh);
+    expect(reopened.stats().entries).toBe(1);
+    reopened.close();
+  });
+
+  it("evicts the oldest entries when the cache grows past its size limit", () => {
+    const dbPath = file();
+    const cache = new SqliteCache(dbPath, { maxBytes: 1 });
+    const big = "x".repeat(5000) + Math.random();
+    const now = Date.now();
+    cache.set("a", { ...entry, body: big + "a", fetchedAt: now - 3000, ttlMs: 60_000 });
+    cache.set("b", { ...entry, body: big + "b", fetchedAt: now - 2000, ttlMs: 60_000 });
+    cache.set("c", { ...entry, body: big + "c", fetchedAt: now - 1000, ttlMs: 60_000 });
+    expect(cache.stats().entries).toBe(3);
+    cache.close();
+    const reopened = new SqliteCache(dbPath, { maxBytes: 1 });
+    expect(reopened.stats().entries).toBeLessThanOrEqual(1);
+    expect(reopened.get("a")).toBeUndefined();
+    reopened.close();
+  });
+});
+
+describe("createSources cache fallback", () => {
+  it("falls back to memory when the cache file cannot be opened", async () => {
+    const { createSources } = await import("../src/index.ts");
+    const events: unknown[] = [];
+    const blocked = path.join(mkdtempSync(path.join(os.tmpdir(), "gg-cache-")), "file-not-dir");
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(blocked, "not a directory");
+    const sources = await createSources({ cachePath: path.join(blocked, "x", "cache.sqlite"), token: "t", onEvent: (e) => events.push(e) });
+    expect(sources.cache).toBeInstanceOf(MemoryCache);
+    expect(events).toContainEqual(expect.objectContaining({ type: "cache-fallback" }));
+    sources.close();
   });
 });

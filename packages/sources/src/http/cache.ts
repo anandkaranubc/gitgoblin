@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -78,17 +78,35 @@ interface Row {
 
 /** Entries that expired longer ago than this are dropped when the cache opens. */
 const OPEN_PRUNE_GRACE_MS = 7 * 86_400_000;
+/** Compressed bytes the on-disk cache may hold before the oldest entries go. */
+const DEFAULT_MAX_BYTES = 512 * 1024 * 1024;
+
+export interface SqliteCacheOptions {
+  /** Size limit for stored bodies; the oldest entries are evicted when the cache opens above it. */
+  maxBytes?: number | undefined;
+}
 
 /**
  * Persistent cache on Node's built-in SQLite. Pass ":memory:" for an ephemeral
  * database. Bodies are gzipped: API responses are large JSON and compress ~10x.
+ * The file holds whatever the APIs returned to this user's token, so it is
+ * created readable by this user only.
  */
 export class SqliteCache implements HttpCache {
   readonly #db: DatabaseSync;
+  readonly #maxBytes: number;
 
-  constructor(path: string) {
-    if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
+  constructor(path: string, options: SqliteCacheOptions = {}) {
+    this.#maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+    if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.#db = new DatabaseSync(path);
+    if (path !== ":memory:") {
+      try {
+        chmodSync(path, 0o600);
+      } catch {
+        // Filesystems without POSIX permissions: the directory mode above is the best we can do.
+      }
+    }
     this.#db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA busy_timeout = 5000;
@@ -102,6 +120,7 @@ export class SqliteCache implements HttpCache {
       );
     `);
     this.prune(OPEN_PRUNE_GRACE_MS);
+    this.evictToSize(this.#maxBytes);
   }
 
   get(key: string): CacheEntry | undefined {
@@ -109,14 +128,29 @@ export class SqliteCache implements HttpCache {
       .prepare("SELECT status, body, etag, fetched_at, ttl_ms FROM http_cache WHERE key = ?")
       .get(key) as Row | undefined;
     if (!row) return undefined;
-    return {
-      status: row.status,
+    let body: string;
+    try {
       // Rows written before compression was added are plain text.
-      body: typeof row.body === "string" ? row.body : gunzipSync(row.body).toString("utf8"),
-      etag: row.etag,
-      fetchedAt: row.fetched_at,
-      ttlMs: row.ttl_ms,
-    };
+      body = typeof row.body === "string" ? row.body : gunzipSync(row.body).toString("utf8");
+    } catch {
+      // A damaged row is a cache miss, not a broken tool.
+      this.delete(key);
+      return undefined;
+    }
+    return { status: row.status, body, etag: row.etag, fetchedAt: row.fetched_at, ttlMs: row.ttl_ms };
+  }
+
+  /** Deletes the oldest entries until the stored bodies fit in `maxBytes`. Returns how many went. */
+  evictToSize(maxBytes: number): number {
+    let removed = 0;
+    while (this.stats().bytes > maxBytes) {
+      const result = this.#db
+        .prepare("DELETE FROM http_cache WHERE key IN (SELECT key FROM http_cache ORDER BY fetched_at ASC LIMIT 50)")
+        .run();
+      if (Number(result.changes) === 0) break;
+      removed += Number(result.changes);
+    }
+    return removed;
   }
 
   set(key: string, entry: CacheEntry): void {
