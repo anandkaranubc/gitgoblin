@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { access, lstat, mkdir, readFile, realpath, stat } from "node:fs/promises";
+import { access, lstat, mkdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { isAbsolute, join, posix, relative, sep } from "node:path";
 import { promisify } from "node:util";
 
@@ -88,9 +88,31 @@ const GIT_ENV: NodeJS.ProcessEnv = Object.fromEntries(
 );
 GIT_ENV.GIT_TERMINAL_PROMPT = "0";
 GIT_ENV.LC_ALL = "C";
+// The user's own git configuration must not apply to repositories chosen by someone else: no system or global config
+// (git-lfs filters, credential helpers, url rewrites), and git-lfs never downloads objects a repository points at.
+GIT_ENV.GIT_CONFIG_NOSYSTEM = "1";
+GIT_ENV.GIT_CONFIG_GLOBAL = process.platform === "win32" ? "NUL" : "/dev/null";
+GIT_ENV.GIT_LFS_SKIP_SMUDGE = "1";
+
+/**
+ * Settings on every git call, ahead of the subcommand, so neither a cloned repository nor a checkout's own config
+ * (`--local`) can change them: symlinks checked out as files, https as the only transport (no file://, ssh or ext::),
+ * no credential helper (public repositories only), no hooks, no filesystem monitor, no LFS filters.
+ */
+export const SAFE_GIT_CONFIG = [
+  "-c", "core.symlinks=false",
+  "-c", "protocol.allow=never",
+  "-c", "protocol.https.allow=always",
+  "-c", "credential.helper=",
+  "-c", `core.hooksPath=${process.platform === "win32" ? "NUL" : "/dev/null"}`,
+  "-c", "core.fsmonitor=false",
+  "-c", "filter.lfs.smudge=",
+  "-c", "filter.lfs.process=",
+  "-c", "filter.lfs.required=false",
+];
 
 export async function git(args: string[], cwd: string, timeoutMs = 120_000): Promise<string> {
-  const { stdout } = await execFileAsync("git", args, {
+  const { stdout } = await execFileAsync("git", [...SAFE_GIT_CONFIG, ...args], {
     cwd,
     env: GIT_ENV,
     timeout: timeoutMs,
@@ -108,7 +130,7 @@ export interface CloneOptions {
   cacheDir: string;
   /** Limit history for very large repositories. */
   depth?: number | undefined;
-  timeoutMs?: number;
+  timeoutMs?: number | undefined;
 }
 
 export interface CloneResult {
@@ -128,13 +150,26 @@ export function looksLikeSha(ref: string | undefined): boolean {
  * `ref.ref` may be a branch, a tag, or a commit id; commits are fetched after a default-branch clone,
  * because `--branch` only accepts named refs.
  */
+/**
+ * Where a repository's clone lives in the cache: one directory per host, owner and name, so codeberg.org/a/b and
+ * github.com/a/b never share a clone (owner and name are validated identifiers, so the path cannot escape).
+ */
+export function cloneDirFor(cacheDir: string, ref: Pick<RepoRef, "host" | "owner" | "name">): string {
+  return join(cacheDir, "repos", ref.host.toLowerCase(), ref.owner, ref.name);
+}
+
 export async function ensureClone(ref: RepoRef, options: CloneOptions): Promise<CloneResult> {
   const started = Date.now();
-  const dir = join(options.cacheDir, "repos", `${ref.owner}__${ref.name}`);
+  const dir = cloneDirFor(options.cacheDir, ref);
   const url = `https://${ref.host}/${ref.owner}/${ref.name}.git`;
   const timeoutMs = options.timeoutMs ?? 600_000;
   const target = ref.ref ?? "HEAD";
 
+  // Reuse a clone only if it was made from this exact URL; anything else is replaced, never fetched into.
+  if (await pathExists(join(dir, ".git"))) {
+    const origin = (await git(["config", "--get", "remote.origin.url"], dir, 30_000).catch(() => "")).trim();
+    if (origin !== url) await rm(dir, { recursive: true, force: true });
+  }
   if (await pathExists(join(dir, ".git"))) {
     await git(["config", "core.autocrlf", "false"], dir, timeoutMs).catch(() => undefined); // clones made before this setting
     if (looksLikeSha(ref.ref)) {
@@ -147,7 +182,7 @@ export async function ensureClone(ref: RepoRef, options: CloneOptions): Promise<
     return { repo: openRepo(dir), cloneMs: Date.now() - started, fresh: false };
   }
 
-  await mkdir(join(options.cacheDir, "repos"), { recursive: true });
+  await mkdir(join(dir, ".."), { recursive: true });
   const sha = looksLikeSha(ref.ref);
   // Files as committed: Windows' default core.autocrlf would add \r to every line the analyzers read.
   const args = ["clone", "--quiet", "-c", "core.autocrlf=false", "-c", "core.eol=lf", "--filter=blob:none", "--single-branch", "--tags"];

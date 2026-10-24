@@ -17,6 +17,8 @@ import {
 } from "./types.ts";
 
 interface RestRepo {
+  private?: boolean;
+  visibility?: string;
   name: string;
   owner: { login: string };
   default_branch: string;
@@ -40,6 +42,8 @@ interface RestRepo {
 
 export async function fetchRepoMeta(api: GitHubApi, owner: string, name: string): Promise<RepoMeta> {
   const r = await api.rest<RestRepo>(`/repos/${owner}/${name}`);
+  // gitgoblin reads public repositories only; a token that can see a private one must not turn it into analysis input.
+  if (r.private || (r.visibility && r.visibility !== "public")) throw new PrivateRepositoryError(owner, name);
   const spdx = r.license?.spdx_id;
   return {
     owner: r.owner.login,
@@ -288,4 +292,12 @@ function toPr(p: GqlPr | GqlPrLite): PrSample {
     lastComments: present("lastComments" in p ? p.lastComments?.nodes : undefined).map(toComment),
     reviews,
   };
+}
+
+/** The repository exists but is not public. */
+export class PrivateRepositoryError extends Error {
+  constructor(owner: string, name: string) {
+    super(`${owner}/${name} is private; gitgoblin analyzes public repositories only`);
+    this.name = "PrivateRepositoryError";
+  }
 }
