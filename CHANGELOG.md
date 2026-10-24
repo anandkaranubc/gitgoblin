@@ -41,7 +41,8 @@ a pull request a maintainer would want to merge.
 - `contribute` has an AI agent investigate, plan, implement and verify one opportunity in a local
   clone, gets an independent review, and prepares a pull request written for the maintainers who
   will read it. It asks before running the agent, before implementing the plan and before
-  publishing; nothing is pushed or posted without that last yes.
+  publishing; nothing is pushed or posted until you type `publish` at that last question, and keys
+  pressed before a question appears are discarded, so a `y` typed ahead cannot answer it.
 - The opportunity picker marks the ones the engine would refuse (`!`, dependency bumps among them:
   the agent works offline and cannot regenerate a lockfile, so it stops before spending anything)
   and the ones intel doubts (`?`), and Enter skips both. Once one is chosen, `contribute` says which of
