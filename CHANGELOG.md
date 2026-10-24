@@ -26,6 +26,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - On GitLab, `analyze` no longer offers an issue as untouched when GitLab counts merge requests for
   it that could not be read; it says to check them first. Large Gitea and Forgejo repositories get
   the same shallow clone as large GitHub ones.
+- `analyze` ranks issues closer to what outsiders actually fix: long discussions and issues open
+  for over two years rank lower, documentation issues higher, and comment count no longer adds
+  value. In a backtest on 27 repositories the new order put more outsider-fixed issues in each
+  repository's top five.
 
 ## gitgoblin 0.1.1 - 2026-10-24
 
@@ -54,6 +58,8 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   easy fix for outsiders, and a single failed run is not called a failing streak.
 - On GitLab, an issue with merge requests that could not be read is no longer offered as untouched,
   and large Gitea and Forgejo repositories are cloned shallowly like large GitHub ones.
+- The analyze tool ranks issues closer to what outsiders fix: long discussions and issues open
+  for over two years rank lower, documentation issues higher.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 

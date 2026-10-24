@@ -364,11 +364,12 @@ export function issueSignals(issue: IssueSample, a: IssueAssessment, now: Date, 
   if (a.confirmedLabel) { value += 0.15; valueWhy.push(`labelled "${a.confirmedLabel}"`); }
   if (a.endorsed) { value += 0.1; valueWhy.push("maintainer endorsed in comments"); }
   if (issue.reactions > 0) { value += Math.min(0.15, issue.reactions * 0.02); valueWhy.push(`${issue.reactions} reactions`); }
-  if (issue.commentCount >= 3) { value += 0.05; valueWhy.push(`${issue.commentCount} comments`); }
   if (a.hasTrace) { value += 0.1; valueWhy.push("crash or stack trace reported"); }
   if (hinted) { value += 0.05; valueWhy.push("selected by discovery"); }
+  // Outcome backtest (scripts/backtest-outcomes.ts): issues open for more than two years were fixed by outsiders at
+  // well under half the rate of younger ones in the same repository, whether or not they had recent activity.
   if (age > 365 * 4 && idle > 365 * 2) { value *= 0.55; valueWhy.push("many years old with no recent activity; likely stale or implicitly declined"); }
-  else if (age > 730 && idle > 365) { value *= 0.8; valueWhy.push("old and quiet; may be outdated"); }
+  else if (age > 730) { value *= 0.8; valueWhy.push(idle > 365 ? "old and quiet; may be outdated" : "open for over two years; outsiders rarely land fixes for issues this old"); }
 
   let feasibility = 0.4;
   const feasWhy: string[] = [];
@@ -379,6 +380,10 @@ export function issueSignals(issue: IssueSample, a: IssueAssessment, now: Date, 
   if (a.hard) { feasibility -= 0.2; feasWhy.push("labelled as hard or needing design"); }
   if (feature) { feasibility -= 0.1; feasWhy.push("features need design agreement"); }
   if (review && review.confidence >= 0.75 && !review.actionable) { feasibility -= 0.15; feasWhy.push(`model: ${review.rationale}`); }
+  // Long threads go with fewer outsider fixes (the problem is contested, or harder than it looks); docs changes with more.
+  if (issue.commentCount >= 10) { feasibility -= 0.1; feasWhy.push(`${issue.commentCount} comments: read the whole discussion first`); }
+  else if (issue.commentCount >= 5) { feasibility -= 0.05; feasWhy.push(`${issue.commentCount} comments to read first`); }
+  if (a.isDocs) { feasibility += 0.1; feasWhy.push("documentation change"); }
   if (feasWhy.length === 0) feasWhy.push("no reproduction, label or file hints; expect investigation");
 
   // An issue that ends by asking maintainers to pick an approach needs their answer before code. Until a maintainer
