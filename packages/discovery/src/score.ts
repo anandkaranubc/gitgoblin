@@ -66,7 +66,20 @@ export function scoreRepo(repo: EnrichedRepo, goal: Goal, options: ScoreOptions)
     reasons.push({ signal: "jitter", weight: nudge, detail: "random nudge for serendipity" });
   }
 
-  return { score: round(clamp01(score)), reasons: reasons.map((r) => ({ ...r, weight: round(r.weight) })), signals, evidence };
+  score = clamp01(score);
+  if (profile.scale) {
+    // The scale's effect is reported on the scaling signal's own reason, so `explain` shows one row per signal.
+    const scaled = score * profile.scale.factor(signals);
+    const effect = scaled - score;
+    const own = reasons.find((r) => r.signal === profile.scale!.signal);
+    if (own) own.weight += effect;
+    else reasons.push({ signal: profile.scale.signal, weight: effect, detail: describe(profile.scale.signal, repo, signals, evidence, false) });
+    // Keep signals sorted by effect and bonuses after them, as before scaling.
+    reasons.splice(0, contributions.length, ...reasons.slice(0, contributions.length).sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight)));
+    score = scaled;
+  }
+
+  return { score: round(score), reasons: reasons.map((r) => ({ ...r, weight: round(r.weight) })), signals, evidence };
 }
 
 function round(value: number): number {

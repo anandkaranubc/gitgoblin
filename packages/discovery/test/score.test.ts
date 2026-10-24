@@ -55,12 +55,24 @@ describe("scoreRepo", () => {
     expect(full.reasons.map((r) => r.signal)).toContain("busFactor");
   });
 
-  it("explains acceptance without weighing it in any goal yet", () => {
-    for (const goal of GOALS) expect(GOAL_PROFILES[goal].weights.acceptance).toBeUndefined();
+  it("scales the contribute score by acceptance and reports the effect on the acceptance reason", () => {
+    const scale = GOAL_PROFILES.contribute.scale!;
+    expect(scale.signal).toBe("acceptance");
+    expect(scale.factor({ acceptance: 0 })).toBe(0.5);
+    expect(scale.factor({ acceptance: 1 })).toBe(1);
+    expect(scale.factor({})).toBe(0.75);
+    for (const goal of GOALS) {
+      expect(GOAL_PROFILES[goal].weights.acceptance).toBeUndefined();
+      if (goal !== "contribute") expect(GOAL_PROFILES[goal].scale).toBeUndefined();
+    }
     const repo = healthyLibrary();
     repo.issueStats = { ...repo.issueStats!, pastYear: { ...repo.issueStats!.pastYear, mergedPullRequests: 6 } };
-    const reason = scoreRepo(repo, "contribute", { now: NOW }).reasons.find((r) => r.signal === "acceptance");
-    expect(reason).toMatchObject({ weight: 0, detail: "merged 10% of pull requests in the past year (6 of 60)" });
+    const { score, reasons } = scoreRepo(repo, "contribute", { now: NOW });
+    const acceptance = reasons.find((r) => r.signal === "acceptance")!;
+    expect(acceptance.detail).toBe("merged 10% of pull requests in the past year (6 of 60)");
+    // Scaled by 0.55, so the reason carries the score lost: unscaled minus scaled.
+    expect(acceptance.weight).toBeCloseTo(score - score / 0.55, 2);
+    expect(acceptance.weight).toBeLessThan(0);
   });
 
   it("explains itself with human-readable evidence", () => {

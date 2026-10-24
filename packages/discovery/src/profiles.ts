@@ -11,6 +11,11 @@ export interface GoalProfile {
   exclude(repo: EnrichedRepo, evidence: Evidence): string | undefined;
   /** Extra score adjustments, each explained. */
   bonuses(repo: EnrichedRepo, signals: Signals, evidence: Evidence): Reason[];
+  /**
+   * Scales the final score by a signal that should multiply the others rather than average with
+   * them: a project that never merges outside work is a poor place to contribute however active it is.
+   */
+  scale?: { signal: SignalName; factor(signals: Signals): number } | undefined;
 }
 
 const YEAR = 365;
@@ -33,6 +38,10 @@ export const GOAL_PROFILES: Record<Goal, GoalProfile> = {
       if ((evidence.daysSincePush ?? 0) > 180) return "no pushes in the last 6 months";
       return undefined;
     },
+    // A newcomer's pull request is merged more often where many pull requests are, and stars point
+    // the other way; a project merging none keeps half its score, unknown keeps three quarters.
+    // packages/eval/docs/design.md records the backtest behind the numbers.
+    scale: { signal: "acceptance", factor: (signals) => (signals.acceptance === undefined ? 0.75 : 0.5 + 0.5 * signals.acceptance) },
     bonuses: (_repo, _signals, evidence) => {
       const reasons: Reason[] = [];
       if (evidence.goodFirstIssues) {
