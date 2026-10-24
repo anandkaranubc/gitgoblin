@@ -7,16 +7,16 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.1.2 - Unreleased
 
+- `discover contribute` gets each repository's GitHub details again (starter issues, contributing
+  guide, recent merges). It asked for 20 repositories per request, which GitHub timed out on with
+  HTTP 502, and one failed request dropped the details of every candidate. It now asks for 10 at a
+  time, splits a request GitHub cannot finish, and keeps what it fetched.
 - `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
   requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
   of putting it at the top. One failed run is reported as a single failure, not as "failing since".
 
 ## gitgoblin 0.1.1 - 2026-10-24
 
-- `discover contribute` gets each repository's GitHub details again (starter issues, contributing
-  guide, recent merges). It asked for 20 repositories per request, which GitHub timed out on with
-  HTTP 502, and one failed request dropped the details of every candidate. It now asks for 10 at a
-  time, splits a request GitHub cannot finish, and keeps what it fetched.
 - `contribute --install-browsers` downloads the browsers a project's Playwright test suite needs,
   with the project's own Playwright, after the install; the run says when the tests need them.
   0.1.0 offered this only through `gitgoblin-engine run --install-browsers`.
