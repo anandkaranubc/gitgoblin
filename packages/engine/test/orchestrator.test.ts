@@ -394,6 +394,25 @@ describe("runContribution", () => {
     expect(infos.join("\n")).toMatch(/\(strict\).*install limited to package registries/);
   });
 
+  it.skipIf(!detectHostSandbox())("limits the install to package registries by default, without strict", async () => {
+    const repo = await createFixtureRepo();
+    const probe = "node -e \"console.log('proxy=' + (process.env.HTTPS_PROXY ? 'set' : 'unset'))\"";
+    const task = { ...fixtureTask(repo), commands: { install: probe, test: "npm test" } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(result.status).toBe("awaiting_approval");
+    expect(readFileSync(path.join(result.runDir, "install-output.txt"), "utf8")).toContain("proxy=set");
+    expect(readFileSync(path.join(result.runDir, "events.jsonl"), "utf8")).toMatch(/"phase":"install","type":"end".*"network":"registries"/);
+  });
+
+  it.skipIf(!detectHostSandbox())("opens the install's network only when asked to", async () => {
+    const repo = await createFixtureRepo();
+    const probe = "node -e \"console.log('proxy=' + (process.env.HTTPS_PROXY ? 'set' : 'unset'))\"";
+    const task = { ...fixtureTask(repo), commands: { install: probe, test: "npm test" } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, installNetwork: "open", runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(readFileSync(path.join(result.runDir, "install-output.txt"), "utf8")).toContain("proxy=unset");
+    expect(readFileSync(path.join(result.runDir, "events.jsonl"), "utf8")).toMatch(/"phase":"install","type":"end".*"network":"open"/);
+  });
+
   it("records when repository commands ran without an OS sandbox", async () => {
     const repo = await createFixtureRepo();
     const result = await run(happyPath, [], { checkIsolation: "none" })(repo, workdir());
@@ -475,6 +494,22 @@ describe("runContribution", () => {
       expect(c.timeoutMs).toBeLessThanOrEqual(10 * 60_000);
     }
     expect(calls[1]!.timeoutMs!).toBeLessThanOrEqual(calls[0]!.timeoutMs!);
+  });
+
+  it("restores tracked files the install rewrote, so the change carries none of that churn", async () => {
+    const repo = await createFixtureRepo();
+    writeFileSync(path.join(repo, "package-lock.json"), JSON.stringify({ name: "fixture", lockfileVersion: 3, packages: { "": {}, "node_modules/gone": { version: "1.0.0" } } }, null, 2));
+    await git(["add", "package-lock.json"], repo, env);
+    await git(["commit", "-q", "-m", "lockfile"], repo, env);
+    // The install drops an entry from the committed lockfile, as npm does for workspaces missing from the tree.
+    const install = "node -e \"require('fs').writeFileSync('package-lock.json', JSON.stringify({ name: 'fixture', lockfileVersion: 3, packages: { '': {} } }))\"";
+    const task = { ...fixtureTask(repo), commands: { install, test: "npm test" } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(result.status).toBe("awaiting_approval");
+    const verification = JSON.parse(readFileSync(path.join(result.runDir, "verification-1.json"), "utf8"));
+    expect(verification.diff.changedFiles).not.toContain("package-lock.json");
+    expect(readFileSync(path.join(result.runDir, "events.jsonl"), "utf8")).toMatch(/"phase":"install","type":"end".*"restored":\["package-lock.json"\]/);
+    expect(readFileSync(path.join(result.runDir, "report.md"), "utf8")).toMatch(/install rewrote package-lock\.json; restored/);
   });
 
   it("reports a failed phase instead of throwing", async () => {

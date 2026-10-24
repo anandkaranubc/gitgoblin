@@ -48,9 +48,10 @@ issue to trigger.
   and build commands the engine runs on your machine run inside an OS sandbox
   when one exists (`sandbox-exec` on macOS, `bwrap` on Linux): writes only to
   the checkout and tool caches, credential files unreadable, no network except
-  during install. A change that edits what those commands execute (package
-  scripts, Makefiles, test-runner configuration) must stop for a person before
-  the engine runs it. A way around either is a vulnerability.
+  during install, and then only to package registries. A change that edits
+  what those commands execute (package scripts, Makefiles, test-runner
+  configuration) must stop for a person before the engine runs it. A way
+  around any of these is a vulnerability.
 - **Credentials never reach the agent.** GitHub tokens, cloud credentials, and
   anything else beyond what the agent needs for model access must stay in the
   operator's process.
@@ -71,12 +72,15 @@ refusing to do something.
   the token when you are done experimenting.
 - Treat every prepared pull request as untrusted until you have read the diff
   yourself. Approval is the safety boundary; use it.
-- Keep the sandboxes on. Even inside one, a repository's install script runs
-  as you with network access, so for a repository you do not trust, use
-  `--check-isolation strict` (on `gitgoblin contribute` and `gitgoblin-engine
-  run`), which also hides your home directory from its commands and limits its
-  install to package registries, or run the engine in a container. `--no-sandbox` and `--check-isolation none` are for platforms
-  without a sandbox.
+- Keep the sandboxes on. Inside one, a repository's install script runs as
+  you but reaches only package registries; `--install-network open` (on
+  `gitgoblin contribute` and `gitgoblin-engine run`) lifts that for a
+  repository that needs other hosts.
+  For a repository you do not trust, also use `--check-isolation strict` (on
+  `gitgoblin contribute` and `gitgoblin-engine run`), which hides your home
+  directory from its commands, or run the engine in a container. Without an
+  OS sandbox the install's network cannot be limited, and the run says so;
+  `--no-sandbox` and `--check-isolation none` are for platforms without one.
 - Run it on repositories you are allowed to contribute to. Discovery and
   analysis use public read-only data, but publishing a pull request is an
   action in someone else's project. See [docs/etiquette.md](docs/etiquette.md).

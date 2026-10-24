@@ -117,6 +117,16 @@ export function atIntake(task: Task): Decision {
       questions: ["Has the original author been asked, and may their work be continued with co-authorship?"],
     };
   }
+  if (task.kind === "dependency") {
+    // The agent's shell is offline and verification does not re-run the install, so a bump would
+    // edit the manifest without a matching lockfile and still pass its checks against the old
+    // packages. The repository's dependency bot, or a maintainer with network access, does this well.
+    return {
+      action: "escalate",
+      reason: "updating a locked dependency needs the lockfile regenerated with network access, which the agent does not have",
+      questions: ["Should the repository's dependency bot or a maintainer run this update (for example `npm update <package>`), or is there a code change around it to make instead?"],
+    };
+  }
   if (task.kind === "hygiene" && task.files.length === 0) {
     return {
       action: "escalate",

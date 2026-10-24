@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { DiscoveryQuery, DiscoveryResult, Goal, RepoRef } from "@gitgoblin/core";
 import { GOAL_DESCRIPTIONS, GOALS, parseRepoRef, sameRepo } from "@gitgoblin/core";
-import type { CheckIsolation, Effort, Reporter } from "@gitgoblin/engine";
+import type { CheckIsolation, Effort, Reporter, RunOptions } from "@gitgoblin/engine";
 import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/intel";
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
 import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
@@ -88,6 +88,8 @@ const defaultRuntime: Runtime = {
 
 const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
 const ISOLATIONS: readonly CheckIsolation[] = ["auto", "sandbox", "strict", "none"];
+type InstallNetwork = NonNullable<RunOptions["installNetwork"]>;
+const INSTALL_NETWORKS: readonly InstallNetwork[] = ["registries", "open"];
 
 /** What each isolation means for the repository's own commands, in the words of the question the person answers. */
 const ISOLATION_WORDS: Record<CheckIsolation, string | undefined> = {
@@ -137,6 +139,11 @@ function repoArgument(value: string): RepoRef {
   const ref = parseRepoRef(value);
   if (!ref) throw new InvalidArgumentError(`Expected owner/name or a repository URL, got "${value}"`);
   return ref;
+}
+
+function installNetworkArgument(value: string): InstallNetwork {
+  if ((INSTALL_NETWORKS as readonly string[]).includes(value)) return value as InstallNetwork;
+  throw new InvalidArgumentError(`Expected one of ${INSTALL_NETWORKS.join(", ")}, got "${value}"`);
 }
 
 function isolationArgument(value: string): CheckIsolation {
@@ -403,8 +410,13 @@ export function buildProgram(runtime: Runtime): Command {
       `how the repository's own install and test commands run here, one of ${ISOLATIONS.join(", ")} (default auto: an OS sandbox when available; strict also hides your home directory, for repositories you do not trust)`,
       isolationArgument,
     )
+    .option(
+      "--install-network <mode>",
+      `what the repository's install may reach under an OS sandbox, one of ${INSTALL_NETWORKS.join(", ")} (default registries: package registries only; open allows any host, for projects that install from elsewhere)`,
+      installNetworkArgument,
+    )
     .option("-g, --goal <goal>", "discovery goal used for hints", goalArgument, "contribute")
-    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: string; workdir?: string; model?: string; effort?: Effort; checkIsolation?: CheckIsolation; goal: Goal }) => {
+    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: string; workdir?: string; model?: string; effort?: Effort; checkIsolation?: CheckIsolation; installNetwork?: InstallNetwork; goal: Goal }) => {
       if (!runtime.canPrompt) {
         throw new Error("contribute needs an interactive terminal: it asks before running an agent and again before publishing anything.");
       }
@@ -452,7 +464,12 @@ export function buildProgram(runtime: Runtime): Command {
       // attaches a git worktree to that checkout. The person approves what will actually happen.
       const localPath = report.profile.repo.localPath;
       const where = localPath ? `a git worktree of ${localPath}` : "a local clone";
-      const isolationWords = options.checkIsolation ? ISOLATION_WORDS[options.checkIsolation] : undefined;
+      const isolationWords = [
+        options.checkIsolation ? ISOLATION_WORDS[options.checkIsolation] : undefined,
+        options.installNetwork === "open" ? "the repository's install allowed to reach any host" : undefined,
+      ]
+        .filter(Boolean)
+        .join(", and ");
       const proceed = await confirm(
         runtime,
         `${refusal ? "Run it anyway" : "Run an AI agent"} against ${slug(ref)} in ${where}${isolationWords ? `, with ${isolationWords}` : ""}, spending up to $${maxCostUsd.toFixed(2)}? Nothing is published without another explicit yes.`,
@@ -470,6 +487,7 @@ export function buildProgram(runtime: Runtime): Command {
           ...(options.model ? { model: options.model } : {}),
           ...(options.effort ? { effort: options.effort } : {}),
           ...(options.checkIsolation ? { checkIsolation: options.checkIsolation } : {}),
+          ...(options.installNetwork ? { installNetwork: options.installNetwork } : {}),
           // Newer engines pass what they know about the install and the baseline as a second argument.
           approvePlan: async (plan, context?: PlanContextLike) => {
             const warning = describeEnvironment(context);

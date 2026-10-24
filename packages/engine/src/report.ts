@@ -23,6 +23,8 @@ export interface ReportInput {
   prTitle?: string;
   /** How the repository's own commands were isolated on this machine: sandbox-exec, bwrap or none. */
   checkIsolation?: string;
+  /** Tracked files the install rewrote and the engine put back as committed. */
+  installRestored?: string[];
   /** The last implementation's notes; their environment notes appear here and never in the pull request. */
   notes?: ImplementationNotes;
 }
@@ -39,6 +41,7 @@ export function renderReport(input: ReportInput): string {
     result.branch ? `- Branch: ${result.branch}` : "",
     result.workspace ? `- Workspace: ${result.workspace}` : "",
     input.checkIsolation ? `- Repository commands ran ${input.checkIsolation === "none" ? "without an OS sandbox" : `under ${input.checkIsolation}`}` : "",
+    input.installRestored?.length ? `- The install rewrote ${input.installRestored.join(", ")}; restored, the change is measured against the committed files` : "",
     "",
   ];
   if (result.questions.length) {

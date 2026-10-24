@@ -19,7 +19,7 @@ Last updated 2026-10-23.
 | Prepare a contribution with an AI agent, then publish it after you approve | `contribute`, `runs`, `show`, `publish` | Experimental; needs an Anthropic API key or Claude Code login, and each run costs money |
 | MCP server and agent skill for Claude Code, Codex, Cursor, Gemini CLI, VS Code and others | | Released on GitHub and listed in the MCP Registry; [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) says which clients were checked |
 
-`analyze` reads GitHub, GitLab and Gitea or Forgejo repositories (Codeberg among them); discovery and publishing are GitHub-only. Developed on macOS and tested on Linux in CI; Windows is untested.
+`analyze` reads GitHub, GitLab and Gitea or Forgejo repositories (Codeberg among them); discovery and publishing are GitHub-only. Developed on macOS and tested in CI on Linux and Windows; on Windows, `discover`, `analyze` and the MCP server work, and `contribute` does not, because its sandbox for repository commands exists only on macOS and Linux.
 
 ## Being built now
 

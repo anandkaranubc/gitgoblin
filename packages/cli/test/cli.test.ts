@@ -873,3 +873,25 @@ describe("clean", () => {
     expect(err.join("\n")).toMatch(/run id .* or --finished/);
   });
 });
+
+describe("contribute --install-network", () => {
+  it("leaves the engine's default alone, and passes open through with a plain warning in the first question", async () => {
+    const siblings = fakeSiblings();
+    const plainRun = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], plainRun.runtime)).toBe(0);
+    expect((siblings.calls[1]?.args[1] as RunOptions).installNetwork).toBeUndefined();
+    expect(plainRun.asked[0]).not.toMatch(/any host/);
+
+    const open = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--install-network", "open", "--workdir", siblings.workdir], open.runtime)).toBe(0);
+    expect((siblings.calls.at(-1)?.args[1] as RunOptions).installNetwork).toBe("open");
+    expect(open.asked[0]).toContain("with the repository's install allowed to reach any host");
+  });
+
+  it("rejects an unknown value as a usage error", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["contribute", "acme/widget", "--install-network", "everywhere", "--workdir", siblings.workdir], runtime)).toBe(2);
+    expect(err.join("\n")).toMatch(/registries, open/);
+  });
+});

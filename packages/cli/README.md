@@ -128,6 +128,7 @@ There is no flag to skip any of them. When the engine reports that the repositor
 | `--workdir <dir>` | Where runs and clones live (default `$GITGOBLIN_WORKDIR` or `~/.gitgoblin`). |
 | `--model <id>`, `--effort <level>` | Model and effort for the engine; effort is `low`, `medium`, `high`, `xhigh` or `max`. |
 | `--check-isolation <mode>` | How the repository's own install and test commands run on your machine: `auto` (default, an OS sandbox when one is available), `sandbox` (required), `strict` (required, and your home directory is hidden except toolchains and caches; use it for repositories you do not trust) or `none`. Anything but the default is stated in the first question. |
+| `--install-network <mode>` | What the repository's install may reach when an OS sandbox is in use: `registries` (default, package registries only, including GitHub-hosted dependencies) or `open` (any host, for projects that install from elsewhere; stated in the first question). When the install fails because a host was refused, `contribute` names it and this flag. |
 | `-g, --goal <goal>` | Discovery goal used for the hints. |
 
 Without `--opportunity` or `--issue` it lists the opportunities, best first, with

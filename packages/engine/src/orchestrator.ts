@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
 import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
-import { forwardedCommand, REGISTRY_HOSTS, startEgressProxy, proxyEnv, type EgressProxy } from "./egress.ts";
+import { forwardedCommand, REGISTRY_HOSTS, startEgressProxy, proxyEnv, upstreamProxyFrom, type EgressProxy } from "./egress.ts";
 import { execShell, tail } from "./exec.ts";
 import { commandEnv, isInside, isSafeCommand, scrubEnv } from "./guard.ts";
 import { hostSandboxFor, OFFLINE_ENV, specFor, type CheckIsolation, type HostIsolation } from "./hostbox.ts";
@@ -109,7 +109,13 @@ export interface RunOptions {
   /** Shallow clone depth for very large repositories; omitted means full history. */
   cloneDepth?: number;
   /**
-   * Hosts the install may reach under strict isolation, besides the public package registries
+   * What the repository's install may reach when an OS sandbox is in use: "registries" (default)
+   * sends it through the engine's allowlisting proxy, "open" lets it reach any host. Without an OS
+   * sandbox the install's network cannot be limited.
+   */
+  installNetwork?: "registries" | "open";
+  /**
+   * Hosts the install may reach, besides the public package registries
    * (REGISTRY_HOSTS), for example a private registry. Entries starting with "." match subdomains.
    */
   installHosts?: string[];
@@ -234,6 +240,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   const started = Date.now();
   const phases: PhaseSummary[] = [];
   let checkIsolation: string | undefined;
+  let installRestored: string[] = [];
   let lastNotes: ImplementationNotes | undefined;
   let costUsd = 0;
   let workspace: Workspace | undefined;
@@ -305,9 +312,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       reporter.warn("repository commands run on this machine without an OS sandbox (none available or disabled); use a container for repositories you do not trust");
     } else {
       reporter.info(
-        strict
-          ? `repository commands run under ${hostBox.kind} (strict): home directory hidden except toolchains and caches, credential paths hidden, install limited to package registries`
-          : `repository commands run under ${hostBox.kind}: writes limited to the workspace and tool caches, credential paths hidden, network only during install`,
+        `repository commands run under ${hostBox.kind}${strict ? " (strict)" : ""}: writes limited to the workspace and tool caches, ${strict ? "home directory hidden except toolchains and caches, " : ""}credential paths hidden, ${(options.installNetwork ?? "registries") === "registries" ? "install limited to package registries" : "install network open"}, checks offline`,
       );
     }
     // A per-run prefix for what the toolchain installs, so `pip install -e .` lands in a virtualenv
@@ -338,13 +343,16 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       const egressDir = path.join(journal.dir, "egress");
       let installCommand = task.commands.install;
       let installEnv: Record<string, string> = hostEnv;
-      if (strict && hostBox.kind === "sandbox-exec") {
-        egress = await startEgressProxy(hosts);
+      const limitInstall = (options.installNetwork ?? "registries") === "registries";
+      const upstream = upstreamProxyFrom(hostEnv);
+      const egressOptions = upstream ? { upstream } : {};
+      if (limitInstall && hostBox.kind === "sandbox-exec") {
+        egress = await startEgressProxy(hosts, egressOptions);
         installEnv = { ...hostEnv, ...proxyEnv(egress.url) };
-      } else if (strict && hostBox.kind === "bwrap") {
+      } else if (limitInstall && hostBox.kind === "bwrap") {
         mkdirSync(egressDir, { recursive: true });
         const socketPath = path.join(egressDir, "proxy.sock");
-        egress = await startEgressProxy(hosts, { socketPath });
+        egress = await startEgressProxy(hosts, { ...egressOptions, socketPath });
         const forwarded = forwardedCommand(task.commands.install, socketPath);
         installCommand = forwarded.command;
         installEnv = { ...hostEnv, ...forwarded.env };
@@ -364,9 +372,18 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
           await egress.close();
         }
       }
-      if (egress) checkIsolation = `${hostBox.kind} (strict; install limited to package registries${denied.length ? `, refused ${denied.length}: ${denied.slice(0, 5).join(", ")}` : ""})`;
+      if (egress) checkIsolation = `${hostBox.kind} (${strict ? "strict; " : ""}install limited to package registries${denied.length ? `, refused ${denied.length}: ${denied.slice(0, 5).join(", ")}` : ""})`;
+      else if (hostBox.kind !== "none") checkIsolation = `${hostBox.kind} (${strict ? "strict; " : ""}install network open)`;
       journal.text("install-output.txt", denied.length ? `${install.output}\n[gitgoblin] the install tried to reach hosts that are not package registries, refused: ${denied.join(", ")}\n` : install.output);
-      journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs, timedOut: install.timedOut, network: installNetwork, refused: denied, outputTail: tail(install.output, 2000) });
+      // An install can rewrite tracked files (npm drops lockfile entries for workspaces missing from
+      // the tree, formatters run in postinstall). That is not the contribution: put them back as
+      // committed, so every diff from here on is measured against the repository's own files.
+      const restored = await restoreTrackedChanges(workspace.path, env);
+      if (restored.length) {
+        installRestored = restored;
+        reporter.warn(`install rewrote ${restored.join(", ")}; restored, the change is measured against the committed files`);
+      }
+      journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs, timedOut: install.timedOut, network: installNetwork, refused: denied, restored, outputTail: tail(install.output, 2000) });
       if (denied.length) reporter.warn(`install tried to reach hosts that are not package registries (refused): ${denied.join(", ")}`);
       if (install.exitCode !== 0) {
         installFailure = { exitCode: install.exitCode ?? -1, logPath: journal.pathFor("install-output.txt"), timedOut: install.timedOut };
@@ -550,6 +567,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
         ...(review ? { review } : {}),
         ...(delivery ? { prTitle: delivery.prTitle } : {}),
         ...(checkIsolation ? { checkIsolation } : {}),
+        ...(installRestored.length ? { installRestored } : {}),
         ...(lastNotes ? { notes: lastNotes } : {}),
       }),
     );
@@ -663,4 +681,16 @@ export async function cleanRun(runId: string, options: CleanRunOptions = {}): Pr
   }
   journal.event("run", "cleaned", { removed });
   return { removed };
+}
+
+/** Tracked files that differ from HEAD in the working tree, put back as committed. Returns their paths. */
+async function restoreTrackedChanges(wsPath: string, env: Record<string, string>): Promise<string[]> {
+  const status = await git(["status", "--porcelain", "--untracked-files=no", "-z"], wsPath, env).catch(() => "");
+  const paths = status
+    .split("\0")
+    .filter((entry) => entry.length > 3)
+    .map((entry) => entry.slice(3));
+  if (paths.length === 0) return [];
+  await git(["checkout", "HEAD", "--", ...paths], wsPath, env);
+  return paths;
 }

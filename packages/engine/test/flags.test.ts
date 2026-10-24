@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCheckIsolation, parseCloneDepth, parseCostLimit, parseEffort, unsandboxedAllowed } from "../src/flags.ts";
+import { parseCheckIsolation, parseCloneDepth, parseCostLimit, parseEffort, parseInstallNetwork, unsandboxedAllowed } from "../src/flags.ts";
 
 describe("parseCostLimit", () => {
   it("accepts positive numbers", () => {
@@ -43,5 +43,13 @@ describe("unsandboxedAllowed", () => {
     expect(unsandboxedAllowed({})).toBe(false);
     expect(unsandboxedAllowed({ GITGOBLIN_UNSAFE_NO_SANDBOX: "0" })).toBe(false);
     expect(unsandboxedAllowed({ GITGOBLIN_UNSAFE_NO_SANDBOX: "1" })).toBe(true);
+  });
+});
+
+describe("parseInstallNetwork", () => {
+  it("accepts registries and open only", () => {
+    expect(parseInstallNetwork("open")).toBe("open");
+    expect(parseInstallNetwork(undefined)).toBeUndefined();
+    expect(() => parseInstallNetwork("all")).toThrow(/install-network/);
   });
 });
