@@ -16,6 +16,7 @@ import { explainMissingRepository, explainNetworkFailure } from "./errors.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
 import { directorySize, formatBytes, formatRuns, installSummary, isRunId, listRuns, readInstall, readRun } from "./runs.ts";
 import { type IntelModule, type ModuleLoader, importSibling, loadEngine, loadIntel } from "./siblings.ts";
+import { discardTypeAhead } from "./prompt.ts";
 import { plain } from "./text.ts";
 
 /** What the CLI needs from the engine; tests inject a fake. */
@@ -71,6 +72,9 @@ const defaultRuntime: Runtime = {
     return load ? importSibling(name, load) : undefined;
   },
   async ask(question) {
+    // A key pressed during minutes of agent work would otherwise answer this question unread.
+    const { interrupted } = await discardTypeAhead(process.stdin);
+    if (interrupted) process.kill(process.pid, "SIGINT");
     const rl = createInterface({ input: process.stdin, output: process.stderr });
     try {
       return await rl.question(question);
@@ -102,6 +106,13 @@ const ISOLATION_WORDS: Record<CheckIsolation, string | undefined> = {
 async function confirm(runtime: Runtime, question: string): Promise<boolean> {
   const answer = (await runtime.ask(`${question} [y/N] `)).trim().toLowerCase();
   return answer === "y" || answer === "yes";
+}
+
+/** Publishing reaches other people, so it takes a word that a key pressed early cannot type. */
+async function confirmPublish(runtime: Runtime, question: string): Promise<boolean> {
+  const answer = (await runtime.ask(`${question} [type publish, or Enter to stop] `)).trim().toLowerCase();
+  if (answer === "y" || answer === "yes") runtime.stderr(`Publishing takes the word "publish", not ${answer}, so a key pressed early cannot publish for you.`);
+  return answer === "publish";
 }
 
 /** Discovery's view of a repository, passed to intel as hints it validates rather than trusts. */
@@ -477,7 +488,7 @@ export function buildProgram(runtime: Runtime): Command {
         .join(", and ");
       const proceed = await confirm(
         runtime,
-        `${refusal ? "Run it anyway" : "Run an AI agent"} against ${slug(ref)} in ${where}${isolationWords ? `, with ${isolationWords}` : ""}, spending up to $${maxCostUsd.toFixed(2)}? Nothing is published without another explicit yes.`,
+        `${refusal ? "Run it anyway" : "Run an AI agent"} against ${slug(ref)} in ${where}${isolationWords ? `, with ${isolationWords}` : ""}, spending up to $${maxCostUsd.toFixed(2)}? Nothing is published unless you type publish at the end.`,
       );
       if (!proceed) {
         runtime.stdout("Stopped before running the engine.");
@@ -523,7 +534,7 @@ export function buildProgram(runtime: Runtime): Command {
       runtime.stdout(`\nDiff: ${join(result.runDir, "diff.patch")}`);
       runtime.stdout(`Read the diff and the report before publishing. To decide later: gitgoblin publish ${result.runId}${options.workdir ? ` --workdir ${workdir}` : ""}`);
 
-      const publish = await confirm(runtime, "Open a draft pull request on GitHub under your account?");
+      const publish = await confirmPublish(runtime, "Open a draft pull request on GitHub under your account?");
       if (!publish) {
         runtime.stdout(`Not published. The change stays in ${result.runDir}.`);
         return;
@@ -633,7 +644,7 @@ export function buildProgram(runtime: Runtime): Command {
       if (run.prBody) runtime.stdout(plain(run.prBody));
       runtime.stdout(`\nDiff: ${run.diffPath}\nReport: ${join(run.dir, "report.md")}`);
       const draft = !options.ready;
-      const ok = await confirm(runtime, `Push this change and open a ${draft ? "draft" : "ready-for-review"} pull request on GitHub under your account?`);
+      const ok = await confirmPublish(runtime, `Push this change and open a ${draft ? "draft" : "ready-for-review"} pull request on GitHub under your account?`);
       if (!ok) {
         runtime.stdout("Not published.");
         return;
