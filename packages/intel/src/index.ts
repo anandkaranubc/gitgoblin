@@ -7,6 +7,8 @@ import { AnalysisReport, type ContributionOpportunity, RepoRef, type RepoRefInpu
 import { evaluate } from "./evaluate/index.ts";
 import { scanRepo } from "./fs/scan.ts";
 import { ensureClone, openRepo, looksLikeSha } from "./git/repo.ts";
+export { cloneDirFor } from "./git/repo.ts";
+export { PrivateRepositoryError } from "./github/fetch.ts";
 import { FetchGitHubApi, type GitHubApi, GitHubError, discoverToken } from "./github/client.ts";
 import { sharedGitHubApi } from "./github/sources-adapter.ts";
 import { detectForge, fetchForge } from "./forge/index.ts";
@@ -98,7 +100,7 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
   } else {
     const large = (meta?.sizeKb ?? 0) > 300_000;
     log(`cloning (blob:none)${large ? ", shallow history" : ""}`);
-    const clone = await ensureClone(ref, { cacheDir: opts.cacheDir, depth: large ? 2000 : undefined }).catch((error: unknown) => {
+    const clone = await ensureClone(ref, { cacheDir: opts.cacheDir, depth: large ? 2000 : undefined, timeoutMs: options.cloneTimeoutMs }).catch((error: unknown) => {
       // Other forges have no metadata call to fail first; git's own message is the signal.
       if (/repository '[^']*' not found|not found|could not read Username|Authentication failed/i.test((error as Error).message ?? "")) throw new RepositoryNotFoundError(ref);
       throw error;
