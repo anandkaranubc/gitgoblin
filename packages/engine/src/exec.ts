@@ -10,6 +10,11 @@ export interface ExecResult {
   timedOut: boolean;
   /** True when more than `maxOutputBytes` arrived and the start of the output was dropped. */
   truncated: boolean;
+  /**
+   * The first characters of the output, kept even when `output` lost its start: the first error is
+   * usually the one that explains the rest (a browser that would not launch, a missing module).
+   */
+  head?: string;
 }
 
 export interface ExecOptions {
@@ -23,6 +28,7 @@ export interface ExecOptions {
 
 const DEFAULT_TIMEOUT_MS = 10 * 60_000;
 const DEFAULT_MAX_OUTPUT = 512 * 1024;
+const HEAD_CHARS = 16 * 1024;
 /** After the process exits, how long to wait for stray children holding its pipes. */
 const STDIO_GRACE_MS = 2000;
 
@@ -66,13 +72,16 @@ function run(file: string, args: string[], display: string, opts: ExecOptions): 
     installExitHandlers();
     const child = spawn(file, args, { cwd: opts.cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"], detached: true });
     let output = "";
+    let head = "";
     let received = 0;
     let timedOut = false;
     let done = false;
     let graceTimer: NodeJS.Timeout | undefined;
     const append = (chunk: Buffer) => {
       received += chunk.length;
-      output += chunk.toString("utf8");
+      const text = chunk.toString("utf8");
+      if (head.length < HEAD_CHARS) head += text.slice(0, HEAD_CHARS - head.length);
+      output += text;
       if (output.length > maxBytes * 2) output = output.slice(-maxBytes);
     };
     child.stdout.on("data", append);
@@ -95,7 +104,7 @@ function run(file: string, args: string[], display: string, opts: ExecOptions): 
       clearTimeout(timer);
       if (graceTimer) clearTimeout(graceTimer);
       if (child.pid) live.delete(child.pid);
-      resolve({ command: display, exitCode, signal, output: output.slice(-maxBytes), durationMs: Date.now() - started, timedOut, truncated: received > maxBytes });
+      resolve({ command: display, exitCode, signal, output: output.slice(-maxBytes), durationMs: Date.now() - started, timedOut, truncated: received > maxBytes, head });
     };
     child.on("error", (err) => {
       output += `\n${err.message}`;
@@ -121,6 +130,24 @@ export function execShell(command: string, opts: ExecOptions): Promise<ExecResul
 /** Runs an executable with explicit arguments and no shell. Use for git and gh. */
 export function execFile(file: string, args: string[], opts: ExecOptions): Promise<ExecResult> {
   return run(file, args, [file, ...args].join(" "), opts);
+}
+
+/**
+ * The start and the end of a command's output within `maxChars`, with a marker where the middle was
+ * cut. A tail alone loses the first error, which often explains every later one.
+ */
+export function excerpt(result: Pick<ExecResult, "output" | "truncated" | "head">, maxChars = 6000, headChars = 1500): string {
+  const { output } = result;
+  if (!result.truncated && output.length <= maxChars) return output;
+  const start = (result.truncated ? (result.head ?? "") : output).slice(0, headChars);
+  const end = output.slice(-(maxChars - start.length));
+  const omitted = result.truncated ? "the middle of a long output" : `${output.length - start.length - end.length} characters`;
+  return `${start}\n[... ${omitted} omitted ...]\n${end}`;
+}
+
+/** Everything a command printed that was kept: the whole output, or its start and its last part when it was cut. */
+export function keptOutput(result: Pick<ExecResult, "output" | "truncated" | "head">): string {
+  return result.truncated && result.head ? `${result.head}\n[... the middle of the output was too long to keep ...]\n${result.output}` : result.output;
 }
 
 /** Last `maxChars` of a text, with a marker when something was cut. */

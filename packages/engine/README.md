@@ -37,6 +37,7 @@ Each run writes `.gitgoblin/runs/<runId>/`, which other tools may read:
 | `events.jsonl` | one JSON event per line: phases, decisions, isolation, toolchain, install |
 | `install-output.txt` | the install command's output, when it ran |
 | `baseline.json`, `verification-<n>.json` | the repository's checks before and after |
+| `check-baseline-<check>.txt`, `check-verify-<n>-<check>.txt` | each check's whole output (the JSON files keep its start and end) |
 | `investigation.json`, `plan.json`, `implementation-<n>.json`, `review-<n>.json` | each phase's structured output |
 | `diff-<n>.patch` | the change as reviewed in round `n` |
 | `pr.md`, `pr-title.txt`, `diff.patch`, `delivery.json` | the prepared pull request, when the run reached `awaiting_approval` |

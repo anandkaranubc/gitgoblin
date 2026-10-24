@@ -54,6 +54,10 @@ describe("runContribution", () => {
     const runDir = result.runDir;
     const baseline = JSON.parse(readFileSync(path.join(runDir, "baseline.json"), "utf8"));
     expect(baseline.checks[0]).toMatchObject({ name: "test", status: "pass" });
+    // Each check's whole output sits next to the artifacts, per stage.
+    expect(readFileSync(path.join(runDir, "check-baseline-test.txt"), "utf8")).toBe(baseline.checks[0].outputTail);
+    expect(existsSync(path.join(runDir, "check-verify-1-test.txt"))).toBe(true);
+    expect(existsSync(path.join(runDir, "check-verify-1-reproduction.txt"))).toBe(true);
     const verification = JSON.parse(readFileSync(path.join(runDir, "verification-1.json"), "utf8"));
     expect(verification.checks.map((c: { name: string; status: string }) => [c.name, c.status])).toEqual([["test", "pass"], ["reproduction", "pass"]]);
     expect(verification.diff.changedFiles).toEqual(["src/paginate.js", "test/paginate.test.js"]);

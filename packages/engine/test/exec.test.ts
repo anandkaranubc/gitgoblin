@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { execFile, execShell, killAllChildren, liveChildCount, tail } from "../src/exec.ts";
+import { excerpt, execFile, execShell, keptOutput, killAllChildren, liveChildCount, tail } from "../src/exec.ts";
 
 const opts = { cwd: process.cwd(), env: { PATH: process.env["PATH"] ?? "" } };
+
+describe("excerpt", () => {
+  it("returns short output whole and keeps both ends of long output", () => {
+    expect(excerpt({ output: "short", truncated: false })).toBe("short");
+    const long = `FIRST${"x".repeat(10_000)}LAST`;
+    const cut = excerpt({ output: long, truncated: false }, 1000, 100);
+    expect(cut.startsWith("FIRST")).toBe(true);
+    expect(cut.endsWith("LAST")).toBe(true);
+    expect(cut).toContain(`[... ${long.length - 1000} characters omitted ...]`);
+  });
+});
 
 describe("execShell", () => {
   it("captures output and exit code", async () => {
@@ -23,6 +34,20 @@ describe("execShell", () => {
     expect(r.output.length).toBeLessThanOrEqual(1000);
     expect(r.truncated).toBe(true);
     expect((await execShell("echo small", opts)).truncated).toBe(false);
+  });
+
+  it("keeps the start of output it had to cut, where the first error usually is", async () => {
+    const r = await execShell("echo 'Error: firefox would not launch'; yes filler | head -c 50000; echo LAST", { ...opts, maxOutputBytes: 1000 });
+    expect(r.truncated).toBe(true);
+    expect(r.output).not.toContain("firefox");
+    expect(r.head?.startsWith("Error: firefox would not launch")).toBe(true);
+    const short = excerpt(r, 600, 100);
+    expect(short).toContain("Error: firefox");
+    expect(short).toContain("[... the middle of a long output omitted ...]");
+    expect(short.trimEnd().endsWith("LAST")).toBe(true);
+    const kept = keptOutput(r);
+    expect(kept.startsWith("Error: firefox")).toBe(true);
+    expect(kept.trimEnd().endsWith("LAST")).toBe(true);
   });
 
   it("kills every live child when the engine is told to shut down", async () => {
