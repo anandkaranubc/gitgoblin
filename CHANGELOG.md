@@ -25,6 +25,10 @@ a pull request a maintainer would want to merge.
   is marked as possibly fixed; a dependency update an open pull request already makes is skipped;
   generated files and code that only quotes a pattern are not reported. `--llm` adds a second
   opinion from Claude on issue triage; it is off by default, needs an API key and costs money.
+- `analyze` reads public repositories only, and runs git without your own git configuration (no
+  credential helpers, LFS downloads, hooks or transports other than https), so a repository you
+  analyze cannot use your setup. Clones are kept per host, so a same-named repository elsewhere
+  cannot stand in for the one you asked for.
 - The install command `analyze` reports installs what the project declares for development (PEP 735
   dependency groups or real extras, not an assumed `.[dev]`) and installs from a committed lockfile
   without rewriting it (`npm ci`, `pnpm install --frozen-lockfile`, and the yarn and bun equivalents).
