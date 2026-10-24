@@ -258,14 +258,17 @@ export function buildProgram(runtime: Runtime): Command {
       const query = toQuery(goal ?? "explore", options);
       if (query.goal === "explore" && query.randomSeed === undefined) query.randomSeed = Math.floor(Math.random() * 1_000_000);
       const showProgress = Boolean(options.verbose) || (!options.json && runtime.isInteractive);
+      // Warnings (a refused or rate-limited search) mean the ranking may be incomplete; JSON carries them.
+      const warnings: string[] = [];
       const session = await runtime.createEngine({
         onProgress: (event) => {
+          if (event.stage === "warning") warnings.push(event.message);
           if (showProgress) runtime.stderr(`${event.stage}: ${event.message}`);
         },
       });
       try {
         const results = await session.engine.discover(query);
-        if (options.json) runtime.stdout(JSON.stringify({ query, results }, null, 2));
+        if (options.json) runtime.stdout(JSON.stringify({ query, results, warnings }, null, 2));
         else {
           runtime.stdout(formatResults(results, { color: runtime.color }));
           if (query.goal === "explore") runtime.stderr(`seed ${query.randomSeed}: pass --seed ${query.randomSeed} to see these again`);

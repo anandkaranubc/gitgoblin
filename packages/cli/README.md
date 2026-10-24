@@ -52,8 +52,9 @@ description, URL, up to three reasons that helped (`+`), the one that hurt most
 (`−`), and for `contribute` up to two open starter issues. In a terminal it ends
 with the `analyze` command for the top result.
 
-JSON output is `{ query, results }` where each result is a `DiscoveryResult`
-from `@gitgoblin/core`: `repo`, `goal`, `score` (0..1, comparable within a
+JSON output is `{ query, results, warnings }`. `warnings` lists searches that
+were refused or rate limited, so a script can tell a partial ranking from a
+complete one. Each result is a `DiscoveryResult` from `@gitgoblin/core`: `repo`, `goal`, `score` (0..1, comparable within a
 goal), `reasons[]` (`signal`, `weight`, `detail`), `signals`, `evidence`, and
 `issues[]` when available.
 
