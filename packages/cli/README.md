@@ -59,7 +59,9 @@ Ranks repositories for a goal and says why. Goals: `contribute`, `learn`,
 Text output, per result: rank, `owner/name`, stars, language, license, score,
 description, URL, up to three reasons that helped (`+`), the one that hurt most
 (`−`), and for `contribute` up to two open starter issues. In a terminal it ends
-with the `analyze` command for the top result.
+with the `analyze` command for the top result. Warnings that make a ranking
+partial, such as a refused search or GitHub details that could not be read, are
+printed on stderr even when progress is hidden.
 
 JSON output is `{ query, results, warnings }`. `warnings` lists searches that
 were refused or rate limited, so a script can tell a partial ranking from a

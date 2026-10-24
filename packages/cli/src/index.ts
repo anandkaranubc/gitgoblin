@@ -283,6 +283,8 @@ export function buildProgram(runtime: Runtime): Command {
         if (options.json) runtime.stdout(JSON.stringify({ query, results, warnings }, null, 2));
         else {
           runtime.stdout(formatResults(results, { color: runtime.color }));
+          // Without progress on screen, a refused search or missing details would leave a partial ranking unexplained.
+          if (!showProgress) for (const warning of warnings) runtime.stderr(`warning: ${warning}`);
           if (query.goal === "explore") runtime.stderr(`seed ${query.randomSeed}: pass --seed ${query.randomSeed} to see these again`);
           const first = results[0];
           if (first && runtime.isInteractive) runtime.stderr(`Next: gitgoblin analyze ${first.repo.owner}/${first.repo.name}   (profile it and find concrete work to do)`);
