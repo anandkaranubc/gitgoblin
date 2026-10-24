@@ -140,6 +140,9 @@ export function assessIssue(issue: IssueSample, now: Date, repoResponsive: boole
       novelty = 0.05;
       noveltyReason = `PR #${openPr.number} is open${openPr.isDraft ? " (draft)" : ""} and active`;
     }
+  } else if (issue.unreadLinkedPrs) {
+    novelty = 0.5;
+    noveltyReason = `the forge lists ${issue.unreadLinkedPrs} merge request${issue.unreadLinkedPrs === 1 ? "" : "s"} for it that could not be read; check them before starting`;
   } else if (issue.assignees.length > 0) {
     novelty = idle > 90 ? 0.5 : 0.2;
     noveltyReason = `assigned to ${issue.assignees.join(", ")}${idle > 90 ? `, but no activity for ${Math.round(idle)} days` : ""}`;

@@ -10,6 +10,9 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
   requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
   of putting it at the top. One failed run is reported as a single failure, not as "failing since".
+- On GitLab, `analyze` no longer offers an issue as untouched when GitLab counts merge requests for
+  it that could not be read; it says to check them first. Large Gitea and Forgejo repositories get
+  the same shallow clone as large GitHub ones.
 
 ## gitgoblin 0.1.1 - 2026-10-24
 
@@ -36,6 +39,8 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   longer invents a TypeScript check when the repository root has no `tsconfig.json`.
 - A failing CI workflow that needs repository secrets forks do not get is no longer ranked as an
   easy fix for outsiders, and a single failed run is not called a failing streak.
+- On GitLab, an issue with merge requests that could not be read is no longer offered as untouched,
+  and large Gitea and Forgejo repositories are cloned shallowly like large GitHub ones.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 

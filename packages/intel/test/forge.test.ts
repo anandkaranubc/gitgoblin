@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { knownForge, referencedIssues } from "../src/forge/common.ts";
 import { fetchGitea } from "../src/forge/gitea.ts";
 import { fetchGitLab } from "../src/forge/gitlab.ts";
+import { assessIssue } from "../src/analyzers/issues.ts";
 
 function fakeFetch(routes: Record<string, unknown>): typeof fetch & { calls: string[] } {
   const calls: string[] = [];
@@ -62,6 +63,28 @@ describe("fetchGitLab", () => {
   });
 });
 
+describe("GitLab merge requests that could not be read", () => {
+  it("keeps an issue with merge requests from looking untouched when their lookup fails", async () => {
+    const fetchImpl = fakeFetch({
+      "/projects/o%2Fr/issues?state=opened": [{ iid: 4, title: "Crash on empty input", description: "It crashes when the input is empty.", state: "opened", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-02-01T00:00:00Z", closed_at: null, labels: ["bug"], assignees: [], author: { username: "ext" }, closed_by: null, user_notes_count: 0, upvotes: 0, merge_requests_count: 2, discussion_locked: null, web_url: "https://gitlab.com/o/r/-/issues/4" }],
+      "/projects/o%2Fr/issues?state=closed": [],
+      "/merge_requests?state=": [],
+      "/labels": [],
+      "/pipelines?ref=main": [],
+      // No route for /issues/4/related_merge_requests: the lookup fails.
+      "/projects/o%2Fr": { default_branch: "main", description: "d", star_count: 10, forks_count: 2, created_at: "2020-01-01T00:00:00Z", last_activity_at: "2026-02-01T00:00:00Z", namespace: { kind: "group", path: "o" }, web_url: "https://gitlab.com/o/r" },
+    });
+    const failures: string[] = [];
+    const { samples } = await fetchGitLab("gitlab.com", "o", "r", { fetchImpl, counter: { requests: 0 }, failures });
+    const issue = samples.openIssues[0]!;
+    expect(issue).toMatchObject({ linkedPrs: [], unreadLinkedPrs: 2 });
+    expect(failures.some((f) => f.includes("related_merge_requests"))).toBe(true);
+    const a = assessIssue(issue, new Date("2026-02-15T00:00:00Z"), true, "https://gitlab.com/o/r");
+    expect(a.novelty).toBe(0.5);
+    expect(a.noveltyReason).toMatch(/2 merge requests for it that could not be read/);
+  });
+});
+
 describe("fetchGitea", () => {
   it("maps repository, issues, pulls, reviews and repo-wide comments", async () => {
     const fetchImpl = fakeFetch({
@@ -72,10 +95,11 @@ describe("fetchGitea", () => {
       "/repos/o/r/labels": [{ name: "bug" }],
       "/repos/o/r/issues/comments?since": [{ issue_url: "https://codeberg.org/api/v1/repos/o/r/issues/5", user: { login: "owner" }, body: "can reproduce", created_at: "2026-01-02T00:00:00Z" }],
       "/repos/o/r/pulls/8/reviews": [{ state: "REQUEST_CHANGES", submitted_at: "2026-01-02T00:00:00Z", user: { login: "owner" } }],
-      "/repos/o/r": { description: "d", stars_count: 100, forks_count: 5, archived: false, has_issues: true, open_issues_count: 1, open_pr_counter: 1, default_branch: "master", created_at: "2019-01-01T00:00:00Z", updated_at: "2026-02-01T00:00:00Z", fork: false, template: false, mirror: false, topics: ["terminal"], owner: { login: "owner", type: "User" }, html_url: "https://codeberg.org/o/r" },
+      "/repos/o/r": { description: "d", stars_count: 100, forks_count: 5, archived: false, has_issues: true, open_issues_count: 1, open_pr_counter: 1, default_branch: "master", created_at: "2019-01-01T00:00:00Z", updated_at: "2026-02-01T00:00:00Z", fork: false, template: false, mirror: false, topics: ["terminal"], owner: { login: "owner", type: "User" }, html_url: "https://codeberg.org/o/r", size: 2048 },
     });
     const { meta, samples } = await fetchGitea("codeberg.org", "o", "r", { fetchImpl, counter: { requests: 0 } });
-    expect(meta).toMatchObject({ defaultBranch: "master", stars: 100, topics: ["terminal"], hasIssues: true });
+    // Gitea reports the size in KiB, which the shallow-clone rule for large repositories reads.
+    expect(meta).toMatchObject({ defaultBranch: "master", stars: 100, topics: ["terminal"], hasIssues: true, sizeKb: 2048 });
     expect(samples.openIssues[0]?.lastComments[0]).toMatchObject({ association: "MEMBER", body: "can reproduce" });
     expect(samples.openIssues[0]?.linkedPrs).toEqual([{ number: 8, url: "p8", state: "OPEN", isDraft: false, updatedAt: "2026-01-02T00:00:00Z" }]);
     expect(samples.openPrs[0]?.closingIssues).toEqual([5]);
