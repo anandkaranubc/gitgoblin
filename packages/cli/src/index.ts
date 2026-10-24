@@ -10,7 +10,7 @@ import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/i
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
 import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
-import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "./contribute.ts";
+import { type PlanContextLike, checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { explainMissingRepository, explainNetworkFailure } from "./errors.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
@@ -457,6 +457,7 @@ export function buildProgram(runtime: Runtime): Command {
         }
       }
       runtime.stdout(`Opportunity: ${plain(opportunity.title)}`);
+      runtime.stdout(checksLine(report.profile));
       const refusal = engineWillRefuse(opportunity);
       if (refusal) runtime.stdout(`The engine will refuse this one at intake: ${refusal}.`);
 
