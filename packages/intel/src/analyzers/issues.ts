@@ -299,7 +299,7 @@ async function secondOpinion(ctx: AnalysisContext, profile: RepositoryProfile, a
   return reviewIssues({
     llm: ctx.llm, profile, issues, now: ctx.now,
     cache: new DiskCache(join(ctx.options.cacheDir, "llm")),
-    onError: (error) => ctx.budget.note(`language-model review stopped: ${describeLlmError(error)}`),
+    onError: (error, { stopped, failed, total }) => ctx.budget.note(`language-model review ${stopped ? "stopped" : "failed"} for ${failed} of ${total} issues: ${describeLlmError(error)}`),
   });
 }
 
