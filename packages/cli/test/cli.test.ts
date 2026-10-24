@@ -921,3 +921,24 @@ describe("contribute says what will be checked", () => {
     expect(lines[at + 1]).toBe("The engine will check the change with the project's own commands: cargo build, cargo test.");
   });
 });
+
+describe("discover --json keeps the warnings", () => {
+  it("includes search warnings, so a ranking built after refused searches is visible to a script", async () => {
+    const { runtime, out } = fakeRuntime();
+    const base = runtime.createEngine.bind(runtime);
+    runtime.createEngine = async (options) => {
+      options.onProgress({ stage: "warning", message: "search for language:rust was rate limited; results may be incomplete" });
+      options.onProgress({ stage: "search", message: "3 searches" });
+      return base(options);
+    };
+    expect(await run(["discover", "learn", "--json"], runtime)).toBe(0);
+    const parsed = JSON.parse(out.join("\n")) as { warnings: string[] };
+    expect(parsed.warnings).toEqual(["search for language:rust was rate limited; results may be incomplete"]);
+  });
+
+  it("has an empty warnings list when nothing went wrong", async () => {
+    const { runtime, out } = fakeRuntime();
+    expect(await run(["discover", "learn", "--json"], runtime)).toBe(0);
+    expect((JSON.parse(out.join("\n")) as { warnings: string[] }).warnings).toEqual([]);
+  });
+});
