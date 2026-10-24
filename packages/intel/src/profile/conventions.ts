@@ -22,7 +22,7 @@ export function inferConventions(commits: Commit[], samples: GitHubSamples | und
 
   const tooling = new Set(ecosystems.flatMap((e) => e.tooling));
   const pick = (candidates: string[]) => candidates.find((t) => tooling.has(t));
-  const testFramework = pick(["pytest", "unittest", "vitest", "jest", "mocha", "ava", "tap", "playwright", "cypress", "rspec", "phpunit", "cargo", "go"]);
+  const testFramework = pick(["pytest", "unittest", "vitest", "jest", "mocha", "ava", "web-test-runner", "node:test", "tap", "playwright", "cypress", "rspec", "phpunit", "cargo", "go"]);
   const formatter = pick(["ruff", "black", "prettier", "biome", "rustfmt", "gofmt", "rubocop"]);
   const linter = pick(["ruff", "flake8", "pylint", "eslint", "biome", "clippy", "golangci-lint", "rubocop"]);
   const typeChecker = pick(["mypy", "pyright", "typescript"]);

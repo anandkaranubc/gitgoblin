@@ -73,8 +73,9 @@ refusing to do something.
 - Treat every prepared pull request as untrusted until you have read the diff
   yourself. Approval is the safety boundary; use it.
 - Keep the sandboxes on. Inside one, a repository's install script runs as
-  you but reaches only package registries; `--install-network open` on
-  `gitgoblin-engine run` lifts that for a repository that needs other hosts.
+  you but reaches only package registries; `--install-network open` (on
+  `gitgoblin contribute` and `gitgoblin-engine run`) lifts that for a
+  repository that needs other hosts.
   For a repository you do not trust, also use `--check-isolation strict` (on
   `gitgoblin contribute` and `gitgoblin-engine run`), which hides your home
   directory from its commands, or run the engine in a container. Without an

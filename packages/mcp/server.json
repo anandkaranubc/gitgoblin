@@ -33,7 +33,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.7/gitgoblin.mcpb",
-      "fileSha256": "FILL-ME-from-mcp-v0.1.7-SHA256SUMS",
+      "fileSha256": "17dc27a107c25bcc5ae4d35759486fca71a3d1c7f9a299cce974a8d8b2c2cea9",
       "transport": {
         "type": "stdio"
       },

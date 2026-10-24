@@ -38,7 +38,7 @@ The first start downloads the package, a few seconds on a normal connection; aft
 The MCP server gives your agent the tools. The gitgoblin **skill** teaches it when to reach for them, how to read the results, and how to behave in someone else's repository once you decide to act. It follows the [Agent Skills](https://agentskills.io) format, so one command installs it into whichever agents you use:
 
 ```sh
-npx skills add anandkaranubc/gitgoblin
+npx skills@1.7.4 add anandkaranubc/gitgoblin
 ```
 
 Claude Code users can take the plugin instead, which bundles the server and the skill:
@@ -60,7 +60,7 @@ The agent will call `discover_repositories`, then `analyze_repository` on whiche
 
 ## The tools
 
-All four only read public data. Discovery and `explain_repository` read GitHub; `analyze_repository` and `get_opportunity` also read gitlab.com and codeberg.org through their public APIs. Other hosts are refused. Nothing is written anywhere except a local cache under `~/.cache/gitgoblin`. Because your agent picks the repository, the server treats every repository as hostile: committed symlinks are checked out as plain files, git only speaks HTTPS, external links are never fetched, and the agent is told that text quoted from a repository is data, not instructions.
+All four only read public repositories, and confirm each one is public with an anonymous request before reading it, even when you have given the server a GitHub token that can see private ones. Discovery and `explain_repository` read GitHub; `analyze_repository` and `get_opportunity` also read gitlab.com and codeberg.org through their public APIs. Other hosts are refused. Nothing is written anywhere except a local cache under `~/.cache/gitgoblin`. Because your agent picks the repository, the server treats every repository as hostile: committed symlinks are checked out as plain files, git only speaks HTTPS, external links are never fetched, and the agent is told that text quoted from a repository is data, not instructions.
 
 | Tool | What it does | Time |
 | --- | --- | --- |
@@ -175,10 +175,11 @@ The launcher runs the TypeScript source directly on Node 24; there is nothing to
 - **"Analysis of owner/name stopped after 5 minutes"**: analysis runs in its own thread and is stopped when it takes that long, so the other tools keep answering. Very large repositories can hit the limit; something in a repository that makes analysis pathologically slow will too. Try another repository, or report it with the repository's name.
 - **Rate limited**: the error says when the limit resets and how to add a token. See [GitHub token](#github-token-optional).
 - **A repository is "not found"**: check the spelling, whether it moved, and that it is public. Private repositories are out of scope.
+- **"not a repository gitgoblin can confirm is public"**: the server reads public repositories only and checks each one with an anonymous request to its forge. Private repositories are refused even when your token can see them. If the forge was unreachable or GitHub's anonymous limit was spent, try again in a few minutes.
 - **"not one of the forges this tool reads"**: discovery and `explain_repository` look repositories up through GitHub's API, so they take github.com only; analysis and briefings take github.com, gitlab.com and codeberg.org. Self-hosted forges are refused so the server, whose repository your agent chooses, can never be pointed at your own network.
 - **Something printed on stdout broke the connection**: the server routes all its logging to stderr. If you see this, it is a bug; please report it with the client and the command.
 
-The cache lives at `~/.cache/gitgoblin` (`$XDG_CACHE_HOME/gitgoblin`, or `$GITGOBLIN_CACHE_DIR`). Deleting it is always safe.
+The cache lives at `~/.cache/gitgoblin` (`$XDG_CACHE_HOME/gitgoblin`, or `$GITGOBLIN_CACHE_DIR`); the server's clones are under `mcp/repos/<host>` there, at most 20 per forge. Deleting it is always safe.
 
 ## What has been verified
 
@@ -187,17 +188,18 @@ Checked on macOS on 22 and 23 October 2026. "Release" means the tarball or bundl
 | Client | Checked | Result |
 | --- | --- | --- |
 | `npx` from the release URL | Cold run in an empty directory, 0.1.0 to 0.1.6 | Installs in under two seconds, answers `initialize` and `tools/list`, nothing but JSON-RPC on stdout; 0.1.1 refuses `169.254.169.254` as a repository host |
+| npm package | `npx -y @gitgoblin/mcp` (0.1.7) in Claude Code 2.1.309 and Codex 0.163.0 | Connected; Codex called `explain_repository` through it, and the result opened with the data notice |
 | Claude Code 2.1.309 | `claude mcp add` with the 0.1.0 to 0.1.6 release URLs and with a clone, `claude mcp list` | Connected, four tools listed |
 | Codex 0.163.0 | `codex mcp add` with the 0.1.0 to 0.1.6 release URLs and with a clone, then headless `codex exec` turns | Codex called `explain_repository` through the server and answered from its result; on 0.1.1 and later an `analyze_repository` call for `https://10.0.0.5/team/app` was refused, on 0.1.3 one for `https://gitlab.com/gitlab-org/gitlab` too, and Codex reported each refusal; on 0.1.4 to 0.1.6 Codex analyzed `codeberg.org/dnkl/foot` through the server |
 | Cursor CLI (`agent`) | `.cursor/mcp.json` with a clone, `agent mcp enable`, `agent mcp list-tools` | All four tools listed with their arguments; `agent mcp list` reports the server ready |
 | VS Code 1.139.1 | `code --add-mcp` | Entry written to the user profile `mcp.json`; connection not exercised |
 | Gemini CLI 0.64.0 | `gemini mcp add -s user`, `gemini mcp list` | Registered. `mcp list` labels every server Disabled without connecting, and this machine's account can no longer run Gemini CLI, so the connection was not exercised |
 | Antigravity CLI 1.4.5 | `agy mcp add` with the release URL, `agy mcp list` | Registered and enabled; the headless turn hit the account's quota, so the connection was not exercised |
-| Agent Skills | `npx skills add anandkaranubc/gitgoblin --list` | Finds the `gitgoblin` skill in the public repository |
+| Agent Skills | `npx skills add anandkaranubc/gitgoblin --list` (1.7.4 rechecked on 23 October) | Finds the `gitgoblin` skill in the public repository |
 | Claude Code plugin | `claude plugin validate`, install from a local marketplace | Installs with the skill and the server inventoried |
 | MCPB bundle | `mcpb validate`, `mcpb pack`, unpack and run the launcher | Initializes and lists the tools; not installed in Claude Desktop itself |
-| Cursor and VS Code one-click links | Encoded and decoded | Point at the release tarball; not opened in Cursor or VS Code |
+| Cursor and VS Code one-click links | Encoded and decoded | Run `npx -y @gitgoblin/mcp`; not opened in Cursor or VS Code |
 | MCP Registry | `mcp-publisher publish` from the repository's GitHub Actions workflow, which fails unless the registry then lists the version | `io.github.anandkaranubc/gitgoblin` listed as active, pointing at the newest release's `.mcpb`; superseded versions marked deprecated |
-| Release builds | `.github/workflows/release.yml` on the `mcp-v0.1.4` to `mcp-v0.1.6` tags, `gh attestation verify` | Built, checked, attested and drafted by the workflow; draft files matched `SHA256SUMS`; the 0.1.5 and 0.1.6 tarballs ran a real analysis in its worker thread |
+| Release builds | `.github/workflows/release.yml` on the `mcp-v0.1.4` to `mcp-v0.1.7` tags, `gh attestation verify` | Built, checked, attested and drafted by the workflow; draft files matched `SHA256SUMS`; the 0.1.5 and 0.1.6 tarballs ran a real analysis in its worker thread; 0.1.7 published to npm with provenance, and the tarball npm serves matches `SHA256SUMS` |
 
 Anything not in this table has not been tried here.

@@ -36,6 +36,7 @@ export function describeEcosystems(manifests: Manifests, inventory: FileInventor
     const run = (script: string) => (pm === "npm" ? `npm run ${script}` : `${pm} ${script}`);
     const commands: Commands = { install: nodeInstall(pm, inventory) };
     if (node.scripts.test && !/no test specified/.test(node.scripts.test)) commands.test = pm === "npm" ? "npm test" : `${pm} test`;
+    else if (node.workspaceTests.length) commands.test = workspaceTestCommand(pm, node.workspaceTests, inventory);
     if (node.scripts.build) commands.build = run("build");
     if (node.scripts.lint) commands.lint = run("lint");
     if (node.scripts.format) commands.format = run("format");
@@ -156,4 +157,19 @@ export function nodeInstall(pm: NonNullable<Manifests["node"]>["packageManager"]
     return has(".yarnrc.yml") ? "yarn install --immutable" : "yarn install --frozen-lockfile";
   }
   return has("package-lock.json") || has("npm-shrinkwrap.json") ? "npm ci" : "npm install";
+}
+
+/** A monorepo's tests run inside its workspace packages: one package by name or directory, several through the package manager. */
+export function workspaceTestCommand(pm: NonNullable<Manifests["node"]>["packageManager"], packages: NonNullable<Manifests["node"]>["workspaceTests"], inventory: FileInventory): string {
+  if (packages.length === 1) {
+    const { dir, name } = packages[0]!;
+    if (pm === "pnpm") return `pnpm --filter ${name ?? `./${dir}`} test`;
+    if (pm === "yarn") return name ? `yarn workspace ${name} test` : `yarn --cwd ${dir} test`;
+    if (pm === "bun") return `bun run --cwd ${dir} test`;
+    return `npm test -w ${dir}`;
+  }
+  if (pm === "pnpm") return "pnpm -r --if-present test";
+  if (pm === "yarn") return inventory.byPath.has(".yarnrc.yml") ? "yarn workspaces foreach -A run test" : "yarn workspaces run test";
+  if (pm === "bun") return "bun run --filter '*' test";
+  return "npm test --workspaces --if-present";
 }

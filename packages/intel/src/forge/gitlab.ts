@@ -47,6 +47,8 @@ export async function fetchGitLabPipelines(base: string, ref: string, options: F
 export async function fetchGitLab(host: string, owner: string, name: string, options: ForgeFetchOptions): Promise<ForgeResult> {
   const base = `https://${host}/api/v4/projects/${encodeURIComponent(`${owner}/${name}`)}`;
   const project = await forgeJson<GlProject>(base, options);
+  // An SSO page or proxy can answer 200 with something else; fail clearly instead of mapping undefined fields.
+  if (!project || typeof project !== "object" || typeof project.created_at !== "string") throw new Error(`unexpected project response from ${host}`);
   const [openIssues, closedIssues, openMrs, mergedMrs, closedMrs, labels] = await Promise.all([
     forgeList<GlIssue>(`${base}/issues?state=opened&order_by=updated_at&per_page=50`, options),
     forgeList<GlIssue>(`${base}/issues?state=closed&order_by=updated_at&per_page=30`, options),
