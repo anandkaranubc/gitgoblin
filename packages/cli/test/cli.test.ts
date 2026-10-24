@@ -934,7 +934,8 @@ describe("contribute says what will be checked", () => {
     expect(lines[at + 1]).toBe("The engine will check the change with the project's own commands: cargo build, cargo test.");
   });
 
-  it("warns before the first question when this machine lacks the project's toolchain", async () => {
+  // contribute runs on macOS and Linux only, so the check is skipped on Windows.
+  it.skipIf(process.platform === "win32")("warns before the first question when this machine lacks the project's toolchain", async () => {
     const siblings = fakeSiblings();
     const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
     runtime.env = { PATH: mkdtempSync(join(tmpdir(), "gitgoblin-empty-path-")) };
