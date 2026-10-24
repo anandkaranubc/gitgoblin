@@ -1,5 +1,8 @@
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "../src/contribute.ts";
+import { checksLine, missingToolchains, onPath, toolchainWarning, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "../src/contribute.ts";
 import { sampleOpportunity, sampleReport } from "./fixtures.ts";
 
 const plain = { color: false };
@@ -264,5 +267,44 @@ describe("checksLine", () => {
   it("says plainly when nothing can be checked", () => {
     expect(checksLine(withCommands([{ install: "npm ci" }]))).toBe("No check commands were found, so the engine cannot verify the change against the project's own checks.");
     expect(checksLine(withCommands([]))).toBe("No check commands were found, so the engine cannot verify the change against the project's own checks.");
+  });
+});
+
+describe("missingToolchains", () => {
+  const profileWith = (commands: Record<string, string>) => {
+    const report = sampleReport();
+    report.profile.ecosystems = [{ name: "node", manifests: [], tooling: [], commands }];
+    return report.profile;
+  };
+  const without = (...absent: string[]) => (name: string) => !absent.includes(name);
+
+  it("names the launcher a project's install and checks need when this machine lacks it", () => {
+    expect(missingToolchains(profileWith({ install: "bun install --frozen-lockfile", build: "bun run build", test: "bun run test" }), without("bun"))).toEqual(["bun"]);
+  });
+
+  it("looks past VAR=value prefixes, and only at launchers the engine never installs", () => {
+    const profile = profileWith({ install: "CI=1 pnpm install", test: "pytest -q", lint: "./gradlew check", typecheck: "tsc --noEmit", build: "cargo build" });
+    expect(missingToolchains(profile, without("pnpm", "pytest", "./gradlew", "tsc", "cargo"))).toEqual(["cargo", "pnpm"]);
+  });
+
+  it("is empty when every launcher is present", () => {
+    expect(missingToolchains(profileWith({ install: "npm ci", test: "npm test" }), () => true)).toEqual([]);
+  });
+
+  it("says what is missing and what happens without it", () => {
+    expect(toolchainWarning(["bun"])).toBe("Warning: bun is not installed on this machine (not on PATH). The project's install and checks need it, so install it first, or the run will stop after the install fails.");
+    expect(toolchainWarning(["bun", "cargo"])).toContain("bun and cargo are not installed");
+  });
+});
+
+describe("onPath", () => {
+  it("finds an executable in a PATH directory, and nothing else", () => {
+    const dir = mkdtempSync(join(tmpdir(), "gitgoblin-path-"));
+    writeFileSync(join(dir, "bun"), "#!/bin/sh\n");
+    chmodSync(join(dir, "bun"), 0o755);
+    writeFileSync(join(dir, "notes"), "not a program");
+    expect(onPath("bun", `/nonexistent:${dir}`)).toBe(true);
+    expect(onPath("cargo", dir)).toBe(false);
+    expect(onPath("notes", dir)).toBe(false);
   });
 });
