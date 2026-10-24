@@ -17,7 +17,8 @@ a pull request a maintainer would want to merge.
   name, and says why each one ranked where it did. `explain` shows every signal behind one score,
   including the share of pull requests the project merges (`acceptance`), which in backtests
   predicted whether a newcomer's pull request would be merged better than stars did; `goals` lists
-  what each goal weighs.
+  what each goal weighs. `discover --json` includes the warnings about refused or rate-limited
+  searches, so a script can tell a partial ranking from a complete one.
 - `analyze` profiles a repository (what it is, how active it is, how it treats outside
   contributors, how to build and test it, its conventions) and lists opportunities, each with
   evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo, Codeberg among them; other
