@@ -27,6 +27,8 @@ const REVIEW_STATE: Record<string, string> = { APPROVED: "APPROVED", REQUEST_CHA
 export async function fetchGitea(host: string, owner: string, name: string, options: ForgeFetchOptions): Promise<ForgeResult> {
   const base = `https://${host}/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
   const repo = await forgeJson<GtRepo>(base, options);
+  // An SSO page or proxy can answer 200 with something else; fail clearly instead of mapping undefined fields.
+  if (!repo || typeof repo !== "object" || typeof repo.created_at !== "string") throw new Error(`unexpected repository response from ${host}`);
   // The comments endpoint lists oldest first and ignores `limit` without `page` (Forgejo returned 13,529 comments,
   // 25 MB, in one call). A recent window read in a few pages keeps it small and current.
   const since = new Date(Date.now() - 90 * 24 * 3_600_000).toISOString();
