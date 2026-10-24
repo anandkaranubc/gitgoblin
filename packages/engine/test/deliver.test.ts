@@ -293,6 +293,17 @@ describe("pull request text, run 5 findings", () => {
     expect(body).toContain("| `pnpm test` | pass |");
   });
 
+  it("gives the test counts for a suite that already failed", () => {
+    const input = base();
+    input.verification = {
+      ...input.verification,
+      checks: [{ name: "test", command: "pnpm test", status: "fail", exitCode: 1, durationMs: 1, outputTail: "", tests: { failed: 7, passed: 5292 } }],
+      preexisting: ["test"],
+      testCounts: [{ name: "test", baseline: { failed: 7, passed: 5290 }, now: { failed: 7, passed: 5292 } }],
+    };
+    expect(pullRequestBody(input)).toContain("| `pnpm test` | fail (also fails on the base commit: 7 failing and 5292 passing tests, against 7 and 5290 on the base commit) |");
+  });
+
   it("keeps reviewer notes about the change and drops ones about the workspace or addressed to the operator", () => {
     const body = pullRequestBody(base());
     expect(body).toContain("Consider an early return");

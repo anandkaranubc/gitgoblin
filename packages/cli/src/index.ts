@@ -10,7 +10,7 @@ import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/i
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
 import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
-import { type PlanContextLike, checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "./contribute.ts";
+import { type PlanContextLike, checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, missingToolchains, onPath, recommendedRank, selectOpportunity, toolchainWarning } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { explainMissingRepository, explainNetworkFailure } from "./errors.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
@@ -242,7 +242,7 @@ function nextStepAfterAnalyze(report: AnalysisReport, ref: RepoRef, savedTo: str
 export function buildProgram(runtime: Runtime): Command {
   const program = new Command("gitgoblin")
     .description("Find open-source projects worth your time, work out what they need, and prepare a pull request you approve.")
-    .version("0.1.0")
+    .version("0.1.1")
     .configureOutput({ writeOut: (s) => runtime.stdout(s.trimEnd()), writeErr: (s) => runtime.stderr(s.trimEnd()) })
     .exitOverride();
 
@@ -476,6 +476,12 @@ export function buildProgram(runtime: Runtime): Command {
       }
       runtime.stdout(`Opportunity: ${plain(opportunity.title)}`);
       runtime.stdout(checksLine(report.profile));
+      // A missing launcher (bun, cargo, pnpm) fails the run at its install, after the clone; say so before anything is spent.
+      const path = runtime.env.PATH;
+      if (path && process.platform !== "win32") {
+        const missing = missingToolchains(report.profile, (name) => onPath(name, path));
+        if (missing.length > 0) runtime.stdout(toolchainWarning(missing));
+      }
       const refusal = engineWillRefuse(opportunity);
       if (refusal) runtime.stdout(`The engine will refuse this one at intake: ${refusal}.`);
 
