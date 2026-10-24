@@ -71,10 +71,22 @@ function stripGitSuffix(name: string): string {
   return name.endsWith(".git") ? name.slice(0, -4) : name;
 }
 
+/**
+ * A forge is reached by a DNS name with at least one dot: never an IP address, a path, a name that
+ * starts with "-" (it would read as an option to git or ssh), or a bare name such as localhost.
+ */
+const LABEL = String.raw`[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?`;
+const HOSTNAME = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})+$`);
+
+export function isForgeHost(host: string): boolean {
+  return HOSTNAME.test(host) && !/^[\d.]+$/.test(host);
+}
+
 function fromSegments(host: string, owner: string, name: string): RepoRef | undefined {
   const cleanName = stripGitSuffix(name);
-  if (!SEGMENT.test(owner) || !SEGMENT.test(cleanName)) return undefined;
-  return { host: normalizeHost(host), owner, name: cleanName };
+  const cleanHost = normalizeHost(host);
+  if (!isForgeHost(cleanHost) || !SEGMENT.test(owner) || !SEGMENT.test(cleanName)) return undefined;
+  return { host: cleanHost, owner, name: cleanName };
 }
 
 /**
@@ -92,13 +104,17 @@ export function parseRepoRef(input: string, defaultHost = "github.com"): RepoRef
     return fromSegments(host ?? "", owner ?? "", name ?? "");
   }
 
-  if (/^[a-z]+:\/\//i.test(text)) {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) {
     let url: URL;
     try {
       url = new URL(text);
     } catch {
       return undefined;
     }
+    // Repositories are reached over the web or ssh; a port or embedded credentials would be dropped
+    // silently from a RepoRef, so such URLs are refused instead of half-understood.
+    if (!["http:", "https:", "ssh:", "git:", "git+ssh:"].includes(url.protocol)) return undefined;
+    if (url.port || url.password || (url.username && url.protocol !== "ssh:" && url.protocol !== "git+ssh:")) return undefined;
     const [owner, name] = url.pathname.split("/").filter(Boolean);
     if (!owner || !name) return undefined;
     return fromSegments(url.hostname, owner, name);
