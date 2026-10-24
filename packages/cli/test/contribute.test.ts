@@ -1,6 +1,6 @@
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { checksLine, missingToolchains, onPath, toolchainWarning, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "../src/contribute.ts";
 import { sampleOpportunity, sampleReport } from "./fixtures.ts";
@@ -287,6 +287,12 @@ describe("missingToolchains", () => {
     expect(missingToolchains(profile, without("pnpm", "pytest", "./gradlew", "tsc", "cargo"))).toEqual(["cargo", "pnpm"]);
   });
 
+  it("names the tool to install, not each of its launchers", () => {
+    const profile = profileWith({ install: "bun install", typecheck: "bunx tsc --noEmit", lint: "npx eslint .", test: "pnpx vitest" });
+    expect(missingToolchains(profile, without("bun", "npm", "pnpm"))).toEqual(["bun", "npm", "pnpm"]);
+    expect(missingToolchains(profile, without("bunx", "npx", "pnpx"))).toEqual([]);
+  });
+
   it("is empty when every launcher is present", () => {
     expect(missingToolchains(profileWith({ install: "npm ci", test: "npm test" }), () => true)).toEqual([]);
   });
@@ -303,8 +309,9 @@ describe("onPath", () => {
     writeFileSync(join(dir, "bun"), "#!/bin/sh\n");
     chmodSync(join(dir, "bun"), 0o755);
     writeFileSync(join(dir, "notes"), "not a program");
-    expect(onPath("bun", `/nonexistent:${dir}`)).toBe(true);
+    expect(onPath("bun", [join(dir, "nonexistent"), dir].join(delimiter))).toBe(true);
     expect(onPath("cargo", dir)).toBe(false);
-    expect(onPath("notes", dir)).toBe(false);
+    // Windows has no execute bit: there, any existing file counts, and contribute does not run.
+    if (process.platform !== "win32") expect(onPath("notes", dir)).toBe(false);
   });
 });
