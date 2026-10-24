@@ -955,3 +955,28 @@ describe("discover --json keeps the warnings", () => {
     expect((JSON.parse(out.join("\n")) as { warnings: string[] }).warnings).toEqual([]);
   });
 });
+
+describe("discover's text output keeps the warnings", () => {
+  const warned = (isInteractive: boolean) => {
+    const fake = fakeRuntime({}, { isInteractive });
+    const base = fake.runtime.createEngine.bind(fake.runtime);
+    fake.runtime.createEngine = async (options) => {
+      options.onProgress({ stage: "warning", message: "GitHub details unavailable: HTTP 502 for https://api.github.com/graphql" });
+      options.onProgress({ stage: "search", message: "3 searches" });
+      return base(options);
+    };
+    return fake;
+  };
+
+  it("prints them on stderr when progress is hidden, so a piped ranking is not silently partial", async () => {
+    const { runtime, err } = warned(false);
+    expect(await run(["discover", "learn"], runtime)).toBe(0);
+    expect(err).toEqual(["warning: GitHub details unavailable: HTTP 502 for https://api.github.com/graphql"]);
+  });
+
+  it("prints them once in a terminal, where progress already shows them", async () => {
+    const { runtime, err } = warned(true);
+    expect(await run(["discover", "learn"], runtime)).toBe(0);
+    expect(err.filter((line) => line.includes("HTTP 502"))).toHaveLength(1);
+  });
+});
