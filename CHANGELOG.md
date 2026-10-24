@@ -44,6 +44,9 @@ a pull request a maintainer would want to merge.
   clone takes while keeping its report and diff.
 - Files the repository's own install rewrites (a lockfile npm trims, say) are put back as committed
   before anything else runs, so a prepared change never carries that churn; the run report names them.
+- Projects that test in real browsers through Playwright: the run says when the tests need
+  Playwright's browsers, and `gitgoblin-engine run --install-browsers` downloads them with the
+  project's own Playwright, allowing Playwright's download servers for that step only.
 
 **Safety**
 
