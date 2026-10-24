@@ -11,7 +11,7 @@ export const GET: APIRoute = async ({ site }) => {
     "",
     `> ${description}`,
     "",
-    "gitgoblin is in preview. Discovery and repository analysis work, through the gitgoblin command or an MCP server for AI coding agents; preparing a contribution with an AI agent is experimental. The command installs with `npm install -g gitgoblin`. The repository README says what works today.",
+    "gitgoblin is in preview. Discovery and repository analysis work, through the gitgoblin command or an MCP server for AI coding agents; preparing a contribution with an AI agent is experimental. Install the command with `npm install -g gitgoblin`; the MCP server runs with `npx -y @gitgoblin/mcp`. The repository README says what works today.",
     "",
     "## Docs",
     "",
