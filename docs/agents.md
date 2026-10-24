@@ -181,7 +181,7 @@ The launcher runs the TypeScript source directly on Node 24; there is nothing to
 - **"not one of the forges this tool reads"**: discovery and `explain_repository` look repositories up through GitHub's API, so they take github.com only; analysis and briefings take github.com, gitlab.com and codeberg.org. Self-hosted forges are refused so the server, whose repository your agent chooses, can never be pointed at your own network.
 - **Something printed on stdout broke the connection**: the server routes all its logging to stderr. If you see this, it is a bug; please report it with the client and the command.
 
-The cache lives at `~/.cache/gitgoblin` (`$XDG_CACHE_HOME/gitgoblin`, or `$GITGOBLIN_CACHE_DIR`); the server's clones are under `mcp/<host>` there, at most 20 per forge. Deleting it is always safe.
+The cache lives at `~/.cache/gitgoblin` (`$XDG_CACHE_HOME/gitgoblin`, or `$GITGOBLIN_CACHE_DIR`); the server's clones are under `mcp/repos/<host>` there, at most 20 per forge. Deleting it is always safe.
 
 ## What has been verified
 

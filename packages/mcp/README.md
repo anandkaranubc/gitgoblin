@@ -28,7 +28,7 @@ The repository is often chosen by a model, so the server treats it as hostile: i
 | Variable | Effect |
 | --- | --- |
 | `GITHUB_TOKEN`, `GH_TOKEN` | Optional. Raises GitHub's limits and unlocks starter issues. Falls back to `gh auth token`. |
-| `GITGOBLIN_CACHE_DIR` | Where the HTTP cache lives (default `~/.cache/gitgoblin`); the server's blob-less clones go in `mcp/<host>` under it, at most 20 per forge. |
+| `GITGOBLIN_CACHE_DIR` | Where the HTTP cache lives (default `~/.cache/gitgoblin`); the server's blob-less clones go in `mcp/repos/<host>` under it, at most 20 per forge. |
 
 ## Development
 

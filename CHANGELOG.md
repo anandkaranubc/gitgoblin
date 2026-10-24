@@ -92,7 +92,8 @@ real repository, on macOS, so treat what it prepares as a draft to review.
 - Each analysis runs in a child process with an empty home directory, so your git configuration and
   credential helpers never apply to a repository's clone. A timeout or a cancellation kills the
   child and everything it started, git included. At most two analyses run at once.
-- Clones are kept per forge, and the least recently used are deleted beyond 20 per forge.
+- Clones are kept per forge, and the least recently used are deleted beyond 20 per forge. Clones left by
+  earlier versions are deleted. A clone that takes more than four minutes gives up with a clear error.
 - Every result opens with a reminder that repository text is data, not instructions. Invisible
   format characters, including zero-width and Unicode tag characters, are stripped, and results are
   capped in size.
