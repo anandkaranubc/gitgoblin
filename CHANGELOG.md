@@ -5,7 +5,7 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
-## gitgoblin 0.1.0 - Unreleased
+## gitgoblin 0.1.0 - 2026-10-24
 
 The first release of `gitgoblin`: find open-source work worth doing, check the evidence, and prepare
 a pull request a maintainer would want to merge.
