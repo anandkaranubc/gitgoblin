@@ -18,7 +18,7 @@ export function pct(part: number, whole: number): string {
 export function renderEvaluation(dataset: Pick<BacktestDataset, "asOf" | "windowDays" | "fetchedAt" | "rows">, ev: Evaluation): string {
   const lines: string[] = [];
   lines.push(`## Discovery backtest: contribute ranking against newcomer outcomes`, "");
-  lines.push(`As of ${dataset.asOf.slice(0, 10)}, outcomes over the following ${dataset.windowDays} days, fetched ${dataset.fetchedAt.slice(0, 10)}. ${dataset.rows.length} repositories${ev.uncovered ? `, ${ev.uncovered} dropped because the pull request history fetched did not reach back to the as-of date` : ", all included (sensitivity check: rows whose history does not reach back to the as-of date favour popularity)"}.`, "");
+  lines.push(`As of ${dataset.asOf.slice(0, 10)}, outcomes over the following ${dataset.windowDays} days, fetched ${dataset.fetchedAt.slice(0, 10)}. ${dataset.rows.length} repositories${ev.uncovered ? `, ${ev.uncovered} dropped because the pull request history fetched did not reach back to the as-of date` : ", all included (sensitivity check: repositories whose history does not reach back to the as-of date are given the best grade, the most favourable case for popularity)"}.`, "");
   lines.push(
     table(
       ["language", "candidates", "eligible at T", "grade 0", "grade 1", "grade 2", "grade 3"],

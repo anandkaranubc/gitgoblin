@@ -3,7 +3,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { type BacktestDataset, evaluate, examplesFrom, fetchDataset, LEARN_FEATURES, rescore } from "./discovery-backtest.ts";
+import { completeBusy } from "./busy.ts";
 import { compareRescore } from "./compare.ts";
+import { createSources } from "@gitgoblin/sources";
 import { fitLogistic, leaveOneGroupOut } from "./learn.ts";
 import { gradeIssues, type IntelBacktestDataset, type IssueGradingDataset, regradeDataset, runIntelBacktest } from "./intel-backtest.ts";
 import { renderEvaluation, renderIntel, renderIssueGrading, renderKinds, renderLearning, renderSlices, renderTracker } from "./report.ts";
@@ -11,11 +13,12 @@ import { fetchKinds, type KindsDataset } from "./tracker-kinds.ts";
 
 const USAGE = `usage:
   gitgoblin-eval discovery fetch --as-of YYYY-MM-DD [--window 120] [--languages typescript,python] [--per-language 80] [--seed 1] [--resume data/file.json [--recompute]] --out data/file.json
-  gitgoblin-eval discovery evaluate data/file.json [--k 10] [--iterations 1000] [--include-uncovered] [--rescore]
+  gitgoblin-eval discovery evaluate data/file.json [--k 10] [--iterations 1000] [--include-uncovered] [--rescore] [--outcome prs|people]
       --rescore scores the stored as-of inputs with the discovery code checked out now
   gitgoblin-eval discovery learn data/file.json [--min-grade 1] [--rescore]
   gitgoblin-eval discovery slices data/file.json
-  gitgoblin-eval discovery compare data/file.json   (stored scores against the discovery code checked out now, paired)
+  gitgoblin-eval discovery complete-busy data/file.json   (live; measures the repositories whose history was too long to fetch, rewrites the file)
+  gitgoblin-eval discovery compare data/file.json [more.json...]   (stored scores against the discovery code checked out now, paired; several files are pooled)
   gitgoblin-eval tracker data/file.json
   gitgoblin-eval tracker kinds data/file.json --out data/kinds.json   (live; samples merged outsider PRs and reads their files)
   gitgoblin-eval tracker kinds-report data/kinds.json
@@ -47,7 +50,9 @@ const { values, positionals } = parseArgs({
     recompute: { type: "boolean", default: false },
     "include-uncovered": { type: "boolean", default: false },
     rescore: { type: "boolean", default: false },
+    outcome: { type: "string", default: "prs" },
     concurrency: { type: "string", default: "3" },
+    "max-pr-pages": { type: "string", default: "6" },
     help: { type: "boolean", default: false },
   },
 });
@@ -78,6 +83,7 @@ if (command === "discovery" && sub === "fetch") {
     resume,
     recompute: values.recompute,
     concurrency: Number(values.concurrency),
+    maxPrPages: Number(values["max-pr-pages"]),
     checkpoint: async (partial) => {
       await writeFile(out, JSON.stringify(partial));
       console.error(`checkpoint: ${partial.rows.length} rows written to ${out}`);
@@ -95,14 +101,30 @@ if (command === "discovery" && sub === "fetch") {
 } else if (command === "discovery" && sub === "evaluate") {
   const stored = await readDataset(file);
   const dataset = values.rescore ? rescore(stored) : stored;
-  console.log(renderEvaluation(dataset, evaluate(dataset, { k: Number(values.k), iterations: Number(values.iterations), includeUncovered: values["include-uncovered"] })));
+  if (values.outcome !== "prs" && values.outcome !== "people") fail("--outcome is prs or people");
+  console.log(renderEvaluation(dataset, evaluate(dataset, { k: Number(values.k), iterations: Number(values.iterations), includeUncovered: values["include-uncovered"], outcome: values.outcome })));
 } else if (command === "discovery" && sub === "learn") {
   const stored = await readDataset(file);
   const dataset = values.rescore ? rescore(stored) : stored;
   const examples = examplesFrom(dataset, Number(values["min-grade"]));
   console.log(renderLearning(leaveOneGroupOut(examples, LEARN_FEATURES), fitLogistic(examples, LEARN_FEATURES), Number(values["min-grade"])));
+} else if (command === "discovery" && sub === "complete-busy") {
+  if (!file) fail("a dataset file is required");
+  const dataset = await readDataset(file);
+  const sources = await createSources({ cachePath: values.cache ?? new URL("../.cache/http-cache.sqlite", import.meta.url).pathname });
+  try {
+    const done = await completeBusy(dataset, sources.github, {
+      log: (m) => console.error(m),
+      checkpoint: async (d) => writeFile(file, JSON.stringify(d)),
+    });
+    await writeFile(file, JSON.stringify(done));
+    console.error(`completed ${done.rows.filter((r) => r.completedBySearch).length} repositories in ${file}`);
+  } finally {
+    sources.close();
+  }
 } else if (command === "discovery" && sub === "compare") {
-  const c = compareRescore(await readDataset(file), { k: Number(values.k), iterations: Number(values.iterations) });
+  const files = positionals.slice(2);
+  const c = compareRescore(await Promise.all(files.map((f) => readDataset(f))), { k: Number(values.k), iterations: Number(values.iterations) });
   const f = (x: number) => x.toFixed(3);
   console.log(`${c.repositories} repositories (${c.oddsPool} with three or more decided newcomer pull requests)`);
   console.log(`nDCG@${values.k}: ${f(c.ndcg.before)} -> ${f(c.ndcg.after)}, delta ${f(c.ndcg.delta.estimate)} [${f(c.ndcg.delta.lower)}, ${f(c.ndcg.delta.upper)}]`);

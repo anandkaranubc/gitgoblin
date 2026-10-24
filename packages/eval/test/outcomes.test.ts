@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gradeOutcome, newcomerOutcomes, outsiderOutcomes, type PrRow, trackerStats, type IssueRow } from "../src/outcomes.ts";
+import { gradeOutcome, gradePeople, newcomerOutcomes, outsiderOutcomes, type PrRow, trackerStats, type IssueRow } from "../src/outcomes.ts";
 
 const T = "2026-06-01T00:00:00Z";
 const END = "2026-10-01T00:00:00Z";
@@ -101,5 +101,22 @@ describe("outsiderOutcomes", () => {
       pr({ number: 5, createdAt: "2026-05-01T00:00:00Z", author: "early", mergedAt: "2026-05-02T00:00:00Z" }),
     ];
     expect(outsiderOutcomes(prs, WINDOW)).toEqual({ pullRequests: 3, merged: 1, closedUnmerged: 1, mergeRate: 0.5 });
+  });
+});
+
+describe("people-based outcome", () => {
+  it("counts distinct newcomers so one prolific author cannot make a project a success", () => {
+    const prs = [
+      pr({ number: 1, createdAt: "2026-06-10T00:00:00Z", author: "hire", mergedAt: "2026-06-11T00:00:00Z" }),
+      pr({ number: 2, createdAt: "2026-06-12T00:00:00Z", author: "hire", mergedAt: "2026-06-13T00:00:00Z" }),
+      pr({ number: 3, createdAt: "2026-06-14T00:00:00Z", author: "hire", mergedAt: "2026-06-15T00:00:00Z" }),
+      pr({ number: 4, createdAt: "2026-07-01T00:00:00Z", author: "bob", state: "CLOSED", closedAt: "2026-07-02T00:00:00Z" }),
+      pr({ number: 5, createdAt: "2026-07-03T00:00:00Z", author: "eve", state: "CLOSED", closedAt: "2026-07-04T00:00:00Z" }),
+    ];
+    const o = newcomerOutcomes(prs, WINDOW, "2025-01-01T00:00:00Z");
+    expect(o).toMatchObject({ merged: 3, closedUnmerged: 2, mergedNewcomers: 1, decidedNewcomers: 3 });
+    expect(gradeOutcome(o)).toBe(2);
+    expect(gradePeople(o)).toBe(1);
+    expect(gradePeople({ mergedNewcomers: undefined, decidedNewcomers: undefined, medianResponseHours: 1 })).toBeUndefined();
   });
 });

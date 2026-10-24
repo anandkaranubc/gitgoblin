@@ -11,7 +11,7 @@ import { type Candidate, RANKINGS, type Ranking, rankCandidates, rankingKey } fr
 import { fetchHistory, fetchLabeledIssues, graphqlReset, withRateLimitRetry } from "./github/history.ts";
 import type { Example } from "./learn.ts";
 import { auc, bootstrap, ndcgAtK, precisionAtK, spearman } from "./metrics.ts";
-import { gradeOutcome, type NewcomerOutcome, newcomerOutcomes, type OutsiderOutcome, outsiderOutcomes, type TrackerStats, trackerStats } from "./outcomes.ts";
+import { gradeOutcome, gradePeople, type NewcomerOutcome, newcomerOutcomes, type OutsiderOutcome, outsiderOutcomes, type TrackerStats, trackerStats } from "./outcomes.ts";
 import { type PoolMember, poolQueries, samplePool } from "./pool.ts";
 
 const DAY_MS = 86_400_000;
@@ -41,6 +41,8 @@ export interface BacktestRow {
   issuesTruncated: boolean;
   prCount: number;
   issueCount: number;
+  /** The outcome and past-year statistics came from GitHub search because the history could not be paged back to T (see busy.ts). */
+  completedBySearch?: boolean | undefined;
 }
 
 export interface BacktestDataset {
@@ -71,6 +73,8 @@ export interface FetchOptions {
   recompute?: boolean | undefined;
   /** Repositories fetched at once. Default 3. */
   concurrency?: number | undefined;
+  /** Pages of 100 pull requests per repository. Default 6; older dates need more to reach back a year before T. */
+  maxPrPages?: number | undefined;
   /** Called with the dataset so far after every language and every 25 repositories, so a crash loses little. */
   checkpoint?: ((dataset: BacktestDataset) => Promise<void>) | undefined;
   log?: ((message: string) => void) | undefined;
@@ -101,7 +105,8 @@ export async function fetchDataset(options: FetchOptions): Promise<BacktestDatas
   try {
     for (const language of options.languages) {
       let pool = options.resume?.pool[language];
-      if (!pool) {
+      // An empty saved pool means the searches failed last time; search again.
+      if (!pool?.length) {
         const found: { facts: RepoFacts; slice: string }[] = [];
         for (const query of poolQueries(language, asOf)) {
           try {
@@ -128,7 +133,7 @@ export async function fetchDataset(options: FetchOptions): Promise<BacktestDatas
         try {
           const [ecosystems, history] = await Promise.all([
             sources.ecosystems.lookupRepository(facts).catch(() => undefined),
-            fetchHistory(sources.github, facts.owner, facts.name, { since, asOf, log: (m) => log(`${id}: ${m}`) }),
+            fetchHistory(sources.github, facts.owner, facts.name, { since, asOf, maxPrPages: options.maxPrPages, log: (m) => log(`${id}: ${m}`) }),
           ]);
           // The issue history only reaches a year back; starter issues opened earlier and still open at T come from a labelled-issues query.
           const labelled = await fetchLabeledIssues(sources.github, facts.owner, facts.name, STARTER_ISSUE_LABELS, 3).catch(() => []);
@@ -179,9 +184,25 @@ export async function fetchDataset(options: FetchOptions): Promise<BacktestDatas
   return final;
 }
 
-/** Rows whose fetched history reaches back to T, so the outcome window is fully covered. */
+/**
+ * Rows whose outcome window is fully measured: the fetched history reaches back to T, or paging
+ * stopped because there were no older pull requests (the repository's first one came after T), or
+ * the outcome was completed by search.
+ */
 export function covered(row: BacktestRow, asOf: string): boolean {
-  return row.historyStart === undefined || row.historyStart <= asOf;
+  return row.completedBySearch === true || row.historyStart === undefined || row.historyStart <= asOf || !row.prsTruncated;
+}
+
+/** Which outcome a comparison grades on: pull requests (the original grade) or people (robust to one prolific author). */
+export type Outcome = "prs" | "people";
+
+/** The row with its grade, merged count and merge rate read from the chosen outcome. Rows without people counts keep their own. */
+export function withOutcome(row: BacktestRow, outcome: Outcome): BacktestRow {
+  if (outcome === "prs") return row;
+  const g = gradePeople(row.outcome);
+  if (g === undefined) return row;
+  const o = row.outcome;
+  return { ...row, grade: g, outcome: { ...o, merged: o.mergedNewcomers!, closedUnmerged: o.decidedNewcomers! - o.mergedNewcomers!, mergeRate: o.decidedNewcomers ? o.mergedNewcomers! / o.decidedNewcomers : undefined } };
 }
 
 export function toCandidate(row: BacktestRow): Candidate {
@@ -260,16 +281,22 @@ export interface EvaluateOptions {
   iterations?: number | undefined;
   seed?: number | undefined;
   /**
-   * Sensitivity check: keep repositories whose history did not reach back to T. Their grades
-   * over-count newcomers and their as-of scores lack pre-T pull requests, so this favours
-   * popularity and handicaps gitgoblin; a result that survives it is robust to the coverage drop.
+   * Sensitivity check: keep repositories whose history did not reach back to T (the busiest,
+   * mostly very popular ones), each given the best grade, 3. Their as-of scores also lack pre-T
+   * pull requests, so this is the most favourable case for popularity and the least favourable for
+   * gitgoblin; a result that survives it does not depend on leaving them out.
    */
   includeUncovered?: boolean | undefined;
+  /** Grade on pull requests (default) or on people. */
+  outcome?: Outcome | undefined;
 }
 
 export function evaluate(dataset: Pick<BacktestDataset, "rows" | "asOf">, options: EvaluateOptions = {}): Evaluation {
   const k = options.k ?? 10;
-  const usable = options.includeUncovered ? dataset.rows : dataset.rows.filter((row) => covered(row, dataset.asOf));
+  const rows = dataset.rows.map((row) => withOutcome(row, options.outcome ?? "prs"));
+  const usable = options.includeUncovered
+    ? rows.map((row) => (covered(row, dataset.asOf) ? row : { ...row, grade: 3 }))
+    : rows.filter((row) => covered(row, dataset.asOf));
   const cands = usable.map(toCandidate);
   const groups = byLanguage(cands);
   const perLanguage: Evaluation["perLanguage"] = {};

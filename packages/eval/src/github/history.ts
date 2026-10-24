@@ -170,13 +170,27 @@ export function rateLimitResetAt(error: unknown, fallbackResetAt?: Date | undefi
 /** Waits beyond this many are a sign the error is not really about the budget; give up on the item instead of spinning. */
 const MAX_RATE_LIMIT_WAITS = 6;
 
+/** Network outages (sleep, Wi-Fi drops) are waited out for up to this many minutes before an item fails. */
+const MAX_OUTAGE_MINUTES = 30;
+
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof TypeError && /fetch failed|network|ECONN|ENOTFOUND|EAI_AGAIN/i.test(`${error.message} ${(error as { cause?: { code?: string } }).cause?.code ?? ""}`);
+}
+
 export async function withRateLimitRetry<T>(fn: () => Promise<T>, log: (m: string) => void, resetHint?: (() => Date | undefined) | undefined): Promise<T> {
   let emptyBodies = 0;
   let waits = 0;
+  let outageMinutes = 0;
   for (;;) {
     try {
       return await fn();
     } catch (error) {
+      if (isNetworkError(error) && outageMinutes < MAX_OUTAGE_MINUTES) {
+        if (outageMinutes === 0) log("network unavailable; retrying every minute");
+        outageMinutes++;
+        await new Promise((resolve) => setTimeout(resolve, 60_000));
+        continue;
+      }
       // GitHub occasionally answers with an empty body; one retry is enough in practice.
       if (error instanceof SyntaxError && emptyBodies++ < 2) {
         await new Promise((resolve) => setTimeout(resolve, 2_000));

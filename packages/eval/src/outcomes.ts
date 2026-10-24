@@ -61,6 +61,9 @@ export interface NewcomerOutcome {
   medianResponseHours: number | undefined;
   /** True when the fetched history starts less than a year before the window, so "first pull request" is less certain. */
   partialCoverage: boolean;
+  /** Distinct newcomers with at least one pull request merged in the window, and with at least one decided. Counting people keeps one prolific author (often an unannounced new team member) from deciding the grade. */
+  mergedNewcomers?: number | undefined;
+  decidedNewcomers?: number | undefined;
 }
 
 const DAY_MS = 86_400_000;
@@ -112,7 +115,16 @@ export function newcomerOutcomes(prs: PrRow[], window: Window, historyStart: str
     if (pr.firstResponseAt) responses.push((Date.parse(pr.firstResponseAt) - Date.parse(pr.createdAt)) / 3_600_000);
   }
   const decided = merged + closedUnmerged;
+  const mergedPeople = new Set<string>();
+  const decidedPeople = new Set<string>();
+  for (const pr of prs) {
+    if (!isOutsider(pr) || !newcomers.has(pr.author!) || !inWindow(pr.createdAt, window)) continue;
+    if (pr.mergedAt && inWindow(pr.mergedAt, window)) { mergedPeople.add(pr.author!); decidedPeople.add(pr.author!); }
+    else if (pr.closedAt && inWindow(pr.closedAt, window)) decidedPeople.add(pr.author!);
+  }
   return {
+    mergedNewcomers: mergedPeople.size,
+    decidedNewcomers: decidedPeople.size,
     newcomers: newcomers.size,
     pullRequests,
     merged,
@@ -149,6 +161,19 @@ export function outsiderOutcomes(prs: PrRow[], window: Window): OutsiderOutcome 
   }
   const decided = merged + closedUnmerged;
   return { pullRequests, merged, closedUnmerged, mergeRate: decided > 0 ? merged / decided : undefined };
+}
+
+/**
+ * The same grades counted in people: 0, no newcomer merged; 1, at least one; 2, at least two, and at
+ * least half of the newcomers with a decided pull request got one merged; 3, grade 2 with a median
+ * first response within a week. Undefined for outcomes recorded before people were counted.
+ */
+export function gradePeople(o: Pick<NewcomerOutcome, "mergedNewcomers" | "decidedNewcomers" | "medianResponseHours">): 0 | 1 | 2 | 3 | undefined {
+  if (o.mergedNewcomers === undefined || o.decidedNewcomers === undefined) return undefined;
+  if (o.mergedNewcomers === 0) return 0;
+  if (o.mergedNewcomers < 2 || o.mergedNewcomers / Math.max(1, o.decidedNewcomers) < 0.5) return 1;
+  if (o.medianResponseHours !== undefined && o.medianResponseHours <= 7 * 24) return 3;
+  return 2;
 }
 
 /**

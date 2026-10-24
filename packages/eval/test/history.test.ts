@@ -69,3 +69,13 @@ describe("withRateLimitRetry", () => {
     expect(calls).toBe(7);
   });
 });
+
+describe("isNetworkError", () => {
+  it("recognises undici's fetch failures and nothing else", async () => {
+    const { isNetworkError } = await import("../src/github/history.ts");
+    expect(isNetworkError(new TypeError("fetch failed"))).toBe(true);
+    expect(isNetworkError(Object.assign(new TypeError("x"), { cause: { code: "ECONNRESET" } }))).toBe(true);
+    expect(isNetworkError(new TypeError("Cannot read properties of undefined"))).toBe(false);
+    expect(isNetworkError(new Error("fetch failed"))).toBe(false);
+  });
+});

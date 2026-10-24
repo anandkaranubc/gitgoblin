@@ -27,10 +27,17 @@ function oddsCorrelation(rows: BacktestDataset["rows"]): number {
   return spearman(decided.map((r) => r.score), decided.map((r) => r.outcome.mergeRate ?? 0)) ?? 0;
 }
 
-export function compareRescore(dataset: BacktestDataset, options: { k?: number | undefined; iterations?: number | undefined; seed?: number | undefined } = {}): Comparison {
+/**
+ * With several datasets the comparison is pooled: each date-language pair is its own nDCG pool,
+ * newcomer odds are correlated over every repository from every date, and the bootstrap resamples
+ * repositories across all of them.
+ */
+export function compareRescore(datasets: BacktestDataset | BacktestDataset[], options: { k?: number | undefined; iterations?: number | undefined; seed?: number | undefined } = {}): Comparison {
   const k = options.k ?? 10;
-  const before = dataset.rows.filter((r) => covered(r, dataset.asOf));
-  const after = rescore({ ...dataset, rows: before }).rows;
+  const list = Array.isArray(datasets) ? datasets : [datasets];
+  const tag = list.length > 1;
+  const before = list.flatMap((d) => d.rows.filter((r) => covered(r, d.asOf)).map((r) => (tag ? { ...r, language: `${d.asOf.slice(0, 10)}/${r.language}` } : r)));
+  const after = list.flatMap((d) => rescore({ ...d, rows: d.rows.filter((r) => covered(r, d.asOf)) }).rows.map((r) => (tag ? { ...r, language: `${d.asOf.slice(0, 10)}/${r.language}` } : r)));
   const iter = { iterations: options.iterations ?? 2000, seed: options.seed ?? 1 };
   const pick = <T>(xs: T[], idx: number[]) => idx.map((i) => xs[i]!);
   const ndcg = bootstrap(before.length, (idx) => macroNdcg(pick(after, idx), k) - macroNdcg(pick(before, idx), k), iter);

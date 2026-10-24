@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type BacktestRow, evaluate, toCandidate } from "../src/discovery-backtest.ts";
+import { type BacktestRow, covered, evaluate, toCandidate } from "../src/discovery-backtest.ts";
 import { renderEvaluation, renderSlices, renderTracker } from "../src/report.ts";
 
 function row(id: string, language: string, score: number, grade: number, merged: number, stars: number, excluded?: string): BacktestRow {
@@ -42,13 +42,17 @@ describe("evaluate", () => {
   });
 
   it("drops rows whose history does not reach back to T", () => {
-    const late = { ...rows[0]!, id: "late", historyStart: "2026-07-01T00:00:00Z" };
+    const late = { ...rows[0]!, id: "late", historyStart: "2026-07-01T00:00:00Z", prsTruncated: true };
+    const young = { ...rows[0]!, id: "young", historyStart: "2026-07-01T00:00:00Z", prsTruncated: false };
+    expect(covered(young, "2026-06-01T00:00:00Z")).toBe(true);
+    expect(covered(late, "2026-06-01T00:00:00Z")).toBe(false);
     const ev = evaluate({ rows: [...rows, late], asOf: "2026-06-01T00:00:00Z" }, { k: 3, iterations: 10 });
     expect(ev.uncovered).toBe(1);
     expect(ev.pools.find((p) => p.language === "ts")?.candidates).toBe(5);
     const all = evaluate({ rows: [...rows, late], asOf: "2026-06-01T00:00:00Z" }, { k: 3, iterations: 10, includeUncovered: true });
     expect(all.uncovered).toBe(0);
     expect(all.pools.find((p) => p.language === "ts")?.candidates).toBe(6);
+    expect(all.pools.find((p) => p.language === "ts")?.grades.filter((g) => g === 3)).toHaveLength(2);
   });
 
   it("maps rows to candidates with the prior-year behavioural signal", () => {
@@ -81,5 +85,19 @@ describe("examplesFrom", () => {
     expect(first.features.popularity).toBeGreaterThan(0);
     expect(first.features.priorOutsiderMerged).toBeCloseTo(Math.log1p(10), 10);
     expect(LEARN_FEATURES).toContain("priorNewcomerMergeRate");
+  });
+});
+
+describe("compareRescore", () => {
+  it("is zero for unchanged code and pools several datasets", async () => {
+    const { compareRescore } = await import("../src/compare.ts");
+    const { rescore } = await import("../src/discovery-backtest.ts");
+    const a = rescore({ experiment: "discovery-backtest" as const, asOf: "2026-06-01T00:00:00Z", windowDays: 120, fetchedAt: "", languages: [], perLanguage: 0, seed: 1, pool: {}, skipped: [], rows });
+    const b = { ...a, asOf: "2026-02-01T00:00:00Z" };
+    const one = compareRescore(a, { iterations: 20 });
+    expect(one.ndcg.delta.estimate).toBe(0);
+    const two = compareRescore([a, b], { iterations: 20 });
+    expect(two.repositories).toBe(2 * one.repositories);
+    expect(two.ndcg.delta.estimate).toBe(0);
   });
 });

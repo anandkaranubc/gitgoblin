@@ -1,73 +1,137 @@
 {
  "experiment": "intel-backtest",
  "asOf": "2026-04-25T00:00:00.000Z",
- "fetchedAt": "2026-10-23T05:56:32.977Z",
+ "fetchedAt": "2026-10-23T17:02:22.929Z",
  "rows": [
   {
    "id": "github.com/expressjs/express",
    "sha": "6340c1eaaedc0ddcae8be8df2cdb1d2e961cbf2f",
    "committedDate": "2026-04-23T17:50:02Z",
-   "analyzedAt": "2026-10-23T05:08:12.612Z",
+   "analyzedAt": "2026-10-23T16:35:55.696Z",
    "issues": [
-    {
-     "number": 4099,
-     "kind": "feature_request",
-     "rank": 1,
-     "score": 0.694,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 5623,
-     "kind": "issue",
-     "rank": 2,
-     "score": 0.663,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 6809,
-     "kind": "issue",
-     "rank": 3,
-     "score": 0.646,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
     {
      "number": 2414,
      "kind": "feature_request",
-     "rank": 4,
-     "score": 0.622,
+     "rank": 1,
+     "score": 0.723,
      "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 4944,
-     "kind": "issue",
-     "rank": 5,
-     "score": 0.611,
-     "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 2281,
      "kind": "issue",
+     "rank": 2,
+     "score": 0.706,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7538,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.685,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7350,
+     "kind": "issue",
+     "rank": 4,
+     "score": 0.664,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7362,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.664,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 6809,
+     "kind": "issue",
      "rank": 6,
-     "score": 0.608,
+     "score": 0.657,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 4557,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.649,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 6385,
      "kind": "issue",
-     "rank": 7,
-     "score": 0.606,
+     "rank": 8,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7532,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7503,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7510,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7525,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.611,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 4944,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.611,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7231,
+     "kind": "issue",
+     "rank": 15,
+     "score": 0.599,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7527,
+     "kind": "issue",
+     "rank": 16,
+     "score": 0.591,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     }
    ],
-   "opportunities": 7,
-   "liveKindsDropped": 7,
+   "opportunities": 17,
+   "liveKindsDropped": 17,
    "findings": [],
    "starter": {
     "openAtT": 2,
@@ -77,8 +141,8 @@
     "stillOpen": 1
    },
    "notes": [
-    "issues reviewed: 80; accepted 21, triage 0; passed over: 29 declined, labelled out, or waiting on the reporter, 19 features without maintainer endorsement, 4 unconfirmed or unclear, 4 already in flight or resolved, 3 questions",
-    "issues passed over: #7502: feature request without maintainer endorsement or a help label; #7506: unclear whether maintainers want this changed (no label, confirmation or repro); #6863: reads as a question, not a change request; #6711: feature request without maintainer endorsement or a help label; #7427: labelled question; #4059: unclear whether maintainers want this changed (no label, confirmation or repro); #6370: labelled awaiting more info; #2526: labelled discuss; #2564: feature request without maintainer endorsement or a help label; #2698: labelled discuss; #2739: feature request without maintainer endorsement or a help label; #2708: PR #2237 referencing it was merged; likely resolved; +47 more",
+    "issues reviewed: 80; accepted 15, triage 2; passed over: 27 declined, labelled out, or waiting on the reporter, 26 features without maintainer endorsement, 6 unconfirmed or unclear, 3 questions",
+    "issues passed over: #7547: feature request without maintainer endorsement or a help label; #7502: feature request without maintainer endorsement or a help label; #7506: unclear whether maintainers want this changed (no label, confirmation or repro); #6863: reads as a question, not a change request; #7427: labelled question; #4059: unclear whether maintainers want this changed (no label, confirmation or repro); #6370: labelled awaiting more info; #2526: labelled discuss; #2564: feature request without maintainer endorsement or a help label; #2698: labelled discuss; #2739: feature request without maintainer endorsement or a help label; #2708: feature request without maintainer endorsement or a help label; +50 more",
     "dependency checks disabled",
     "external link checks disabled"
    ]
@@ -87,7 +151,7 @@
    "id": "github.com/psf/requests",
    "sha": "f43f750ee10addbaa13901c1017631b4d70fd6e3",
    "committedDate": "2026-04-24T14:19:25Z",
-   "analyzedAt": "2026-10-23T05:08:47.293Z",
+   "analyzedAt": "2026-10-23T16:36:18.323Z",
    "issues": [
     {
      "number": 4664,
@@ -106,19 +170,19 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 6735,
+     "number": 4871,
      "kind": "issue",
      "rank": 3,
-     "score": 0.599,
+     "score": 0.61,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 4871,
+     "number": 6735,
      "kind": "issue",
      "rank": 4,
-     "score": 0.595,
-     "confidence": 0.51,
+     "score": 0.599,
+     "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
@@ -138,17 +202,9 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 6008,
-     "kind": "issue",
-     "rank": 7,
-     "score": 0.584,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
      "number": 7341,
      "kind": "issue",
-     "rank": 8,
+     "rank": 7,
      "score": 0.581,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -156,8 +212,16 @@
     {
      "number": 6734,
      "kind": "issue",
-     "rank": 9,
+     "rank": 8,
      "score": 0.581,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7399,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.578,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
@@ -202,7 +266,7 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 7399,
+     "number": 5348,
      "kind": "issue",
      "rank": 15,
      "score": 0.565,
@@ -210,25 +274,17 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 5348,
-     "kind": "issue",
-     "rank": 16,
-     "score": 0.565,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 7040,
-     "kind": "issue",
-     "rank": 17,
-     "score": 0.561,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
      "number": 7627,
      "kind": "issue",
-     "rank": 18,
+     "rank": 16,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7599,
+     "kind": "issue",
+     "rank": 17,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -236,7 +292,31 @@
     {
      "number": 6890,
      "kind": "issue",
+     "rank": 18,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 5950,
+     "kind": "issue",
      "rank": 19,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 5316,
+     "kind": "issue",
+     "rank": 20,
+     "score": 0.56,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 6917,
+     "kind": "issue",
+     "rank": 21,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -244,7 +324,15 @@
     {
      "number": 6830,
      "kind": "issue",
-     "rank": 20,
+     "rank": 22,
+     "score": 0.555,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 6026,
+     "kind": "issue",
+     "rank": 23,
      "score": 0.555,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -252,7 +340,7 @@
     {
      "number": 4914,
      "kind": "issue",
-     "rank": 21,
+     "rank": 24,
      "score": 0.551,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -260,7 +348,7 @@
     {
      "number": 6015,
      "kind": "issue",
-     "rank": 22,
+     "rank": 25,
      "score": 0.55,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -268,7 +356,7 @@
     {
      "number": 7564,
      "kind": "issue",
-     "rank": 23,
+     "rank": 26,
      "score": 0.548,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -276,71 +364,39 @@
     {
      "number": 7610,
      "kind": "issue",
-     "rank": 24,
-     "score": 0.548,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 6102,
-     "kind": "issue",
-     "rank": 25,
-     "score": 0.548,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 7599,
-     "kind": "issue",
-     "rank": 26,
-     "score": 0.548,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 6917,
-     "kind": "issue",
      "rank": 27,
      "score": 0.548,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 5950,
-     "kind": "issue",
-     "rank": 28,
-     "score": 0.547,
-     "confidence": 0.51,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 5316,
-     "kind": "issue",
-     "rank": 29,
-     "score": 0.547,
-     "confidence": 0.51,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 6026,
-     "kind": "issue",
-     "rank": 30,
-     "score": 0.542,
-     "confidence": 0.51,
-     "flaggedAlreadyFixed": false
-    },
-    {
      "number": 6992,
      "kind": "issue",
-     "rank": 31,
+     "rank": 28,
      "score": 0.537,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 5814,
+     "kind": "issue",
+     "rank": 29,
+     "score": 0.537,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7188,
+     "kind": "issue",
+     "rank": 30,
+     "score": 0.533,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 6990,
      "kind": "issue",
-     "rank": 32,
+     "rank": 31,
      "score": 0.53,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -348,7 +404,7 @@
     {
      "number": 7350,
      "kind": "issue",
-     "rank": 33,
+     "rank": 32,
      "score": 0.53,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -356,7 +412,7 @@
     {
      "number": 7122,
      "kind": "issue",
-     "rank": 34,
+     "rank": 33,
      "score": 0.53,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -364,23 +420,15 @@
     {
      "number": 6900,
      "kind": "issue",
-     "rank": 35,
+     "rank": 34,
      "score": 0.53,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 5814,
-     "kind": "issue",
-     "rank": 36,
-     "score": 0.525,
-     "confidence": 0.51,
-     "flaggedAlreadyFixed": false
-    },
-    {
      "number": 5058,
      "kind": "issue",
-     "rank": 37,
+     "rank": 35,
      "score": 0.525,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -388,25 +436,33 @@
     {
      "number": 2018,
      "kind": "issue",
-     "rank": 39,
+     "rank": 37,
      "score": 0.522,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 7188,
+     "number": 6282,
+     "kind": "issue",
+     "rank": 38,
+     "score": 0.518,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 7630,
      "kind": "issue",
      "rank": 40,
-     "score": 0.52,
-     "confidence": 0.51,
+     "score": 0.515,
+     "confidence": 0.6,
      "flaggedAlreadyFixed": false
     }
    ],
    "opportunities": 40,
-   "liveKindsDropped": 39,
+   "liveKindsDropped": 38,
    "findings": [
     {
-     "rank": 38,
+     "rank": 36,
      "kind": "test_gap",
      "title": "Investigate and re-enable skipped or expected-failure tests",
      "score": 0.525,
@@ -414,6 +470,18 @@
      "path": "tests/test_requests.py",
      "line": 2159,
      "excerpt": "@pytest.mark.xfail",
+     "control": "unchanged",
+     "status": "unchanged"
+    },
+    {
+     "rank": 39,
+     "kind": "tech_debt",
+     "title": "Clean up TODOs that reference issues which are already closed",
+     "score": 0.517,
+     "effort": "small",
+     "path": "src/requests/adapters.py",
+     "line": 664,
+     "excerpt": "TODO: Remove this in 3.0.0: see #2811",
      "control": "unchanged",
      "status": "unchanged"
     }
@@ -436,7 +504,7 @@
    "id": "github.com/junegunn/fzf",
    "sha": "27dab2422e5faa6149b302d941280fcb8f9fe74c",
    "committedDate": "2026-04-21T09:48:00Z",
-   "analyzedAt": "2026-10-23T05:08:51.137Z",
+   "analyzedAt": "2026-10-23T16:36:36.557Z",
    "issues": [
     {
      "number": 3212,
@@ -455,7 +523,7 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 2526,
+     "number": 4499,
      "kind": "issue",
      "rank": 3,
      "score": 0.586,
@@ -463,17 +531,9 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 4499,
-     "kind": "issue",
-     "rank": 4,
-     "score": 0.586,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
      "number": 4883,
      "kind": "issue",
-     "rank": 6,
+     "rank": 5,
      "score": 0.579,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -481,7 +541,7 @@
     {
      "number": 4837,
      "kind": "issue",
-     "rank": 7,
+     "rank": 6,
      "score": 0.579,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -489,7 +549,7 @@
     {
      "number": 3521,
      "kind": "issue",
-     "rank": 8,
+     "rank": 7,
      "score": 0.579,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -497,15 +557,7 @@
     {
      "number": 4603,
      "kind": "issue",
-     "rank": 9,
-     "score": 0.579,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 4547,
-     "kind": "issue",
-     "rank": 10,
+     "rank": 8,
      "score": 0.579,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -513,7 +565,7 @@
     {
      "number": 4671,
      "kind": "issue",
-     "rank": 11,
+     "rank": 9,
      "score": 0.568,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -521,7 +573,7 @@
     {
      "number": 4677,
      "kind": "issue",
-     "rank": 12,
+     "rank": 10,
      "score": 0.565,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -529,15 +581,23 @@
     {
      "number": 2059,
      "kind": "issue",
-     "rank": 13,
+     "rank": 11,
      "score": 0.565,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 4943,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 4892,
      "kind": "issue",
-     "rank": 14,
+     "rank": 13,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -545,7 +605,7 @@
     {
      "number": 4784,
      "kind": "issue",
-     "rank": 15,
+     "rank": 14,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -553,7 +613,7 @@
     {
      "number": 4754,
      "kind": "issue",
-     "rank": 16,
+     "rank": 15,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -561,7 +621,7 @@
     {
      "number": 4738,
      "kind": "issue",
-     "rank": 17,
+     "rank": 16,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -569,7 +629,7 @@
     {
      "number": 4674,
      "kind": "issue",
-     "rank": 18,
+     "rank": 17,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -577,7 +637,7 @@
     {
      "number": 4662,
      "kind": "issue",
-     "rank": 19,
+     "rank": 18,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -585,7 +645,7 @@
     {
      "number": 4660,
      "kind": "issue",
-     "rank": 20,
+     "rank": 19,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -593,7 +653,7 @@
     {
      "number": 4640,
      "kind": "issue",
-     "rank": 21,
+     "rank": 20,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -601,7 +661,7 @@
     {
      "number": 4656,
      "kind": "issue",
-     "rank": 22,
+     "rank": 21,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -609,7 +669,7 @@
     {
      "number": 4625,
      "kind": "issue",
-     "rank": 23,
+     "rank": 22,
      "score": 0.56,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -617,10 +677,18 @@
     {
      "number": 4851,
      "kind": "feature_request",
-     "rank": 27,
+     "rank": 26,
      "score": 0.512,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 2526,
+     "kind": "issue",
+     "rank": 27,
+     "score": 0.504,
+     "confidence": 0.36,
+     "flaggedAlreadyFixed": true
     },
     {
      "number": 4260,
@@ -635,14 +703,14 @@
    "liveKindsDropped": 28,
    "findings": [
     {
-     "rank": 25,
+     "rank": 23,
      "kind": "test_gap",
      "title": "Investigate and re-enable skipped or expected-failure tests",
-     "score": 0.549,
+     "score": 0.555,
      "effort": "small",
-     "path": "src/tui/tcell_test.go",
-     "line": 33,
-     "excerpt": "t.Skip(\"Skipped because this test misbehaves in terminal, pipe to a pager or redirect output to a file to run it safely.\")",
+     "path": "src/terminal_test.go",
+     "line": 333,
+     "excerpt": "t.SkipNow()",
      "control": "unchanged",
      "status": "unchanged"
     },
@@ -677,12 +745,12 @@
    "id": "github.com/burntsushi/ripgrep",
    "sha": "4519153e5e461527f4bca45b042fff45c4ec6fb9",
    "committedDate": "2026-02-27T16:25:19Z",
-   "analyzedAt": "2026-10-23T05:09:04.553Z",
+   "analyzedAt": "2026-10-23T16:37:05.090Z",
    "issues": [
     {
      "number": 3494,
      "kind": "issue",
-     "rank": 2,
+     "rank": 1,
      "score": 0.612,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -690,7 +758,7 @@
     {
      "number": 1518,
      "kind": "feature_request",
-     "rank": 3,
+     "rank": 2,
      "score": 0.571,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
@@ -698,8 +766,16 @@
     {
      "number": 3236,
      "kind": "issue",
-     "rank": 4,
+     "rank": 3,
      "score": 0.564,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 2873,
+     "kind": "issue",
+     "rank": 4,
+     "score": 0.558,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
@@ -736,17 +812,9 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 2873,
-     "kind": "issue",
-     "rank": 9,
-     "score": 0.546,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
      "number": 3372,
      "kind": "issue",
-     "rank": 10,
+     "rank": 9,
      "score": 0.544,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -754,7 +822,7 @@
     {
      "number": 3382,
      "kind": "issue",
-     "rank": 11,
+     "rank": 10,
      "score": 0.532,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -762,7 +830,7 @@
     {
      "number": 3289,
      "kind": "issue",
-     "rank": 12,
+     "rank": 11,
      "score": 0.532,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -770,7 +838,7 @@
     {
      "number": 3295,
      "kind": "issue",
-     "rank": 13,
+     "rank": 12,
      "score": 0.532,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -778,7 +846,7 @@
     {
      "number": 2761,
      "kind": "issue",
-     "rank": 14,
+     "rank": 13,
      "score": 0.532,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -786,7 +854,7 @@
     {
      "number": 3035,
      "kind": "feature_request",
-     "rank": 15,
+     "rank": 14,
      "score": 0.527,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
@@ -794,7 +862,7 @@
     {
      "number": 3448,
      "kind": "issue",
-     "rank": 16,
+     "rank": 15,
      "score": 0.518,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -802,7 +870,7 @@
     {
      "number": 3306,
      "kind": "issue",
-     "rank": 17,
+     "rank": 16,
      "score": 0.514,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -810,25 +878,17 @@
     {
      "number": 3296,
      "kind": "issue",
-     "rank": 18,
+     "rank": 17,
      "score": 0.514,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 3514,
-     "kind": "issue",
-     "rank": 19,
-     "score": 0.476,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     }
    ],
-   "opportunities": 23,
-   "liveKindsDropped": 21,
+   "opportunities": 21,
+   "liveKindsDropped": 19,
    "findings": [
     {
-     "rank": 22,
+     "rank": 20,
      "kind": "tech_debt",
      "title": "Resolve a 2.9-year-old FIXME in crates/regex/src/non_matching.rs",
      "score": 0.403,
@@ -840,7 +900,7 @@
      "status": "unchanged"
     },
     {
-     "rank": 23,
+     "rank": 21,
      "kind": "tech_debt",
      "title": "Resolve a 2.9-year-old FIXME in crates/regex/src/non_matching.rs",
      "score": 0.403,
@@ -860,8 +920,8 @@
     "stillOpen": 9
    },
    "notes": [
-    "issues reviewed: 80; accepted 35, triage 2; passed over: 21 features without maintainer endorsement, 10 questions, 6 unconfirmed or unclear, 5 declined, labelled out, or waiting on the reporter",
-    "issues passed over: #3568: unclear whether maintainers want this changed (no label, confirmation or repro); #3567: unclear whether maintainers want this changed (no label, confirmation or repro); #3548: unclear whether maintainers want this changed (no label, confirmation or repro); #3517: feature request without maintainer endorsement or a help label; #3526: feature request without maintainer endorsement or a help label; #2832: feature request without maintainer endorsement or a help label; #3533: feature request without maintainer endorsement or a help label; #3532: feature request without maintainer endorsement or a help label; #3522: feature request without maintainer endorsement or a help label; #1497: labelled question; #3342: unclear whether maintainers want this changed (no label, confirmation or repro); #3484: unclear whether maintainers want this changed (no label, confirmation or repro); +30 more",
+    "issues reviewed: 80; accepted 32, triage 2; passed over: 22 features without maintainer endorsement, 13 questions, 5 unconfirmed or unclear, 5 declined, labelled out, or waiting on the reporter",
+    "issues passed over: #3568: unclear whether maintainers want this changed (no label, confirmation or repro); #3567: unclear whether maintainers want this changed (no label, confirmation or repro); #3526: feature request without maintainer endorsement or a help label; #2832: feature request without maintainer endorsement or a help label; #3533: feature request without maintainer endorsement or a help label; #3532: feature request without maintainer endorsement or a help label; #3522: feature request without maintainer endorsement or a help label; #1497: labelled question; #3342: unclear whether maintainers want this changed (no label, confirmation or repro); #3484: unclear whether maintainers want this changed (no label, confirmation or repro); #3323: labelled question; #875: labelled question; +33 more",
     "dependency checks disabled",
     "external link checks disabled"
    ]
@@ -870,7 +930,7 @@
    "id": "github.com/tqdm/tqdm",
    "sha": "b557cb03b6fd573a98e433fcf80b016c7e48702f",
    "committedDate": "2026-02-25T19:39:53Z",
-   "analyzedAt": "2026-10-23T05:09:27.174Z",
+   "analyzedAt": "2026-10-23T16:37:34.112Z",
    "issues": [
     {
      "number": 1037,
@@ -913,17 +973,9 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 1339,
-     "kind": "issue",
-     "rank": 7,
-     "score": 0.649,
-     "confidence": 0.36,
-     "flaggedAlreadyFixed": true
-    },
-    {
      "number": 1687,
      "kind": "issue",
-     "rank": 8,
+     "rank": 7,
      "score": 0.649,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -931,7 +983,7 @@
     {
      "number": 1702,
      "kind": "issue",
-     "rank": 9,
+     "rank": 8,
      "score": 0.628,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -939,16 +991,24 @@
     {
      "number": 1856,
      "kind": "issue",
-     "rank": 10,
+     "rank": 9,
      "score": 0.621,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
+     "number": 1339,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.587,
+     "confidence": 0.36,
+     "flaggedAlreadyFixed": true
+    },
+    {
      "number": 1858,
      "kind": "issue",
      "rank": 11,
-     "score": 0.621,
+     "score": 0.566,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     }
@@ -974,7 +1034,7 @@
    "id": "github.com/google/gson",
    "sha": "6bf8bf6cbf4d4f5f72f69262be890a5a5e28259d",
    "committedDate": "2026-04-23T21:08:20Z",
-   "analyzedAt": "2026-10-23T05:09:52.393Z",
+   "analyzedAt": "2026-10-23T16:38:01.454Z",
    "issues": [
     {
      "number": 2689,
@@ -1025,15 +1085,15 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 2645,
+     "number": 2658,
      "kind": "issue",
      "rank": 8,
-     "score": 0.649,
+     "score": 0.664,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 2943,
+     "number": 2645,
      "kind": "issue",
      "rank": 9,
      "score": 0.649,
@@ -1041,7 +1101,7 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 2658,
+     "number": 2943,
      "kind": "issue",
      "rank": 10,
      "score": 0.649,
@@ -1081,9 +1141,25 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 2539,
+     "number": 2520,
      "kind": "issue",
      "rank": 16,
+     "score": 0.615,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 2638,
+     "kind": "issue",
+     "rank": 17,
+     "score": 0.603,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 2539,
+     "kind": "issue",
+     "rank": 18,
      "score": 0.6,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -1091,25 +1167,9 @@
     {
      "number": 2563,
      "kind": "issue",
-     "rank": 17,
+     "rank": 19,
      "score": 0.6,
      "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 2520,
-     "kind": "issue",
-     "rank": 18,
-     "score": 0.6,
-     "confidence": 0.51,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 2638,
-     "kind": "issue",
-     "rank": 19,
-     "score": 0.588,
-     "confidence": 0.51,
      "flaggedAlreadyFixed": false
     },
     {
@@ -1124,23 +1184,23 @@
      "number": 1242,
      "kind": "issue",
      "rank": 21,
-     "score": 0.538,
-     "confidence": 0.51,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 1632,
-     "kind": "issue",
-     "rank": 22,
-     "score": 0.527,
+     "score": 0.551,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 1920,
      "kind": "issue",
+     "rank": 22,
+     "score": 0.536,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 1632,
+     "kind": "issue",
      "rank": 23,
-     "score": 0.523,
+     "score": 0.527,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
@@ -1187,23 +1247,23 @@
    "id": "github.com/sinatra/sinatra",
    "sha": "f891dd2b6f4911e356600efe6c3b82af97d262c6",
    "committedDate": "2026-03-02T10:56:21Z",
-   "analyzedAt": "2026-10-23T05:09:54.768Z",
+   "analyzedAt": "2026-10-23T16:38:16.138Z",
    "issues": [
-    {
-     "number": 2196,
-     "kind": "issue",
-     "rank": 1,
-     "score": 0.627,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
     {
      "number": 1723,
      "kind": "feature_request",
-     "rank": 2,
+     "rank": 1,
      "score": 0.562,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 2196,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.545,
+     "confidence": 0.36,
+     "flaggedAlreadyFixed": true
     }
    ],
    "opportunities": 4,
@@ -1227,7 +1287,7 @@
    "id": "github.com/jqlang/jq",
    "sha": "5f2a14dd1b03a8b43015058ed006dd4ab24fb58f",
    "committedDate": "2026-04-24T13:33:53Z",
-   "analyzedAt": "2026-10-23T05:10:03.265Z",
+   "analyzedAt": "2026-10-23T16:38:38.325Z",
    "issues": [
     {
      "number": 3156,
@@ -1287,8 +1347,20 @@
     }
    ],
    "opportunities": 13,
-   "liveKindsDropped": 10,
+   "liveKindsDropped": 9,
    "findings": [
+    {
+     "rank": 6,
+     "kind": "ci_rot",
+     "title": "Workflow targets the deprecated macOS 14 runner",
+     "score": 0.614,
+     "effort": "trivial",
+     "path": ".github/workflows/ci.yml",
+     "line": 133,
+     "excerpt": "runs-on: macos-14",
+     "control": "unchanged",
+     "status": "unchanged"
+    },
     {
      "rank": 12,
      "kind": "tech_debt",
@@ -1322,8 +1394,8 @@
     "stillOpen": 0
    },
    "notes": [
-    "issues reviewed: 80; accepted 21, triage 2; passed over: 50 features without maintainer endorsement, 4 already in flight or resolved, 3 unconfirmed or unclear",
-    "issues passed over: #2418: feature request without maintainer endorsement or a help label; #3644: feature request without maintainer endorsement or a help label; #1563: feature request without maintainer endorsement or a help label; #3479: feature request without maintainer endorsement or a help label; #3231: feature request without maintainer endorsement or a help label; #2425: feature request without maintainer endorsement or a help label; #1101: feature request without maintainer endorsement or a help label; #1390: feature request without maintainer endorsement or a help label; #1225: feature request without maintainer endorsement or a help label; #2223: feature request without maintainer endorsement or a help label; #1582: feature request without maintainer endorsement or a help label; #2855: unclear whether maintainers want this changed (no label, confirmation or repro); +45 more",
+    "issues reviewed: 80; accepted 21, triage 2; passed over: 49 features without maintainer endorsement, 4 unconfirmed or unclear, 4 already in flight or resolved",
+    "issues passed over: #3693: unclear whether maintainers want this changed (no label, confirmation or repro); #2418: feature request without maintainer endorsement or a help label; #3644: feature request without maintainer endorsement or a help label; #1563: feature request without maintainer endorsement or a help label; #3479: feature request without maintainer endorsement or a help label; #3231: feature request without maintainer endorsement or a help label; #2425: feature request without maintainer endorsement or a help label; #1101: feature request without maintainer endorsement or a help label; #1390: feature request without maintainer endorsement or a help label; #1225: feature request without maintainer endorsement or a help label; #2223: feature request without maintainer endorsement or a help label; #1582: feature request without maintainer endorsement or a help label; +45 more",
     "dependency checks disabled",
     "external link checks disabled"
    ]
@@ -1332,53 +1404,69 @@
    "id": "github.com/vitejs/vite",
    "sha": "640202a2167b0c19b94e4d3b8ff87309ae1f44d0",
    "committedDate": "2026-04-24T09:26:14Z",
-   "analyzedAt": "2026-10-23T05:10:39.713Z",
+   "analyzedAt": "2026-10-23T16:40:05.129Z",
    "issues": [
     {
-     "number": 18977,
-     "kind": "feature_request",
+     "number": 13756,
+     "kind": "issue",
      "rank": 1,
-     "score": 0.69,
-     "confidence": 0.85,
+     "score": 0.723,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 8739,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.723,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23549,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.712,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 13582,
+     "kind": "issue",
+     "rank": 4,
+     "score": 0.706,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 3924,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.706,
+     "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 23757,
      "kind": "issue",
-     "rank": 2,
-     "score": 0.671,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 23362,
-     "kind": "issue",
-     "rank": 3,
-     "score": 0.649,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 23407,
-     "kind": "issue",
-     "rank": 5,
-     "score": 0.628,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 23626,
-     "kind": "issue",
      "rank": 6,
-     "score": 0.612,
+     "score": 0.704,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 21903,
+     "number": 22918,
      "kind": "issue",
      "rank": 7,
-     "score": 0.608,
+     "score": 0.704,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23096,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.685,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
@@ -1386,64 +1474,256 @@
      "number": 23807,
      "kind": "issue",
      "rank": 9,
-     "score": 0.576,
+     "score": 0.685,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23735,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.685,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23585,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.685,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 22301,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.673,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23052,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.673,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23818,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.669,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 19214,
      "kind": "issue",
-     "rank": 10,
-     "score": 0.576,
+     "rank": 15,
+     "score": 0.669,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 22918,
+     "number": 21503,
      "kind": "issue",
-     "rank": 11,
-     "score": 0.575,
+     "rank": 16,
+     "score": 0.665,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 20098,
+     "number": 23848,
      "kind": "issue",
-     "rank": 12,
-     "score": 0.559,
+     "rank": 17,
+     "score": 0.664,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 16155,
+     "kind": "issue",
+     "rank": 18,
+     "score": 0.664,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23195,
+     "kind": "issue",
+     "rank": 19,
+     "score": 0.664,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23472,
+     "kind": "issue",
+     "rank": 20,
+     "score": 0.664,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23221,
+     "kind": "issue",
+     "rank": 21,
+     "score": 0.664,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23362,
+     "kind": "issue",
+     "rank": 22,
+     "score": 0.664,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 18712,
      "kind": "issue",
-     "rank": 13,
-     "score": 0.559,
+     "rank": 23,
+     "score": 0.664,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 20799,
      "kind": "issue",
-     "rank": 14,
-     "score": 0.555,
+     "rank": 24,
+     "score": 0.66,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 23781,
+     "number": 23620,
      "kind": "issue",
-     "rank": 15,
-     "score": 0.54,
+     "rank": 25,
+     "score": 0.652,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 20098,
+     "kind": "issue",
+     "rank": 26,
+     "score": 0.649,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23880,
+     "kind": "issue",
+     "rank": 28,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23810,
+     "kind": "issue",
+     "rank": 29,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23860,
+     "kind": "issue",
+     "rank": 30,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23847,
+     "kind": "issue",
+     "rank": 31,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23819,
+     "kind": "issue",
+     "rank": 32,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23802,
+     "kind": "issue",
+     "rank": 33,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23783,
+     "kind": "issue",
+     "rank": 34,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23782,
+     "kind": "issue",
+     "rank": 35,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23779,
+     "kind": "issue",
+     "rank": 36,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23719,
+     "kind": "issue",
+     "rank": 37,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23752,
+     "kind": "issue",
+     "rank": 38,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23749,
+     "kind": "issue",
+     "rank": 39,
+     "score": 0.643,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23704,
+     "kind": "issue",
+     "rank": 40,
+     "score": 0.643,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     }
    ],
-   "opportunities": 16,
-   "liveKindsDropped": 14,
+   "opportunities": 40,
+   "liveKindsDropped": 39,
    "findings": [
     {
-     "rank": 4,
+     "rank": 27,
      "kind": "test_gap",
      "title": "Investigate and re-enable skipped or expected-failure tests",
      "score": 0.646,
@@ -1462,18 +1742,6 @@
       "prNumber": 22824,
       "by": "maintainer"
      }
-    },
-    {
-     "rank": 16,
-     "kind": "tech_debt",
-     "title": "Resolve a 1.6-year-old TODO in packages/vite/src/node/server/mixedModuleGraph.ts",
-     "score": 0.464,
-     "effort": "medium",
-     "path": "packages/vite/src/node/server/mixedModuleGraph.ts",
-     "line": 426,
-     "excerpt": "TODO: It seems there isn't usage of this method in the ecosystem",
-     "control": "unchanged",
-     "status": "unchanged"
     }
    ],
    "starter": {
@@ -1484,8 +1752,8 @@
     "stillOpen": 0
    },
    "notes": [
-    "issues reviewed: 80; accepted 47, triage 0; passed over: 12 features without maintainer endorsement, 10 declined, labelled out, or waiting on the reporter, 4 unconfirmed or unclear, 4 already in flight or resolved, 2 questions, 1 other",
-    "issues passed over: #4790: opened by a bot; #23028: a maintainer pushed back: \"Priority is from the app-developer view: what breaks a real app under bundled dev (P0 highest). Ins…\"; #23840: reads as a question, not a change request; #23650: feature request without maintainer endorsement or a help label; #23821: unclear whether maintainers want this changed (no label, confirmation or repro); #23805: feature request without maintainer endorsement or a help label; #23195: PR #23080 referencing it was merged; likely resolved; #21954: labelled bug: upstream; #23766: unclear whether maintainers want this changed (no label, confirmation or repro); #23706: feature request without maintainer endorsement or a help label; #23313: unclear whether maintainers want this changed (no label, confirmation or repro); #23558: labelled bug: upstream; +21 more",
+    "issues reviewed: 80; accepted 49, triage 0; passed over: 16 features without maintainer endorsement, 8 declined, labelled out, or waiting on the reporter, 4 unconfirmed or unclear, 2 questions, 1 other",
+    "issues passed over: #4790: opened by a bot; #23028: feature request without maintainer endorsement or a help label; #23766: unclear whether maintainers want this changed (no label, confirmation or repro); #23840: reads as a question, not a change request; #23650: feature request without maintainer endorsement or a help label; #23821: unclear whether maintainers want this changed (no label, confirmation or repro); #23805: feature request without maintainer endorsement or a help label; #21954: labelled bug: upstream; #23706: feature request without maintainer endorsement or a help label; #23313: unclear whether maintainers want this changed (no label, confirmation or repro); #23558: labelled bug: upstream; #21911: labelled bug: upstream; +19 more",
     "dependency checks disabled",
     "stopped reading files after 60 matches",
     "external link checks disabled"
@@ -1495,7 +1763,7 @@
    "id": "github.com/python-pillow/pillow",
    "sha": "53800d4fcf883416261cc46d45c49a9804b9e8ba",
    "committedDate": "2026-04-24T11:10:05Z",
-   "analyzedAt": "2026-10-23T05:10:50.950Z",
+   "analyzedAt": "2026-10-23T16:40:36.092Z",
    "issues": [
     {
      "number": 1888,
@@ -1508,14 +1776,14 @@
     {
      "number": 3048,
      "kind": "feature_request",
-     "rank": 3,
+     "rank": 4,
      "score": 0.53,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
     }
    ],
-   "opportunities": 5,
-   "liveKindsDropped": 2,
+   "opportunities": 6,
+   "liveKindsDropped": 3,
    "findings": [
     {
      "rank": 1,
@@ -1539,7 +1807,7 @@
      }
     },
     {
-     "rank": 4,
+     "rank": 5,
      "kind": "tech_debt",
      "title": "Resolve a 15.7-year-old FIXME in src/libImaging/RawEncode.c",
      "score": 0.492,
@@ -1551,7 +1819,7 @@
      "status": "unchanged"
     },
     {
-     "rank": 5,
+     "rank": 6,
      "kind": "tech_debt",
      "title": "Resolve a 15.7-year-old FIXME in src/libImaging/Filter.c",
      "score": 0.492,
@@ -1582,7 +1850,7 @@
    "id": "github.com/pallets/flask",
    "sha": "2ac89889f4cc330eabd50f295dcef02828522c69",
    "committedDate": "2026-04-09T04:04:03Z",
-   "analyzedAt": "2026-10-23T05:10:52.728Z",
+   "analyzedAt": "2026-10-23T16:40:37.339Z",
    "issues": [],
    "opportunities": 1,
    "liveKindsDropped": 1,
@@ -1606,7 +1874,7 @@
    "id": "github.com/mochajs/mocha",
    "sha": "46d09d1a8e259300e09b3bc546894878290acac8",
    "committedDate": "2026-04-18T23:05:23Z",
-   "analyzedAt": "2026-10-23T05:11:05.153Z",
+   "analyzedAt": "2026-10-23T16:41:16.583Z",
    "issues": [
     {
      "number": 5006,
@@ -1628,7 +1896,7 @@
      "number": 5641,
      "kind": "issue",
      "rank": 3,
-     "score": 0.696,
+     "score": 0.712,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
     },
@@ -1641,43 +1909,43 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 6219,
-     "kind": "issue",
-     "rank": 5,
-     "score": 0.665,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
      "number": 5665,
      "kind": "issue",
-     "rank": 6,
-     "score": 0.662,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 4743,
-     "kind": "issue",
-     "rank": 7,
-     "score": 0.662,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 3627,
-     "kind": "feature_request",
-     "rank": 8,
-     "score": 0.66,
+     "rank": 5,
+     "score": 0.677,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 6395,
      "kind": "issue",
-     "rank": 9,
-     "score": 0.659,
+     "rank": 6,
+     "score": 0.674,
      "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 6428,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.67,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 6219,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.665,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 3627,
+     "kind": "feature_request",
+     "rank": 9,
+     "score": 0.66,
+     "confidence": 0.85,
      "flaggedAlreadyFixed": false
     },
     {
@@ -1689,33 +1957,41 @@
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 6428,
+     "number": 5922,
      "kind": "issue",
      "rank": 11,
-     "score": 0.648,
+     "score": 0.643,
      "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 5184,
+     "kind": "issue",
+     "rank": 12,
+     "score": 0.639,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 5543,
+     "kind": "feature_request",
+     "rank": 13,
+     "score": 0.637,
+     "confidence": 0.85,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 6116,
      "kind": "issue",
-     "rank": 12,
+     "rank": 14,
      "score": 0.632,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 5922,
-     "kind": "issue",
-     "rank": 13,
-     "score": 0.628,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 902,
      "kind": "feature_request",
-     "rank": 14,
+     "rank": 15,
      "score": 0.627,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
@@ -1723,26 +1999,18 @@
     {
      "number": 6214,
      "kind": "issue",
-     "rank": 15,
+     "rank": 16,
      "score": 0.626,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 5184,
+     "number": 4743,
      "kind": "issue",
-     "rank": 16,
-     "score": 0.625,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 5543,
-     "kind": "feature_request",
      "rank": 18,
-     "score": 0.61,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
+     "score": 0.568,
+     "confidence": 0.51,
+     "flaggedAlreadyFixed": true
     }
    ],
    "opportunities": 20,
@@ -1758,6 +2026,7 @@
      "line": 128,
      "excerpt": "XXX: output is always an array, but we only have one output config.",
      "control": "gone",
+     "controlTargeted": true,
      "status": "file_removed"
     },
     {
@@ -1770,6 +2039,7 @@
      "line": 138,
      "excerpt": "TODO: figure out exactly what the sad path looks like here.",
      "control": "gone",
+     "controlTargeted": false,
      "status": "moved"
     }
    ],
@@ -1792,12 +2062,20 @@
    "id": "github.com/prettier/prettier",
    "sha": "f5f2f10dc02867317483993f6de1e1fe1dd73f41",
    "committedDate": "2026-04-21T13:56:04Z",
-   "analyzedAt": "2026-10-23T05:11:54.383Z",
+   "analyzedAt": "2026-10-23T16:42:49.347Z",
    "issues": [
+    {
+     "number": 19427,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.788,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false
+    },
     {
      "number": 20076,
      "kind": "issue",
-     "rank": 1,
+     "rank": 2,
      "score": 0.781,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
@@ -1805,7 +2083,7 @@
     {
      "number": 5287,
      "kind": "feature_request",
-     "rank": 2,
+     "rank": 3,
      "score": 0.777,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
@@ -1813,21 +2091,13 @@
     {
      "number": 8640,
      "kind": "feature_request",
-     "rank": 3,
+     "rank": 4,
      "score": 0.777,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 16080,
-     "kind": "issue",
-     "rank": 4,
-     "score": 0.77,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 19427,
      "kind": "issue",
      "rank": 5,
      "score": 0.77,
@@ -1918,23 +2188,23 @@
      "number": 19085,
      "kind": "issue",
      "rank": 16,
-     "score": 0.677,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 15918,
-     "kind": "issue",
-     "rank": 17,
-     "score": 0.669,
+     "score": 0.693,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 20199,
      "kind": "issue",
+     "rank": 17,
+     "score": 0.681,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 15918,
+     "kind": "issue",
      "rank": 18,
-     "score": 0.665,
+     "score": 0.669,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
@@ -2131,166 +2401,170 @@
    "id": "github.com/astral-sh/ruff",
    "sha": "76109a943a019e6a3368645313fb850994af5783",
    "committedDate": "2026-04-24T23:09:33Z",
-   "analyzedAt": "2026-10-23T05:12:39.118Z",
+   "analyzedAt": "2026-10-23T16:44:17.039Z",
    "issues": [
-    {
-     "number": 21581,
-     "kind": "issue",
-     "rank": 2,
-     "score": 0.793,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 12287,
-     "kind": "issue",
-     "rank": 3,
-     "score": 0.774,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 8232,
-     "kind": "feature_request",
-     "rank": 4,
-     "score": 0.729,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
     {
      "number": 29068,
      "kind": "issue",
-     "rank": 5,
-     "score": 0.696,
+     "rank": 2,
+     "score": 0.714,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 29073,
      "kind": "issue",
-     "rank": 6,
-     "score": 0.687,
+     "rank": 3,
+     "score": 0.705,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 29449,
+     "number": 15781,
      "kind": "issue",
-     "rank": 8,
-     "score": 0.666,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 29512,
-     "kind": "issue",
-     "rank": 10,
-     "score": 0.665,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 29422,
-     "kind": "issue",
-     "rank": 11,
-     "score": 0.665,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 28274,
-     "kind": "issue",
-     "rank": 12,
-     "score": 0.659,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 27008,
-     "kind": "issue",
-     "rank": 13,
-     "score": 0.65,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 29169,
-     "kind": "issue",
-     "rank": 14,
-     "score": 0.65,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 12611,
-     "kind": "issue",
-     "rank": 15,
-     "score": 0.6,
+     "rank": 4,
+     "score": 0.689,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 29452,
      "kind": "issue",
-     "rank": 16,
-     "score": 0.592,
+     "rank": 5,
+     "score": 0.689,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 29375,
      "kind": "issue",
-     "rank": 17,
-     "score": 0.592,
+     "rank": 6,
+     "score": 0.689,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 29512,
+     "kind": "issue",
+     "rank": 7,
+     "score": 0.682,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 29513,
+     "kind": "issue",
+     "rank": 8,
+     "score": 0.682,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 29422,
+     "kind": "issue",
+     "rank": 9,
+     "score": 0.682,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 28930,
      "kind": "issue",
-     "rank": 18,
-     "score": 0.586,
+     "rank": 10,
+     "score": 0.682,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 28274,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.675,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 13414,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.666,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 19396,
      "kind": "issue",
-     "rank": 20,
-     "score": 0.573,
+     "rank": 14,
+     "score": 0.666,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 29449,
+     "kind": "issue",
+     "rank": 15,
+     "score": 0.666,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 27008,
+     "kind": "issue",
+     "rank": 16,
+     "score": 0.666,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 29106,
      "kind": "issue",
-     "rank": 21,
-     "score": 0.573,
+     "rank": 17,
+     "score": 0.666,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 29169,
+     "kind": "issue",
+     "rank": 18,
+     "score": 0.666,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 26766,
      "kind": "issue",
-     "rank": 22,
-     "score": 0.558,
+     "rank": 20,
+     "score": 0.648,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 29087,
-     "kind": "feature_request",
-     "rank": 23,
-     "score": 0.547,
-     "confidence": 0.85,
+     "number": 12611,
+     "kind": "issue",
+     "rank": 21,
+     "score": 0.6,
+     "confidence": 0.6,
      "flaggedAlreadyFixed": false
     }
    ],
    "opportunities": 25,
-   "liveKindsDropped": 20,
+   "liveKindsDropped": 19,
    "findings": [
     {
-     "rank": 7,
+     "rank": 1,
+     "kind": "ci_rot",
+     "title": "Workflow targets the deprecated macOS 14 runner",
+     "score": 0.806,
+     "effort": "trivial",
+     "path": ".github/workflows/build-binaries.yml",
+     "line": 70,
+     "excerpt": "runs-on: macos-14",
+     "control": "unchanged",
+     "status": "moved"
+    },
+    {
+     "rank": 12,
      "kind": "broken_link",
      "title": "Fix links to files that no longer exist in the repository",
      "score": 0.669,
@@ -2311,7 +2585,7 @@
      }
     },
     {
-     "rank": 9,
+     "rank": 19,
      "kind": "test_gap",
      "title": "Investigate and re-enable skipped or expected-failure tests",
      "score": 0.666,
@@ -2319,7 +2593,8 @@
      "path": "crates/ruff_python_parser/tests/fixtures.rs",
      "line": 301,
      "excerpt": "#[ignore]",
-     "status": "unverifiable"
+     "control": "unchanged",
+     "status": "unchanged"
     },
     {
      "rank": 24,
@@ -2342,6 +2617,7 @@
      "line": 35,
      "excerpt": "TODO: remove this test case when the fixes for `perf401` and `perf403` are stabilized",
      "control": "gone",
+     "controlTargeted": false,
      "status": "unchanged"
     }
    ],
@@ -2353,8 +2629,8 @@
     "stillOpen": 4
    },
    "notes": [
-    "issues reviewed: 80; accepted 20, triage 0; passed over: 29 declined, labelled out, or waiting on the reporter, 11 unconfirmed or unclear, 10 questions, 5 already in flight or resolved, 4 features without maintainer endorsement, 1 other",
-    "issues passed over: #29665: feature request without maintainer endorsement or a help label; #10578: opened by a bot; #29640: unclear whether maintainers want this changed (no label, confirmation or repro); #283: PR #789 referencing it was merged; likely resolved; #29593: labelled needs-decision; #25114: labelled needs-decision; #29601: labelled needs-decision; #21301: reads as a question, not a change request; #29486: labelled needs-decision; #27959: PR #27906 referencing it was merged; likely resolved; #29516: labelled needs-decision; #29534: labelled needs-decision; +48 more",
+    "issues reviewed: 80; accepted 18, triage 1; passed over: 29 declined, labelled out, or waiting on the reporter, 12 unconfirmed or unclear, 10 questions, 9 features without maintainer endorsement, 1 other",
+    "issues passed over: #10578: opened by a bot; #29640: unclear whether maintainers want this changed (no label, confirmation or repro); #283: feature request without maintainer endorsement or a help label; #29593: labelled needs-decision; #25114: labelled needs-decision; #29601: labelled needs-decision; #21301: reads as a question, not a change request; #29486: labelled needs-decision; #27959: feature request without maintainer endorsement or a help label; #29516: labelled needs-decision; #29534: labelled needs-decision; #29484: unclear whether maintainers want this changed (no label, confirmation or repro); +49 more",
     "dependency checks disabled",
     "external link checks disabled",
     "test suite is snapshot-driven (3656 snapshot files); untested-file heuristics skipped",
@@ -2365,76 +2641,116 @@
    "id": "github.com/hashicorp/terraform",
    "sha": "844f216569901c0f8142136e9e47fe62e336b9ca",
    "committedDate": "2026-04-24T10:54:24Z",
-   "analyzedAt": "2026-10-23T05:13:53.733Z",
+   "analyzedAt": "2026-10-23T16:45:40.838Z",
    "issues": [
+    {
+     "number": 29524,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.829,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 23710,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.816,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 30951,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.762,
+     "confidence": 0.85,
+     "flaggedAlreadyFixed": false
+    },
     {
      "number": 30783,
      "kind": "issue",
-     "rank": 1,
-     "score": 0.743,
+     "rank": 4,
+     "score": 0.762,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 38939,
      "kind": "issue",
-     "rank": 2,
+     "rank": 5,
      "score": 0.723,
      "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 29524,
-     "kind": "issue",
-     "rank": 3,
-     "score": 0.713,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 37130,
-     "kind": "issue",
-     "rank": 4,
-     "score": 0.706,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 23710,
-     "kind": "issue",
-     "rank": 5,
-     "score": 0.702,
-     "confidence": 0.85,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 38369,
      "kind": "issue",
      "rank": 6,
-     "score": 0.701,
+     "score": 0.719,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 28477,
+     "number": 39399,
      "kind": "issue",
      "rank": 7,
-     "score": 0.696,
+     "score": 0.712,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 38577,
      "kind": "issue",
+     "rank": 8,
+     "score": 0.712,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 39440,
+     "kind": "issue",
      "rank": 9,
-     "score": 0.694,
+     "score": 0.708,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 37130,
+     "kind": "issue",
+     "rank": 10,
+     "score": 0.706,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 28477,
+     "kind": "issue",
+     "rank": 11,
+     "score": 0.696,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 39214,
+     "kind": "issue",
+     "rank": 13,
+     "score": 0.693,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 38872,
+     "kind": "issue",
+     "rank": 14,
+     "score": 0.681,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 39431,
      "kind": "issue",
-     "rank": 10,
+     "rank": 15,
      "score": 0.677,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -2442,39 +2758,63 @@
     {
      "number": 39337,
      "kind": "issue",
-     "rank": 11,
+     "rank": 16,
      "score": 0.677,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 39214,
+     "number": 32382,
      "kind": "issue",
-     "rank": 12,
-     "score": 0.676,
+     "rank": 18,
+     "score": 0.673,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 38578,
+     "kind": "issue",
+     "rank": 19,
+     "score": 0.673,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 38302,
+     "kind": "issue",
+     "rank": 20,
+     "score": 0.673,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 29212,
      "kind": "issue",
-     "rank": 14,
+     "rank": 21,
      "score": 0.662,
      "confidence": 0.85,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 30951,
+     "number": 38720,
      "kind": "issue",
-     "rank": 15,
-     "score": 0.656,
-     "confidence": 0.85,
+     "rank": 22,
+     "score": 0.657,
+     "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
-     "number": 39434,
+     "number": 38396,
      "kind": "issue",
-     "rank": 16,
+     "rank": 23,
+     "score": 0.653,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 39300,
+     "kind": "issue",
+     "rank": 24,
      "score": 0.652,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -2482,7 +2822,7 @@
     {
      "number": 39107,
      "kind": "issue",
-     "rank": 17,
+     "rank": 25,
      "score": 0.652,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
@@ -2490,97 +2830,65 @@
     {
      "number": 35703,
      "kind": "issue",
-     "rank": 18,
-     "score": 0.633,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 32382,
-     "kind": "issue",
-     "rank": 19,
-     "score": 0.628,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 39399,
-     "kind": "issue",
-     "rank": 20,
-     "score": 0.613,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 38872,
-     "kind": "issue",
-     "rank": 21,
-     "score": 0.586,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 39298,
-     "kind": "feature_request",
-     "rank": 22,
-     "score": 0.58,
-     "confidence": 0.85,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 38578,
-     "kind": "issue",
-     "rank": 23,
-     "score": 0.579,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 38720,
-     "kind": "issue",
-     "rank": 24,
-     "score": 0.566,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 39212,
-     "kind": "issue",
-     "rank": 25,
-     "score": 0.565,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 38396,
-     "kind": "issue",
      "rank": 26,
-     "score": 0.562,
-     "confidence": 0.6,
-     "flaggedAlreadyFixed": false
-    },
-    {
-     "number": 39409,
-     "kind": "issue",
-     "rank": 27,
-     "score": 0.561,
+     "score": 0.649,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
     },
     {
      "number": 30910,
      "kind": "issue",
-     "rank": 28,
-     "score": 0.559,
+     "rank": 27,
+     "score": 0.649,
      "confidence": 0.6,
      "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 39200,
+     "kind": "issue",
+     "rank": 28,
+     "score": 0.619,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 33803,
+     "kind": "issue",
+     "rank": 29,
+     "score": 0.599,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 39212,
+     "kind": "issue",
+     "rank": 30,
+     "score": 0.565,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 39409,
+     "kind": "issue",
+     "rank": 31,
+     "score": 0.561,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 39441,
+     "kind": "issue",
+     "rank": 32,
+     "score": 0.533,
+     "confidence": 0.36,
+     "flaggedAlreadyFixed": true
     }
    ],
-   "opportunities": 30,
-   "liveKindsDropped": 26,
+   "opportunities": 34,
+   "liveKindsDropped": 30,
    "findings": [
     {
-     "rank": 8,
+     "rank": 12,
      "kind": "deprecation",
      "title": "Replace io/ioutil with io and os",
      "score": 0.696,
@@ -2592,7 +2900,7 @@
      "status": "unchanged"
     },
     {
-     "rank": 13,
+     "rank": 17,
      "kind": "test_gap",
      "title": "Investigate and re-enable skipped or expected-failure tests",
      "score": 0.675,
@@ -2600,10 +2908,11 @@
      "path": "internal/backend/remote-state/azure/helpers_test.go",
      "line": 37,
      "excerpt": "t.Skip()",
-     "status": "unverifiable"
+     "control": "unchanged",
+     "status": "unchanged"
     },
     {
-     "rank": 29,
+     "rank": 33,
      "kind": "tech_debt",
      "title": "Resolve a 5.1-year-old FIXME in internal/configs/configschema/internal_validate.go",
      "score": 0.464,
@@ -2615,15 +2924,15 @@
      "status": "unchanged"
     },
     {
-     "rank": 30,
+     "rank": 34,
      "kind": "tech_debt",
-     "title": "Resolve a 1.9-year-old FIXME in internal/terraform/transform_destroy_cbd.go",
+     "title": "Resolve a 3.7-year-old FIXME in scripts/goimportscheck.sh",
      "score": 0.464,
      "effort": "medium",
-     "path": "internal/terraform/transform_destroy_cbd.go",
-     "line": 112,
-     "excerpt": "FIXME: This should optimally be decided entirely during plan, and then we",
-     "control": "gone",
+     "path": "scripts/goimportscheck.sh",
+     "line": 29,
+     "excerpt": "FIXME: \"readarray' is a Bash 4 feature, which means that currently this script",
+     "control": "unchanged",
      "status": "unchanged"
     }
    ],
@@ -2636,8 +2945,8 @@
    },
    "notes": [
     "history limited to 2000 commits because the repository is large",
-    "issues reviewed: 80; accepted 29, triage 0; passed over: 43 features without maintainer endorsement, 5 already in flight or resolved, 2 declined, labelled out, or waiting on the reporter, 1 unconfirmed or unclear",
-    "issues passed over: #39436: feature request without maintainer endorsement or a help label; #39428: feature request without maintainer endorsement or a help label; #39426: feature request without maintainer endorsement or a help label; #39252: feature request without maintainer endorsement or a help label; #25051: feature request without maintainer endorsement or a help label; #37439: PR #37492 referencing it was merged; likely resolved; #39412: labelled waiting-response; #32418: feature request without maintainer endorsement or a help label; #39403: PR #39404 referencing it was merged; likely resolved; #35740: feature request without maintainer endorsement or a help label; #16375: feature request without maintainer endorsement or a help label; #37679: feature request without maintainer endorsement or a help label; +39 more",
+    "issues reviewed: 80; accepted 30, triage 0; passed over: 47 features without maintainer endorsement, 2 unconfirmed or unclear, 1 declined, labelled out, or waiting on the reporter",
+    "issues passed over: #39317: feature request without maintainer endorsement or a help label; #39436: feature request without maintainer endorsement or a help label; #39428: feature request without maintainer endorsement or a help label; #39426: feature request without maintainer endorsement or a help label; #39252: feature request without maintainer endorsement or a help label; #25051: feature request without maintainer endorsement or a help label; #37439: unclear whether maintainers want this changed (no label, confirmation or repro); #39412: labelled waiting-response; #32418: feature request without maintainer endorsement or a help label; #39403: feature request without maintainer endorsement or a help label; #35740: feature request without maintainer endorsement or a help label; #16375: feature request without maintainer endorsement or a help label; +38 more",
     "dependency checks disabled",
     "external link checks disabled",
     "stopped reading files after 400 matches"
@@ -2647,11 +2956,32 @@
    "id": "github.com/guzzle/guzzle",
    "sha": "fb92d95f80a9da51bf8f2a5b26d8e8ea3b6d99ed",
    "committedDate": "2026-03-05T20:35:15Z",
-   "analyzedAt": "2026-10-23T05:13:55.689Z",
+   "analyzedAt": "2026-10-23T16:45:58.544Z",
    "issues": [],
    "opportunities": 2,
-   "liveKindsDropped": 1,
+   "liveKindsDropped": 0,
    "findings": [
+    {
+     "rank": 1,
+     "kind": "ci_rot",
+     "title": "Core actions pinned to Node 16 era versions",
+     "score": 0.655,
+     "effort": "trivial",
+     "path": ".github/workflows/ci.yml",
+     "line": 26,
+     "excerpt": "uses: actions/setup-node@v3",
+     "control": "unchanged",
+     "status": "excerpt_gone",
+     "commit": {
+      "sha": "df5461271a03b70593f03c4dd5622ab88991e176",
+      "author": "Graham Campbell",
+      "date": "2026-05-18T17:29:57+01:00",
+      "daysAfter": 24,
+      "files": 13,
+      "prNumber": 3336,
+      "by": "maintainer"
+     }
+    },
     {
      "rank": 2,
      "kind": "test_gap",
@@ -2692,10 +3022,43 @@
    "id": "github.com/jd/tenacity",
    "sha": "8779333a4759e56427b5d7ba23cacd3fe6054d61",
    "committedDate": "2026-03-23T17:21:20Z",
-   "analyzedAt": "2026-10-23T05:13:57.077Z",
-   "issues": [],
-   "opportunities": 0,
-   "liveKindsDropped": 0,
+   "analyzedAt": "2026-10-23T16:46:14.017Z",
+   "issues": [
+    {
+     "number": 763,
+     "kind": "issue",
+     "rank": 1,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 534,
+     "kind": "issue",
+     "rank": 2,
+     "score": 0.628,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 507,
+     "kind": "issue",
+     "rank": 3,
+     "score": 0.586,
+     "confidence": 0.6,
+     "flaggedAlreadyFixed": false
+    },
+    {
+     "number": 511,
+     "kind": "issue",
+     "rank": 5,
+     "score": 0.532,
+     "confidence": 0.36,
+     "flaggedAlreadyFixed": true
+    }
+   ],
+   "opportunities": 6,
+   "liveKindsDropped": 6,
    "findings": [],
    "starter": {
     "openAtT": 0,
@@ -2705,7 +3068,8 @@
     "stillOpen": 0
    },
    "notes": [
-    "issue and PR samples unavailable: GitHub GraphQL error: [{\"type\":\"RATE_LIMIT\",\"code\":\"graphql_rate_limit\",\"message\":\"API rate limit already exceeded for user ID 119553199.\"}]",
+    "issues reviewed: 22; accepted 13, triage 2; passed over: 3 features without maintainer endorsement, 2 unconfirmed or unclear, 1 questions",
+    "issues passed over: #504: feature request without maintainer endorsement or a help label; #644: feature request without maintainer endorsement or a help label; #625: feature request without maintainer endorsement or a help label; #521: reads as a question, not a change request; #517: unclear whether maintainers want this changed (no label, confirmation or repro); #496: unclear whether maintainers want this changed (no label, confirmation or repro)",
     "dependency checks disabled",
     "external link checks disabled"
    ]
