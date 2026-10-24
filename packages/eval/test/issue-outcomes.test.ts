@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BacktestIssue } from "@gitgoblin/intel/backtest";
-import { classify, type IssueRow, issueOutcome, summarize } from "../src/issue-outcomes.ts";
+import { ageSplit, classify, type IssueRow, issueOutcome, strict, summarize } from "../src/issue-outcomes.ts";
 
 const W = { start: "2026-06-20T00:00:00.000Z", end: "2026-10-18T00:00:00.000Z" };
 
@@ -53,5 +53,26 @@ describe("summarize", () => {
     expect(s.intelAccepted.outsiderPr.estimate).toBeCloseTo(1 / 2, 10);
     expect(s.starterLabel.notPlanned).toBeCloseTo(1 / 2, 10);
     expect(s.intelTriage.issues).toBe(0);
+  });
+});
+
+describe("ageSplit", () => {
+  it("compares recent and older accepted issues", () => {
+    const row = (createdAt: string, outcome: IssueRow["outcome"], accepted = true): IssueRow => ({ repo: "o/n", number: 1, createdAt, selections: accepted ? ["all", "intelAccepted"] : ["all"], verdict: "issue", outcome });
+    const split = ageSplit({ asOf: "2026-06-20T00:00:00.000Z", repos: [
+      { repo: "a/b", openTruncated: false, issues: [row("2026-06-01T00:00:00Z", "outsider_pr"), row("2026-05-01T00:00:00Z", "open_or_later"), row("2025-01-01T00:00:00Z", "open_or_later"), row("2026-06-02T00:00:00Z", "outsider_pr", false)] },
+      { repo: "c/d", openTruncated: false, issues: [row("2024-01-01T00:00:00Z", "outsider_pr"), row("2024-02-01T00:00:00Z", "open_or_later"), row("2024-03-01T00:00:00Z", "open_or_later")] },
+    ] }, 90, { iterations: 50 });
+    expect(split.recent).toEqual({ issues: 2, rate: 0.5 });
+    expect(split.older).toEqual({ issues: 4, rate: 0.25 });
+    expect(split.difference.estimate).toBeCloseTo(0.25, 10);
+  });
+});
+
+describe("strict", () => {
+  it("counts frequent closers as core and reporters' own fixes as not an outsider's", () => {
+    const row = (n: number, fixer: string, reporter = "r"): IssueRow => ({ repo: "o/n", number: n, createdAt: "", selections: ["all"], verdict: "issue", outcome: "outsider_pr", fixer, reporter });
+    const d = strict({ repos: [{ repo: "o/n", openTruncated: false, issues: [row(1, "busy"), row(2, "busy"), row(3, "busy"), row(4, "busy"), row(5, "once"), row(6, "self", "self")] }] });
+    expect(d.repos[0]!.issues.map((i) => i.outcome)).toEqual(["maintainer_pr", "maintainer_pr", "maintainer_pr", "maintainer_pr", "outsider_pr", "self_fix"]);
   });
 });

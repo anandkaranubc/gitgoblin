@@ -32,7 +32,10 @@ export interface IssueRow {
   selections: Selection[];
   /** intel's verdict at T: kind, or the reason it passed the issue over. */
   verdict: string;
-  outcome: "outsider_pr" | "maintainer_pr" | "completed_other" | "not_planned" | "open_or_later";
+  outcome: "outsider_pr" | "maintainer_pr" | "self_fix" | "completed_other" | "not_planned" | "open_or_later";
+  /** Who opened the issue and who authored the pull request that closed it, so stricter readings of "outsider" can be applied later. */
+  reporter?: string | undefined;
+  fixer?: string | undefined;
 }
 
 /** What happened to an issue in the window. */
@@ -100,7 +103,7 @@ export async function repoIssues(api: GitHubApi, repo: string, window: Window, o
     after = res.endCursor;
   }
   const openAtT = collected.filter((i) => i.createdAt < window.start && !i.author?.isBot);
-  const issues = openAtT.map((issue) => ({ repo, number: issue.number, createdAt: issue.createdAt, ...classify(issue, at, repoUrl, starter), outcome: issueOutcome(issue, window) }));
+  const issues = openAtT.map((issue) => ({ repo, number: issue.number, createdAt: issue.createdAt, ...classify(issue, at, repoUrl, starter), outcome: issueOutcome(issue, window), reporter: issue.author?.login, fixer: issue.closedBy?.merged ? issue.closedBy.authorLogin : undefined }));
   return { repo, issues, openTruncated };
 }
 
@@ -171,4 +174,54 @@ export function summarize(dataset: Pick<IssueOutcomeDataset, "repos">, options: 
       notPlanned: share(all, sel, (o) => o === "not_planned"),
     }];
   })) as Record<Selection, SelectionSummary>;
+}
+
+export interface AgeSplit {
+  days: number;
+  recent: { issues: number; rate: number };
+  older: { issues: number; rate: number };
+  /** Outsider-fix rate of recent accepted issues minus older ones, with a 95% interval resampling repositories. */
+  difference: { estimate: number; lower: number; upper: number };
+}
+
+/** Among issues intel accepts: are the recently opened ones resolved by outsiders more often than the older ones? */
+export function ageSplit(dataset: Pick<IssueOutcomeDataset, "repos" | "asOf">, days = 90, options: { iterations?: number | undefined; seed?: number | undefined } = {}): AgeSplit {
+  const t = Date.parse(dataset.asOf);
+  const repos = dataset.repos;
+  const isRecent = (i: IssueRow) => t - Date.parse(i.createdAt) <= days * DAY_MS;
+  const rate = (idx: number[], recent: boolean) => {
+    let n = 0;
+    let hit = 0;
+    for (const k of idx) for (const i of repos[k]!.issues) if (i.selections.includes("intelAccepted") && isRecent(i) === recent) { n++; if (i.outcome === "outsider_pr") hit++; }
+    return { n, rate: n ? hit / n : 0 };
+  };
+  const all = repos.map((_, k) => k);
+  const r = rate(all, true);
+  const o = rate(all, false);
+  const b = bootstrap(repos.length, (idx) => rate(idx, true).rate - rate(idx, false).rate, { iterations: options.iterations ?? 2000, seed: options.seed ?? 1 });
+  return { days, recent: { issues: r.n, rate: r.rate }, older: { issues: o.n, rate: o.rate }, difference: { estimate: b.estimate, lower: b.lower, upper: b.upper } };
+}
+
+/**
+ * A stricter reading of "outsider fix". GitHub reports private organization members as plain
+ * contributors, so an author who closed `coreAt` or more issues in one repository's window is
+ * counted as core; and a reporter fixing their own issue is not work a newcomer could have taken.
+ */
+export function strict<D extends Pick<IssueOutcomeDataset, "repos">>(dataset: D, coreAt = 4): D {
+  return {
+    ...dataset,
+    repos: dataset.repos.map((r) => {
+      const fixes = new Map<string, number>();
+      for (const i of r.issues) if (i.outcome === "outsider_pr" && i.fixer) fixes.set(i.fixer, (fixes.get(i.fixer) ?? 0) + 1);
+      return {
+        ...r,
+        issues: r.issues.map((i) => {
+          if (i.outcome !== "outsider_pr") return i;
+          if (i.fixer && (fixes.get(i.fixer) ?? 0) >= coreAt) return { ...i, outcome: "maintainer_pr" as const };
+          if (i.fixer && i.reporter && i.fixer === i.reporter) return { ...i, outcome: "self_fix" as const };
+          return i;
+        }),
+      };
+    }),
+  };
 }
