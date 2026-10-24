@@ -2,9 +2,7 @@
 
 gitgoblin runs as a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server, so the agent you already use can find open-source projects worth your time, understand what a repository needs, and hand you an evidence-backed piece of work to start on. Any client that can start a local (stdio) MCP server can use it; the table below says which clients were actually connected and which were only configured.
 
-> **Where this stands (October 2026).** The server ships from [GitHub release `mcp-v0.1.6`](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.6) as an npm tarball and a Claude Desktop bundle, and is listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.anandkaranubc/gitgoblin) as `io.github.anandkaranubc/gitgoblin`. Every command on this page installs the tarball from that release.
->
-> **Do not run `npx -y @gitgoblin/mcp` yet.** That npm name is not published, and `npx -y` runs whatever package first claims it. This page will switch to the short name once the gitgoblin maintainers have published it.
+> **Where this stands.** The server is published on npm as [`@gitgoblin/mcp`](https://www.npmjs.com/package/@gitgoblin/mcp), built and attested by gitgoblin's release workflow, and listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.anandkaranubc/gitgoblin) as `io.github.anandkaranubc/gitgoblin`. Each [GitHub release](https://github.com/anandkaranubc/gitgoblin/releases) also carries the same tarball and a Claude Desktop bundle.
 
 You need [Node.js](https://nodejs.org) 24 or newer and git. No account, no token, no configuration. A GitHub token is optional and explained below.
 
@@ -14,11 +12,11 @@ One line per agent. Each registers the same stdio server.
 
 | Agent | Command | Checked |
 | --- | --- | --- |
-| Claude Code | `claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz` | Connected; tools called |
-| Codex | `codex mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz` | Connected; tools called |
-| Gemini CLI | `gemini mcp add -s user gitgoblin npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz` | Configured only |
-| VS Code | `code --add-mcp '{"name":"gitgoblin","type":"stdio","command":"npx","args":["-y","https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz"]}'` | Configured only |
-| Cursor | [![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=gitgoblin&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImh0dHBzOi8vZ2l0aHViLmNvbS9hbmFuZGthcmFudWJjL2dpdGdvYmxpbi9yZWxlYXNlcy9kb3dubG9hZC9tY3AtdjAuMS42L2dpdGdvYmxpbi1tY3AtMC4xLjYudGd6Il19) or the JSON below in `.cursor/mcp.json` | Tools listed by the Cursor CLI |
+| Claude Code | `claude mcp add gitgoblin -- npx -y @gitgoblin/mcp` | Connected; tools called |
+| Codex | `codex mcp add gitgoblin -- npx -y @gitgoblin/mcp` | Connected; tools called |
+| Gemini CLI | `gemini mcp add -s user gitgoblin npx -y @gitgoblin/mcp` | Configured only |
+| VS Code | `code --add-mcp '{"name":"gitgoblin","type":"stdio","command":"npx","args":["-y","@gitgoblin/mcp"]}'` | Configured only |
+| Cursor | [![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=gitgoblin&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBnaXRnb2JsaW4vbWNwIl19) or the JSON below in `.cursor/mcp.json` | Tools listed by the Cursor CLI |
 
 Everything else takes the standard block, in whichever file your client reads (the [table below](#other-clients) lists them):
 
@@ -27,20 +25,20 @@ Everything else takes the standard block, in whichever file your client reads (t
   "mcpServers": {
     "gitgoblin": {
       "command": "npx",
-      "args": ["-y", "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz"]
+      "args": ["-y", "@gitgoblin/mcp"]
     }
   }
 }
 ```
 
-The first start downloads the tarball, a few seconds on a normal connection; after that npm caches it. [What has been verified](#what-has-been-verified) has the details behind the Checked column.
+The first start downloads the package, a few seconds on a normal connection; after that npm caches it. [What has been verified](#what-has-been-verified) has the details behind the Checked column.
 
 ## Teach your agent when to use it
 
 The MCP server gives your agent the tools. The gitgoblin **skill** teaches it when to reach for them, how to read the results, and how to behave in someone else's repository once you decide to act. It follows the [Agent Skills](https://agentskills.io) format, so one command installs it into whichever agents you use:
 
 ```sh
-npx skills add anandkaranubc/gitgoblin
+npx skills@1.7.4 add anandkaranubc/gitgoblin
 ```
 
 Claude Code users can take the plugin instead, which bundles the server and the skill:
@@ -62,7 +60,7 @@ The agent will call `discover_repositories`, then `analyze_repository` on whiche
 
 ## The tools
 
-All four only read public data. Discovery and `explain_repository` read GitHub; `analyze_repository` and `get_opportunity` also read gitlab.com and codeberg.org through their public APIs. Other hosts are refused. Nothing is written anywhere except a local cache under `~/.cache/gitgoblin`. Because your agent picks the repository, the server treats every repository as hostile: committed symlinks are checked out as plain files, git only speaks HTTPS, external links are never fetched, and the agent is told that text quoted from a repository is data, not instructions.
+All four only read public repositories, and confirm each one is public with an anonymous request before reading it, even when you have given the server a GitHub token that can see private ones. Discovery and `explain_repository` read GitHub; `analyze_repository` and `get_opportunity` also read gitlab.com and codeberg.org through their public APIs. Other hosts are refused. Nothing is written anywhere except a local cache under `~/.cache/gitgoblin`. Because your agent picks the repository, the server treats every repository as hostile: committed symlinks are checked out as plain files, git only speaks HTTPS, external links are never fetched, and the agent is told that text quoted from a repository is data, not instructions.
 
 | Tool | What it does | Time |
 | --- | --- | --- |
@@ -80,9 +78,9 @@ Without a token GitHub allows 60 requests per hour and 10 searches per minute, e
 Most clients pass environment variables through:
 
 ```sh
-claude mcp add gitgoblin -e GITHUB_TOKEN=ghp_... -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz
-codex mcp add gitgoblin --env GITHUB_TOKEN=ghp_... -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz
-gemini mcp add -s user -e GITHUB_TOKEN=ghp_... gitgoblin npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz
+claude mcp add gitgoblin -e GITHUB_TOKEN=ghp_... -- npx -y @gitgoblin/mcp
+codex mcp add gitgoblin --env GITHUB_TOKEN=ghp_... -- npx -y @gitgoblin/mcp
+gemini mcp add -s user -e GITHUB_TOKEN=ghp_... gitgoblin npx -y @gitgoblin/mcp
 ```
 
 Or in JSON: `"env": { "GITHUB_TOKEN": "ghp_..." }`. If you are logged in with the GitHub CLI you can skip all of this.
@@ -95,7 +93,7 @@ Or in JSON: `"env": { "GITHUB_TOKEN": "ghp_..." }`. If you are logged in with th
 
 ### Claude Desktop
 
-Download [`gitgoblin.mcpb`](https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin.mcpb) from the release and open it; Claude Desktop shows the install dialog (or use Settings → Extensions → Advanced settings → Install Extension). The bundle asks for an optional GitHub token and declares Node.js 24 or newer. Alternatively, Settings → Developer → Edit Config opens `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude\` on Windows); paste the standard block and restart. The Anthropic directory distributes local servers as Claude Code plugins, which is why gitgoblin ships one.
+Download [`gitgoblin.mcpb`](https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.7/gitgoblin.mcpb) from the release and open it; Claude Desktop shows the install dialog (or use Settings → Extensions → Advanced settings → Install Extension). The bundle asks for an optional GitHub token and declares Node.js 24 or newer. Alternatively, Settings → Developer → Edit Config opens `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude\` on Windows); paste the standard block and restart. The Anthropic directory distributes local servers as Claude Code plugins, which is why gitgoblin ships one.
 
 ### Codex
 
@@ -104,7 +102,7 @@ Download [`gitgoblin.mcpb`](https://github.com/anandkaranubc/gitgoblin/releases/
 ```toml
 [mcp_servers.gitgoblin]
 command = "npx"
-args = ["-y", "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz"]
+args = ["-y", "@gitgoblin/mcp"]
 env_vars = ["GITHUB_TOKEN"]
 ```
 
@@ -118,7 +116,7 @@ Project: `.cursor/mcp.json`; everywhere: `~/.cursor/mcp.json`; both take the sta
 
 `gemini mcp add` writes to the project's `.gemini/settings.json` unless you pass `-s user` for `~/.gemini/settings.json`. The `mcpServers` entry takes the standard block. Check the connection with `/mcp` inside a session: in Gemini CLI 0.64, `gemini mcp list` labels every configured server "Disabled" without trying to start it, so that label says nothing about the server. [Gemini CLI MCP docs](https://geminicli.com/docs/tools/mcp-server/).
 
-Google moved individual accounts from Gemini CLI to the Antigravity CLI in June 2026. There, `agy mcp add gitgoblin npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz` writes `~/.gemini/config/mcp_config.json` (or a project's `.agents/mcp_config.json`) with the same `mcpServers` block; `agy mcp list` shows it. [Antigravity MCP docs](https://antigravity.google/docs/mcp).
+Google moved individual accounts from Gemini CLI to the Antigravity CLI in June 2026. There, `agy mcp add gitgoblin npx -y @gitgoblin/mcp` writes `~/.gemini/config/mcp_config.json` (or a project's `.agents/mcp_config.json`) with the same `mcpServers` block; `agy mcp list` shows it. [Antigravity MCP docs](https://antigravity.google/docs/mcp).
 
 ### VS Code
 
@@ -130,13 +128,13 @@ Google moved individual accounts from Gemini CLI to the Antigravity CLI in June 
     "gitgoblin": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz"]
+      "args": ["-y", "@gitgoblin/mcp"]
     }
   }
 }
 ```
 
-Or click [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=gitgoblin&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22https%3A%2F%2Fgithub.com%2Fanandkaranubc%2Fgitgoblin%2Freleases%2Fdownload%2Fmcp-v0.1.6%2Fgitgoblin-mcp-0.1.6.tgz%22%5D%7D). Copilot's agent mode lists the tools under the tools picker. [VS Code MCP docs](https://code.visualstudio.com/docs/agents/reference/mcp-configuration).
+Or click [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=gitgoblin&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40gitgoblin%2Fmcp%22%5D%7D). Copilot's agent mode lists the tools under the tools picker. [VS Code MCP docs](https://code.visualstudio.com/docs/agents/reference/mcp-configuration).
 
 ### Other clients
 
@@ -148,13 +146,13 @@ Same standard block, different file:
 | Windsurf / Devin Desktop | `~/.codeium/windsurf/mcp_config.json` (older) or `~/.config/devin/mcp_config.json` |
 | Cline | `cline_mcp_settings.json` via the MCP Servers panel |
 | Roo Code | `.roo/mcp.json` or the global `mcp_settings.json` |
-| OpenCode | `opencode.json`, as `"mcp": { "gitgoblin": { "type": "local", "command": ["npx", "-y", "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz"] } }` |
-| Goose | `~/.config/goose/config.yaml`, as an `extensions` entry with `cmd: npx`, `args: [-y, "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz"]` |
-| Amp | `amp mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz` |
+| OpenCode | `opencode.json`, as `"mcp": { "gitgoblin": { "type": "local", "command": ["npx", "-y", "@gitgoblin/mcp"] } }` |
+| Goose | `~/.config/goose/config.yaml`, as an `extensions` entry with `cmd: npx`, `args: [-y, "@gitgoblin/mcp"]` |
+| Amp | `amp mcp add gitgoblin -- npx -y @gitgoblin/mcp` |
 | JetBrains AI Assistant / Junie | Settings → Tools → AI Assistant → MCP, paste the block; Junie also reads `.junie/mcp/mcp.json` |
 | Kiro | `.kiro/settings/mcp.json` |
 | Warp | `~/.warp/.mcp.json` or Settings → Agents → MCP servers |
-| Continue | `.continue/mcpServers/gitgoblin.yaml` with `type: stdio`, `command: npx`, `args: [-y, "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz"]` |
+| Continue | `.continue/mcpServers/gitgoblin.yaml` with `type: stdio`, `command: npx`, `args: [-y, "@gitgoblin/mcp"]` |
 
 If your client is not listed, it almost certainly accepts the standard block too. Open an issue if it does not.
 
@@ -177,10 +175,11 @@ The launcher runs the TypeScript source directly on Node 24; there is nothing to
 - **"Analysis of owner/name stopped after 5 minutes"**: analysis runs in its own thread and is stopped when it takes that long, so the other tools keep answering. Very large repositories can hit the limit; something in a repository that makes analysis pathologically slow will too. Try another repository, or report it with the repository's name.
 - **Rate limited**: the error says when the limit resets and how to add a token. See [GitHub token](#github-token-optional).
 - **A repository is "not found"**: check the spelling, whether it moved, and that it is public. Private repositories are out of scope.
+- **"not a repository gitgoblin can confirm is public"**: the server reads public repositories only and checks each one with an anonymous request to its forge. Private repositories are refused even when your token can see them. If the forge was unreachable or GitHub's anonymous limit was spent, try again in a few minutes.
 - **"not one of the forges this tool reads"**: discovery and `explain_repository` look repositories up through GitHub's API, so they take github.com only; analysis and briefings take github.com, gitlab.com and codeberg.org. Self-hosted forges are refused so the server, whose repository your agent chooses, can never be pointed at your own network.
 - **Something printed on stdout broke the connection**: the server routes all its logging to stderr. If you see this, it is a bug; please report it with the client and the command.
 
-The cache lives at `~/.cache/gitgoblin` (`$XDG_CACHE_HOME/gitgoblin`, or `$GITGOBLIN_CACHE_DIR`). Deleting it is always safe.
+The cache lives at `~/.cache/gitgoblin` (`$XDG_CACHE_HOME/gitgoblin`, or `$GITGOBLIN_CACHE_DIR`); the server's clones are under `mcp/repos/<host>` there, at most 20 per forge. Deleting it is always safe.
 
 ## What has been verified
 
@@ -189,17 +188,18 @@ Checked on macOS on 22 and 23 October 2026. "Release" means the tarball or bundl
 | Client | Checked | Result |
 | --- | --- | --- |
 | `npx` from the release URL | Cold run in an empty directory, 0.1.0 to 0.1.6 | Installs in under two seconds, answers `initialize` and `tools/list`, nothing but JSON-RPC on stdout; 0.1.1 refuses `169.254.169.254` as a repository host |
+| npm package | `npx -y @gitgoblin/mcp` (0.1.7) in Claude Code 2.1.309 and Codex 0.163.0 | Connected; Codex called `explain_repository` through it, and the result opened with the data notice |
 | Claude Code 2.1.309 | `claude mcp add` with the 0.1.0 to 0.1.6 release URLs and with a clone, `claude mcp list` | Connected, four tools listed |
 | Codex 0.163.0 | `codex mcp add` with the 0.1.0 to 0.1.6 release URLs and with a clone, then headless `codex exec` turns | Codex called `explain_repository` through the server and answered from its result; on 0.1.1 and later an `analyze_repository` call for `https://10.0.0.5/team/app` was refused, on 0.1.3 one for `https://gitlab.com/gitlab-org/gitlab` too, and Codex reported each refusal; on 0.1.4 to 0.1.6 Codex analyzed `codeberg.org/dnkl/foot` through the server |
 | Cursor CLI (`agent`) | `.cursor/mcp.json` with a clone, `agent mcp enable`, `agent mcp list-tools` | All four tools listed with their arguments; `agent mcp list` reports the server ready |
 | VS Code 1.139.1 | `code --add-mcp` | Entry written to the user profile `mcp.json`; connection not exercised |
 | Gemini CLI 0.64.0 | `gemini mcp add -s user`, `gemini mcp list` | Registered. `mcp list` labels every server Disabled without connecting, and this machine's account can no longer run Gemini CLI, so the connection was not exercised |
 | Antigravity CLI 1.4.5 | `agy mcp add` with the release URL, `agy mcp list` | Registered and enabled; the headless turn hit the account's quota, so the connection was not exercised |
-| Agent Skills | `npx skills add anandkaranubc/gitgoblin --list` | Finds the `gitgoblin` skill in the public repository |
+| Agent Skills | `npx skills add anandkaranubc/gitgoblin --list` (1.7.4 rechecked on 23 October) | Finds the `gitgoblin` skill in the public repository |
 | Claude Code plugin | `claude plugin validate`, install from a local marketplace | Installs with the skill and the server inventoried |
 | MCPB bundle | `mcpb validate`, `mcpb pack`, unpack and run the launcher | Initializes and lists the tools; not installed in Claude Desktop itself |
-| Cursor and VS Code one-click links | Encoded and decoded | Point at the release tarball; not opened in Cursor or VS Code |
+| Cursor and VS Code one-click links | Encoded and decoded | Run `npx -y @gitgoblin/mcp`; not opened in Cursor or VS Code |
 | MCP Registry | `mcp-publisher publish` from the repository's GitHub Actions workflow, which fails unless the registry then lists the version | `io.github.anandkaranubc/gitgoblin` listed as active, pointing at the newest release's `.mcpb`; superseded versions marked deprecated |
-| Release builds | `.github/workflows/release.yml` on the `mcp-v0.1.4` to `mcp-v0.1.6` tags, `gh attestation verify` | Built, checked, attested and drafted by the workflow; draft files matched `SHA256SUMS`; the 0.1.5 and 0.1.6 tarballs ran a real analysis in its worker thread |
+| Release builds | `.github/workflows/release.yml` on the `mcp-v0.1.4` to `mcp-v0.1.7` tags, `gh attestation verify` | Built, checked, attested and drafted by the workflow; draft files matched `SHA256SUMS`; the 0.1.5 and 0.1.6 tarballs ran a real analysis in its worker thread; 0.1.7 published to npm with provenance, and the tarball npm serves matches `SHA256SUMS` |
 
 Anything not in this table has not been tried here.

@@ -142,3 +142,31 @@ describe("unread comments in profile statistics and triage", () => {
     expect(assessIssue(issue as never, now, true, "https://gitlab.com/o/r").kind).not.toBe("triage");
   });
 });
+
+describe("forge requests against a hostile or flaky host", () => {
+  it("follows redirects only to https on the same host", async () => {
+    const { forgeJson } = await import("../src/forge/common.ts");
+    const calls: string[] = [];
+    const fetchImpl = (async (input: string | URL | Request) => {
+      const url = String(input);
+      calls.push(url);
+      if (url === "https://forge.test/api/v1/version") return new Response(null, { status: 302, headers: { location: "/api/v1/version2" } });
+      if (url === "https://forge.test/api/v1/version2") return Response.json({ version: "1" });
+      if (url === "https://forge.test/api/v1/evil") return new Response(null, { status: 302, headers: { location: "http://169.254.169.254/latest" } });
+      return new Response("no", { status: 404 });
+    }) as typeof fetch;
+    expect(await forgeJson("https://forge.test/api/v1/version", { fetchImpl, counter: { requests: 0 } })).toEqual({ version: "1" });
+    await expect(forgeJson("https://forge.test/api/v1/evil", { fetchImpl, counter: { requests: 0 } })).rejects.toThrow(/redirect .* refused/);
+    expect(calls).not.toContain("http://169.254.169.254/latest");
+  });
+
+  it("refuses oversized answers and records failed list endpoints", async () => {
+    const { forgeJson, forgeList, MAX_FORGE_BODY } = await import("../src/forge/common.ts");
+    const big = (async () => new Response("[]", { status: 200, headers: { "content-length": String(MAX_FORGE_BODY + 1) } })) as typeof fetch;
+    await expect(forgeJson("https://forge.test/api/v1/repos/o/r/issues", { fetchImpl: big, counter: { requests: 0 } })).rejects.toThrow(/over the/);
+    const failures: string[] = [];
+    const flaky = (async () => new Response("busy", { status: 503 })) as typeof fetch;
+    expect(await forgeList("https://forge.test/api/v1/repos/o/r/pulls?state=closed", { fetchImpl: flaky, counter: { requests: 0 }, failures })).toEqual([]);
+    expect(failures).toEqual(["/pulls (503)"]);
+  });
+});

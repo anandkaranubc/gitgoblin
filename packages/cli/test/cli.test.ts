@@ -328,15 +328,25 @@ describe("analyze", () => {
 });
 
 describe("contribute", () => {
-  it("publishes only after the person says yes twice, then confirms publishing", async () => {
+  it("publishes only after the person says yes twice, then types publish", async () => {
     const siblings = fakeSiblings();
-    const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "y"] });
+    const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "publish"] });
     expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
     expect(siblings.calls.map((c) => c.fn)).toEqual(["analyzeRepository", "runContribution", "publishRun"]);
     expect(siblings.calls[2]?.args).toEqual(["20261022-abcd", expect.objectContaining({ approved: true, draft: true, workdir: siblings.workdir })]);
     expect(asked).toHaveLength(3);
-    expect(asked[2]).toMatch(/draft pull request/);
+    expect(asked[0]).toContain("Nothing is published unless you type publish at the end.");
+    expect(asked[2]).toMatch(/draft pull request on GitHub under your account\? \[type publish, or Enter to stop\] $/);
     expect(out.join("\n")).toContain("Draft pull request: https://github.com/acme/widget/pull/7");
+  });
+
+  it("does not take y for publish: a key pressed early must not open a pull request", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, out, err } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "y"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(siblings.calls.map((c) => c.fn)).toEqual(["analyzeRepository", "runContribution"]);
+    expect(out.join("\n")).toMatch(/Not published/);
+    expect(err.join("\n")).toContain('Publishing takes the word "publish", not y');
   });
 
   it("hands the engine a real Reporter and relays its progress", async () => {
@@ -578,19 +588,19 @@ describe("runs, show and publish", () => {
     expect(missing.err.join("\n")).toMatch(/no run "nope".*gitgoblin runs/s);
   });
 
-  it("publishes a prepared run only after showing it and hearing yes", async () => {
+  it("publishes a prepared run only after showing it and hearing the word publish", async () => {
     const siblings = fakeSiblings();
     writeRun(siblings.workdir, "20261022-093000-bbbb");
-    const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y"] });
+    const { runtime, out, asked } = fakeRuntime({}, { modules: siblings.modules, answers: [" Publish "] });
     expect(await run(["publish", "20261022-093000-bbbb", "--workdir", siblings.workdir], runtime)).toBe(0);
     expect(out.join("\n")).toContain("fix: honour --color on Windows");
     expect(out.join("\n")).toContain(join(siblings.workdir, "runs", "20261022-093000-bbbb", "diff.patch"));
-    expect(asked[0]).toMatch(/draft pull request/);
+    expect(asked[0]).toMatch(/draft pull request on GitHub under your account\? \[type publish, or Enter to stop\] $/);
     expect(siblings.calls.map((c) => c.fn)).toEqual(["publishRun"]);
     expect(siblings.calls[0]?.args).toEqual(["20261022-093000-bbbb", expect.objectContaining({ approved: true, draft: true, workdir: siblings.workdir })]);
     expect(out.join("\n")).toContain("Draft pull request: https://github.com/acme/widget/pull/7");
 
-    const ready = fakeRuntime({}, { modules: siblings.modules, answers: ["y"] });
+    const ready = fakeRuntime({}, { modules: siblings.modules, answers: ["publish"] });
     expect(await run(["publish", "20261022-093000-bbbb", "--ready", "--workdir", siblings.workdir], ready.runtime)).toBe(0);
     expect(siblings.calls[1]?.args).toEqual(["20261022-093000-bbbb", expect.objectContaining({ draft: false })]);
     expect(ready.asked[0]).toMatch(/ready-for-review pull request/);
@@ -603,6 +613,11 @@ describe("runs, show and publish", () => {
     const no = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
     expect(await run(["publish", "20261022-093000-bbbb", "--workdir", siblings.workdir], no.runtime)).toBe(0);
     expect(no.out.join("\n")).toMatch(/Not published/);
+
+    const yes = fakeRuntime({}, { modules: siblings.modules, answers: ["yes"] });
+    expect(await run(["publish", "20261022-093000-bbbb", "--workdir", siblings.workdir], yes.runtime)).toBe(0);
+    expect(yes.out.join("\n")).toMatch(/Not published/);
+    expect(yes.err.join("\n")).toContain('Publishing takes the word "publish", not yes');
 
     const noTty = fakeRuntime({}, { modules: siblings.modules, canPrompt: false });
     expect(await run(["publish", "20261022-093000-bbbb", "--workdir", siblings.workdir], noTty.runtime)).toBe(1);
@@ -888,10 +903,55 @@ describe("contribute --install-network", () => {
     expect(open.asked[0]).toContain("with the repository's install allowed to reach any host");
   });
 
+  it("downloads Playwright's browsers only when asked, and says so in the first question", async () => {
+    const siblings = fakeSiblings();
+    const plainRun = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], plainRun.runtime)).toBe(0);
+    expect((siblings.calls[1]?.args[1] as RunOptions).installBrowsers).toBeUndefined();
+    expect(plainRun.asked[0]).not.toMatch(/Playwright/);
+
+    const browsers = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--install-browsers", "--install-network", "open", "--workdir", siblings.workdir], browsers.runtime)).toBe(0);
+    expect((siblings.calls.at(-1)?.args[1] as RunOptions).installBrowsers).toBe(true);
+    expect(browsers.asked[0]).toContain("with the repository's install allowed to reach any host, and Playwright's browsers downloaded from Playwright's servers");
+  });
+
   it("rejects an unknown value as a usage error", async () => {
     const siblings = fakeSiblings();
     const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
     expect(await run(["contribute", "acme/widget", "--install-network", "everywhere", "--workdir", siblings.workdir], runtime)).toBe(2);
     expect(err.join("\n")).toMatch(/registries, open/);
+  });
+});
+
+describe("contribute says what will be checked", () => {
+  it("prints the checks right after the chosen opportunity", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, out } = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    const lines = out.join("\n").split("\n");
+    const at = lines.findIndex((l) => l.startsWith("Opportunity: "));
+    expect(lines[at + 1]).toBe("The engine will check the change with the project's own commands: cargo build, cargo test.");
+  });
+});
+
+describe("discover --json keeps the warnings", () => {
+  it("includes search warnings, so a ranking built after refused searches is visible to a script", async () => {
+    const { runtime, out } = fakeRuntime();
+    const base = runtime.createEngine.bind(runtime);
+    runtime.createEngine = async (options) => {
+      options.onProgress({ stage: "warning", message: "search for language:rust was rate limited; results may be incomplete" });
+      options.onProgress({ stage: "search", message: "3 searches" });
+      return base(options);
+    };
+    expect(await run(["discover", "learn", "--json"], runtime)).toBe(0);
+    const parsed = JSON.parse(out.join("\n")) as { warnings: string[] };
+    expect(parsed.warnings).toEqual(["search for language:rust was rate limited; results may be incomplete"]);
+  });
+
+  it("has an empty warnings list when nothing went wrong", async () => {
+    const { runtime, out } = fakeRuntime();
+    expect(await run(["discover", "learn", "--json"], runtime)).toBe(0);
+    expect((JSON.parse(out.join("\n")) as { warnings: string[] }).warnings).toEqual([]);
   });
 });

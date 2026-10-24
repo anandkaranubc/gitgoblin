@@ -17,35 +17,11 @@ export const DISCOVERY_HOSTS = ["github.com"] as const;
  */
 export const ANALYSIS_HOSTS = ["github.com", "gitlab.com", "codeberg.org"] as const;
 
-/** Git settings applied to every git command the server runs. */
-export const GIT_SETTINGS: ReadonlyArray<readonly [string, string]> = [
-  // A committed symlink (README.md -> ~/.ssh/id_ed25519, or -> /dev/zero) is checked out as a small
-  // text file holding the link target, so reading it can never reach outside the clone.
-  ["core.symlinks", "false"],
-  // Clones only ever need HTTPS; refuse file://, ssh, git:// and ext:: even if a URL slips through.
-  ["protocol.allow", "never"],
-  ["protocol.https.allow", "always"],
-];
-
-/**
- * Applies GIT_SETTINGS through git's environment configuration (GIT_CONFIG_COUNT, git 2.31 and
- * later), after any entries the person already set. It must run before any module that copies
- * process.env for its git calls, which is why main.ts imports ./env.ts first.
- */
-export function hardenGitEnvironment(env: NodeJS.ProcessEnv): void {
-  const existing = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10);
-  let index = Number.isInteger(existing) && existing > 0 ? existing : 0;
-  for (const [key, value] of GIT_SETTINGS) {
-    env[`GIT_CONFIG_KEY_${index}`] = key;
-    env[`GIT_CONFIG_VALUE_${index}`] = value;
-    index++;
-  }
-  env.GIT_CONFIG_COUNT = String(index);
-}
-
-// C0 controls other than tab and newline, DEL, C1 controls, and bidirectional overrides. Repository
-// text containing them could rewrite a terminal or disguise what a line says.
-const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g;
+// Control and format characters (Unicode Cc and Cf) other than tab and newline, plus line and paragraph
+// separators: terminal escapes, bidirectional overrides, zero-width characters, the invisible tag
+// characters U+E0000 to U+E007F. Repository text containing them could rewrite a terminal, disguise
+// what a line says, or carry instructions a person cannot see.
+const CONTROL = /(?![\n\t])[\p{Cc}\p{Cf}\u2028\u2029]/gu;
 
 export function stripControl(text: string): string {
   return text.replace(CONTROL, "");
@@ -59,4 +35,25 @@ export function stripControlDeep<T>(value: T): T {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, stripControlDeep(item)])) as T;
   }
   return value;
+}
+
+/** Longest text a single result may carry. Larger answers are cut, with a note saying so. */
+export const MAX_RESULT_CHARS = 20_000;
+const MAX_STRUCTURED_STRING = 2_000;
+const MAX_STRUCTURED_ITEMS = 50;
+
+/** Caps every string and list inside a JSON-like value, so one hostile repository cannot flood the agent's context. */
+export function capDeep<T>(value: T): T {
+  if (typeof value === "string") return (value.length > MAX_STRUCTURED_STRING ? `${value.slice(0, MAX_STRUCTURED_STRING - 1)}…` : value) as T;
+  if (Array.isArray(value)) return value.slice(0, MAX_STRUCTURED_ITEMS).map((item) => capDeep(item)) as T;
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, capDeep(item)])) as T;
+  return value;
+}
+
+/** Cuts text to MAX_RESULT_CHARS at a line boundary and says how much was left out. */
+export function capText(text: string): string {
+  if (text.length <= MAX_RESULT_CHARS) return text;
+  const cut = text.lastIndexOf("\n", MAX_RESULT_CHARS);
+  const kept = text.slice(0, cut > MAX_RESULT_CHARS / 2 ? cut : MAX_RESULT_CHARS);
+  return `${kept}\n[result cut: ${text.length - kept.length} more characters left out]`;
 }

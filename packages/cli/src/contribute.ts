@@ -1,6 +1,6 @@
 import { styleText } from "node:util";
 import type { ChangePlan, RunResult } from "@gitgoblin/engine";
-import type { AnalysisReport, ContributionOpportunity } from "@gitgoblin/intel";
+import type { AnalysisReport, ContributionOpportunity, RepositoryProfile } from "@gitgoblin/intel";
 import type { Style } from "./format.ts";
 import { plain } from "./text.ts";
 
@@ -90,7 +90,7 @@ export function selectOpportunity(report: AnalysisReport, choice: Choice): Contr
       return found;
     }
     const found = all.find((o) => o.id.toLowerCase() === wanted.toLowerCase());
-    if (!found) throw new Error(`No opportunity "${wanted}". Available: ${all.map((o) => `${o.id} (${o.title})`).join("; ")}`);
+    if (!found) throw new Error(`No opportunity "${plain(wanted)}". Available: ${all.map((o) => `${o.id} (${plain(o.title)})`).join("; ")}`);
     return found;
   }
   return all.length === 1 ? all[0] : undefined;
@@ -192,4 +192,21 @@ export function issueGap(report: AnalysisReport): string | undefined {
   const why = reason ? ` (${plain(reason)})` : "";
   const advice = failed ? " Try again in a minute, or check your token with `gh auth status`." : "";
   return `Issues and pull requests were not analyzed${why}, so opportunities from them are missing.${advice}`;
+}
+
+/** The checks the engine runs, in its order (packages/engine/src/verify.ts). */
+const CHECK_ORDER = ["typecheck", "lint", "build", "test"] as const;
+
+/**
+ * Which of the project's own commands the engine will run to check a change, from the same choice the
+ * engine makes (packages/engine/src/intake.ts: the first command set that can run tests, else the
+ * first). Said before anything runs, because verification is only as strong as these commands.
+ */
+export function checksLine(profile: RepositoryProfile): string {
+  const sets = profile.ecosystems.map((e) => e.commands as Record<string, string | undefined>);
+  const chosen = sets.find((c) => c.test) ?? sets[0] ?? {};
+  const commands = CHECK_ORDER.map((name) => chosen[name]).filter((c): c is string => typeof c === "string" && c.length > 0).map(plain);
+  if (commands.length === 0) return "No check commands were found, so the engine cannot verify the change against the project's own checks.";
+  const noTests = chosen.test ? "" : " No test command was found; unless the agent finds one while investigating, the project's tests will not run.";
+  return `The engine will check the change with the project's own commands: ${commands.join(", ")}.${noTests}`;
 }

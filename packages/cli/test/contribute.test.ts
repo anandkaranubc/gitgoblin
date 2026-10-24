@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "../src/contribute.ts";
+import { checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "../src/contribute.ts";
 import { sampleOpportunity, sampleReport } from "./fixtures.ts";
 
 const plain = { color: false };
@@ -233,5 +233,36 @@ describe("when issues could not be read", () => {
   it("puts the warning at the top of the opportunity list", () => {
     const text = formatOpportunities(withNote("issue and PR samples unavailable: fetch failed"), plain);
     expect(text.split("\n")[0]).toMatch(/^! Issues and pull requests were not analyzed \(fetch failed\)/);
+  });
+});
+
+describe("checksLine", () => {
+  const withCommands = (sets: Record<string, string>[]) => {
+    const report = sampleReport();
+    report.profile.ecosystems = sets.map((commands, i) => ({ name: i === 0 ? "node" : "python", manifests: [], tooling: [], commands }));
+    return report.profile;
+  };
+
+  it("names the project's own checks the engine will run, in the engine's order", () => {
+    expect(checksLine(withCommands([{ install: "pnpm install --frozen-lockfile", test: "pnpm test", lint: "pnpm lint", typecheck: "pnpm type-check", build: "pnpm build" }]))).toBe(
+      "The engine will check the change with the project's own commands: pnpm type-check, pnpm lint, pnpm build, pnpm test.",
+    );
+  });
+
+  it("warns when there is no test command, since the project's tests cannot be run", () => {
+    expect(checksLine(withCommands([{ install: "npm ci", build: "npm run build", typecheck: "npx tsc --noEmit" }]))).toBe(
+      "The engine will check the change with the project's own commands: npx tsc --noEmit, npm run build. No test command was found; unless the agent finds one while investigating, the project's tests will not run.",
+    );
+  });
+
+  it("uses the first command set that can run tests, as the engine does", () => {
+    expect(checksLine(withCommands([{ build: "npm run build" }, { test: "pytest", lint: "ruff check ." }]))).toBe(
+      "The engine will check the change with the project's own commands: ruff check ., pytest.",
+    );
+  });
+
+  it("says plainly when nothing can be checked", () => {
+    expect(checksLine(withCommands([{ install: "npm ci" }]))).toBe("No check commands were found, so the engine cannot verify the change against the project's own checks.");
+    expect(checksLine(withCommands([]))).toBe("No check commands were found, so the engine cannot verify the change against the project's own checks.");
   });
 });

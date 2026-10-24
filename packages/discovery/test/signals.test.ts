@@ -64,6 +64,19 @@ describe("computeSignals", () => {
     expect(computeSignals({ facts: facts({ owner: "a", name: "b" }) }, NOW).signals.acceptance).toBeUndefined();
   });
 
+  it("keeps every signal in 0..1 when a source sends values out of range or not a number", () => {
+    const repo = healthyLibrary();
+    repo.ecosystems = { ...repo.ecosystems!, commitStats: { ...repo.ecosystems!.commitStats!, dds: 1.6 } };
+    const { signals } = computeSignals(repo, NOW);
+    expect(signals.busFactor).toBeLessThanOrEqual(1);
+    for (const value of Object.values(signals)) expect(value === undefined || (value >= 0 && value <= 1)).toBe(true);
+    const odd = healthyLibrary();
+    odd.issueStats = { ...odd.issueStats!, pastYear: { ...odd.issueStats!.pastYear, mergedPullRequests: Number.NaN } };
+    expect(computeSignals(odd, NOW).signals.acceptance).toBe(0);
+    odd.facts = { ...odd.facts, stars: Number.NaN };
+    for (const value of Object.values(computeSignals(odd, NOW).signals)) expect(value === undefined || (value >= 0 && value <= 1)).toBe(true);
+  });
+
   it("treats disabled issues as closed to newcomers", () => {
     const repo = healthyLibrary();
     repo.details = { ...repo.details!, hasIssuesEnabled: false };

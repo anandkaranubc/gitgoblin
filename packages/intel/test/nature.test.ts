@@ -26,7 +26,7 @@ describe("classifyNature", () => {
     const base = inventoryOf(["package.json", "src/index.ts"]);
     const node = (over: Partial<NonNullable<Manifests["node"]>>): Manifests => ({
       others: [],
-      node: { paths: ["package.json"], name: "x", private: false, hasBin: false, hasMainOrExports: true, engines: undefined, scripts: {}, dependencies: [], packageManager: "npm", tooling: [], workspaces: false, ...over },
+      node: { paths: ["package.json"], name: "x", private: false, hasBin: false, hasMainOrExports: true, engines: undefined, scripts: {}, dependencies: [], packageManager: "npm", tooling: [], workspaces: false, workspaceTests: [], ...over },
     });
     expect(classifyNature({ meta: meta(), inventory: base, manifests: node({}), readme: "" }).nature).toBe("library");
     expect(classifyNature({ meta: meta(), inventory: base, manifests: node({ hasBin: true, hasMainOrExports: false }), readme: "" }).nature).toBe("cli");

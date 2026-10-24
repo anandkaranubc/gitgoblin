@@ -139,6 +139,21 @@ export function findSkippedTests(path: string, text: string): SkippedTest[] {
 export const testGapsAnalyzer: Analyzer = {
   name: "test-gaps",
   async run(ctx: AnalysisContext, profile: RepositoryProfile): Promise<Finding[]> {
+    const findings = await findTestGaps(ctx, profile);
+    // A test gap with no runnable test command cannot be verified: say so where the picker shows it.
+    if (!profile.ecosystems.some((e) => e.commands.test)) {
+      for (const f of findings) {
+        if (f.clusterKey === "no-tests") continue;
+        (f.risks ??= []).unshift("No test command was detected for this repository, so new or re-enabled tests cannot be run as part of the change; find how the project runs its tests first.");
+        f.signals.feasibility = Math.max(0.1, f.signals.feasibility - 0.15);
+        f.signals.feasibilityReason = `${f.signals.feasibilityReason}; no test command detected`;
+      }
+    }
+    return findings;
+  },
+};
+
+async function findTestGaps(ctx: AnalysisContext, profile: RepositoryProfile): Promise<Finding[]> {
     if (!["library", "cli", "framework", "application", "plugin", "unknown"].includes(profile.nature)) return [];
     const files = ctx.inventory.files.filter((f) => !f.vendored);
     const tests = files.filter((f) => f.category === "test" && f.language && CODE_LANGS.has(f.language));
@@ -244,8 +259,7 @@ export const testGapsAnalyzer: Analyzer = {
       });
     }
     return findings;
-  },
-};
+}
 
 /** True when any tracked test file mentions the stem as a whole word (case-insensitive). */
 async function mentionedInTests(ctx: AnalysisContext, stem: string, testPaths: string[]): Promise<boolean> {
