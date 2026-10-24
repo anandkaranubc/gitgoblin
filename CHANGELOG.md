@@ -5,6 +5,13 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
+## gitgoblin 0.1.1 - Unreleased
+
+- When a project's tests already fail before the change, `contribute` no longer takes "also fails on
+  the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
+  web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
+  tests, or fewer passing ones, as a regression. The pull request shows both counts.
+
 ## gitgoblin 0.1.0 - 2026-10-24
 
 The first release of `gitgoblin`: find open-source work worth doing, check the evidence, and prepare

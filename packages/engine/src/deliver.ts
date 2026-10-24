@@ -2,6 +2,7 @@ import { subjectFor, typeForKind } from "./naming.ts";
 import { execFile } from "./exec.ts";
 import { sanitizeText } from "./intake.ts";
 import type { ChangePlan, ImplementationNotes, Investigation, PreparedDelivery, Review, Task, Verification } from "./types.ts";
+import { describeCounts } from "./verify.ts";
 import { commitAll, git } from "./workspace.ts";
 
 export interface DeliveryInput {
@@ -106,7 +107,11 @@ export function pullRequestBody(input: DeliveryInput): string {
     task.issue ? `${closes} #${task.issue.number}` : "",
   ].filter(Boolean);
   const preexisting = new Set(verification.preexisting ?? []);
-  const checks = verification.checks.map((c) => `| \`${c.command}\` | ${c.status}${preexisting.has(c.name) ? " (also fails on the base commit)" : ""} |`);
+  const checks = verification.checks.map((c) => {
+    const counts = describeCounts(verification, c.name);
+    const note = preexisting.has(c.name) ? (counts ? ` (also fails on the base commit: ${counts})` : " (also fails on the base commit)") : "";
+    return `| \`${c.command}\` | ${c.status}${note} |`;
+  });
   // Deviations from the plan are the engine's bookkeeping, not something a maintainer needs; findings
   // about files outside the change (a stray directory in the workspace) are not about the change.
   const changed = new Set(verification.diff.changedFiles);
