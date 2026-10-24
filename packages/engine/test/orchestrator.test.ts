@@ -512,6 +512,33 @@ describe("runContribution", () => {
     expect(readFileSync(path.join(result.runDir, "report.md"), "utf8")).toMatch(/install rewrote package-lock\.json; restored/);
   });
 
+  it("says when the tests need Playwright's browsers", async () => {
+    const repo = await createFixtureRepo();
+    const fail = "node -e \"console.error('browserType.launch: Executable doesn\\'t exist at /Users/x/Library/Caches/ms-playwright/firefox-1482/firefox'); process.exit(1)\"";
+    const task = { ...fixtureTask(repo), commands: { test: fail, lint: "node -e 0" } };
+    const warnings: string[] = [];
+    const reporter = { phase() {}, info() {}, warn: (m: string) => warnings.push(m) };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter, runnerFactory: (ctx) => scriptedRunner(ctx.workspace, { orient: () => ({ ...investigation, feasibility: "stop", reasons: ["enough"] }) }) });
+    expect(warnings.join("\n")).toMatch(/need Playwright's browsers.*--install-browsers/);
+    expect(readFileSync(path.join(result.runDir, "report.md"), "utf8")).toMatch(/Note: the tests need Playwright's browsers/);
+  });
+
+  it("installs Playwright's browsers with the project's own Playwright when asked", async () => {
+    const repo = await createFixtureRepo();
+    // A stand-in for an installed Playwright: its bin records how it was called, inside node_modules.
+    const install = [
+      "mkdir -p node_modules/playwright-core node_modules/.bin",
+      "echo '{}' > node_modules/playwright-core/package.json",
+      "printf '#!/bin/sh\\necho \"playwright $*\" > node_modules/called.txt\\n' > node_modules/.bin/playwright",
+      "chmod +x node_modules/.bin/playwright",
+    ].join(" && ");
+    const task = { ...fixtureTask(repo), commands: { install, test: "npm test" } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, installBrowsers: true, runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(result.status).toBe("awaiting_approval");
+    expect(readFileSync(path.join(result.workspace!, "node_modules", "called.txt"), "utf8").trim()).toBe("playwright install");
+    expect(readFileSync(path.join(result.runDir, "events.jsonl"), "utf8")).toMatch(/"phase":"install","type":"browsers","exitCode":0/);
+  });
+
   it("reports a failed phase instead of throwing", async () => {
     const repo = await createFixtureRepo();
     const result = await run({ orient: () => ({ not: "an investigation" }) })(repo, workdir());

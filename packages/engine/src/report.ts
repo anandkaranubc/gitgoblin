@@ -25,6 +25,8 @@ export interface ReportInput {
   checkIsolation?: string;
   /** Tracked files the install rewrote and the engine put back as committed. */
   installRestored?: string[];
+  /** Things about the environment the person should know, such as missing test browsers. */
+  setupNotes?: string[];
   /** The last implementation's notes; their environment notes appear here and never in the pull request. */
   notes?: ImplementationNotes;
 }
@@ -42,6 +44,7 @@ export function renderReport(input: ReportInput): string {
     result.workspace ? `- Workspace: ${result.workspace}` : "",
     input.checkIsolation ? `- Repository commands ran ${input.checkIsolation === "none" ? "without an OS sandbox" : `under ${input.checkIsolation}`}` : "",
     input.installRestored?.length ? `- The install rewrote ${input.installRestored.join(", ")}; restored, the change is measured against the committed files` : "",
+    ...(input.setupNotes ?? []).map((note) => `- Note: ${note}`),
     "",
   ];
   if (result.questions.length) {
