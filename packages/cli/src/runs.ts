@@ -70,16 +70,31 @@ export function isRunId(value: string): boolean {
   return RUN_ID.test(value);
 }
 
+const STATUSES: readonly string[] = ["awaiting_approval", "published", "escalated", "stopped", "failed"];
+
+/** A run's result.json as the engine writes it, or undefined for anything else (a crash mid-write, a hand edit). */
+function readResult(path: string): RunResult | undefined {
+  const value = readJson<Record<string, unknown>>(path);
+  if (!value || typeof value !== "object") return undefined;
+  if (typeof value.status !== "string" || !STATUSES.includes(value.status)) return undefined;
+  if (typeof value.reason !== "string" || typeof value.costUsd !== "number") return undefined;
+  const questions = Array.isArray(value.questions) ? value.questions.filter((q): q is string => typeof q === "string") : [];
+  return { ...(value as unknown as RunResult), questions };
+}
+
 export function readRun(workdir: string, runId: string): RunFiles | undefined {
   if (!isRunId(runId)) return undefined;
   const dir = join(workdir, "runs", runId);
-  const result = readJson<RunResult>(join(dir, "result.json"));
+  const result = readResult(join(dir, "result.json"));
   if (!result) return undefined;
+  // The title shown for approval is the one publishing sends: delivery.json's, else pr-title.txt.
+  const delivery = readJson<{ prTitle?: unknown }>(join(dir, "delivery.json"));
+  const deliveredTitle = typeof delivery?.prTitle === "string" ? delivery.prTitle.trim() : undefined;
   return {
     dir,
     result,
     report: readText(join(dir, "report.md")),
-    prTitle: readText(join(dir, "pr-title.txt"))?.trim() || undefined,
+    prTitle: deliveredTitle || readText(join(dir, "pr-title.txt"))?.trim() || undefined,
     prBody: readText(join(dir, "pr.md")),
     diff: readText(join(dir, "diff.patch")),
     diffPath: join(dir, "diff.patch"),
@@ -130,13 +145,16 @@ export function listRuns(workdir: string): RunSummary[] {
   const runs: RunSummary[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || !isRunId(entry.name)) continue;
-    const result = readJson<RunResult>(join(root, entry.name, "result.json"));
+    const result = readResult(join(root, entry.name, "result.json"));
     if (!result) continue;
-    const task = readJson<{ title?: string; repo?: { owner?: string; name?: string } }>(join(root, entry.name, "task.json"));
-    const repo = task?.repo?.owner && task.repo.name ? `${task.repo.owner}/${task.repo.name}` : undefined;
+    const task = readJson<{ title?: unknown; repo?: { owner?: unknown; name?: unknown } }>(join(root, entry.name, "task.json"));
+    const owner = task?.repo?.owner;
+    const name = task?.repo?.name;
+    const repo = typeof owner === "string" && typeof name === "string" && owner && name ? `${owner}/${name}` : undefined;
+    const title = typeof task?.title === "string" ? task.title : undefined;
     const workspace = readJson<{ path?: unknown }>(join(root, entry.name, "workspace.json"));
     const keepsWorkspace = typeof workspace?.path === "string" && existsSync(workspace.path);
-    runs.push({ runId: entry.name, status: result.status, reason: result.reason, costUsd: result.costUsd, title: task?.title, repo, keepsWorkspace });
+    runs.push({ runId: entry.name, status: result.status, reason: result.reason, costUsd: result.costUsd, title, repo, keepsWorkspace });
   }
   return runs.sort((a, b) => b.runId.localeCompare(a.runId));
 }
@@ -150,7 +168,7 @@ export function formatRuns(runs: RunSummary[], style: Style, workdirFlag = ""): 
     : "";
   return runs
     .map((run) => {
-      const head = [run.runId, run.status.padEnd(17), `$${run.costUsd.toFixed(2)}`, run.repo, run.title === undefined ? undefined : plain(run.title)].filter((part) => part !== undefined).join("  ");
+      const head = [run.runId, run.status.padEnd(17), `$${run.costUsd.toFixed(2)}`, run.repo === undefined ? undefined : plain(run.repo), run.title === undefined ? undefined : plain(run.title)].filter((part) => part !== undefined).join("  ");
       const detail = run.status === "awaiting_approval" ? `publish with: gitgoblin publish ${run.runId}${workdirFlag}` : plain(run.reason);
       return `${head}\n    ${dim(detail)}`;
     })

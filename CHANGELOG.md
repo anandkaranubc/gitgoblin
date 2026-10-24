@@ -60,6 +60,9 @@ a pull request a maintainer would want to merge.
 - Repository content is treated as untrusted: reads stay inside the clone, link checks reach only
   public addresses, and every parser of issue, README and source text runs in linear time, so a
   crafted file cannot stall it.
+  Everything the command prints that came from outside (repository descriptions, issue titles,
+  registry data, the agent's progress and messages, run files, errors) has escape sequences and
+  invisible control characters removed, so it cannot rewrite the terminal or set the clipboard.
 - The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
   `bwrap` on Linux when installed): tests run offline, and the install reaches package registries
   only, through your `HTTPS_PROXY` if you use one; `contribute --install-network open` allows any

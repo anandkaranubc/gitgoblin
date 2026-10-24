@@ -178,10 +178,11 @@ function resolveWorkdir(runtime: Runtime, option: string | undefined): string {
 
 /** The engine reports progress through this; the same shape its own CLI prints. */
 function reporterFor(runtime: Runtime): Reporter {
+  // The engine reports model-chosen commands, file paths and denial reasons; none may drive the terminal.
   return {
-    phase: (name, detail) => runtime.stderr(`==> ${detail ? `${name}: ${detail}` : name}`),
-    info: (message) => runtime.stderr(`    ${message}`),
-    warn: (message) => runtime.stderr(` !! ${message}`),
+    phase: (name, detail) => runtime.stderr(`==> ${plain(detail ? `${name}: ${detail}` : name)}`),
+    info: (message) => runtime.stderr(`    ${plain(message)}`),
+    warn: (message) => runtime.stderr(` !! ${plain(message)}`),
   };
 }
 
@@ -262,8 +263,8 @@ export function buildProgram(runtime: Runtime): Command {
       const warnings: string[] = [];
       const session = await runtime.createEngine({
         onProgress: (event) => {
-          if (event.stage === "warning") warnings.push(event.message);
-          if (showProgress) runtime.stderr(`${event.stage}: ${event.message}`);
+          if (event.stage === "warning") warnings.push(plain(event.message));
+          if (showProgress) runtime.stderr(`${event.stage}: ${plain(event.message)}`);
         },
       });
       try {
@@ -291,7 +292,7 @@ export function buildProgram(runtime: Runtime): Command {
     .action(async (ref: RepoRef, options: { goal: Goal; json?: boolean; verbose?: boolean }) => {
       const session = await runtime.createEngine({
         onProgress: (event) => {
-          if (options.verbose) runtime.stderr(`${event.stage}: ${event.message}`);
+          if (options.verbose) runtime.stderr(`${event.stage}: ${plain(event.message)}`);
         },
       });
       try {
@@ -382,14 +383,14 @@ export function buildProgram(runtime: Runtime): Command {
         maxOpportunities,
         checkLinks: options.links,
         dependencyChecks: options.deps,
-        log: options.verbose ? (message: string) => runtime.stderr(message) : undefined,
+        log: options.verbose ? (message: string) => runtime.stderr(plain(message)) : undefined,
       });
       const text = options.json ? JSON.stringify(report, null, 2) : intel.renderMarkdown(report);
       if (options.out) {
         await writeFile(options.out, `${text}\n`);
         runtime.stderr(`wrote ${options.out}`);
       } else {
-        runtime.stdout(text);
+        runtime.stdout(options.json ? text : plain(text));
       }
       const gap = issueGap(report);
       if (gap) runtime.stderr(gap);
@@ -438,7 +439,7 @@ export function buildProgram(runtime: Runtime): Command {
       } else {
         runtime.stderr(`Analyzing ${slug(ref)}...`);
         const hints = await discoveryHints(runtime, ref, options.goal);
-        report = await intel.analyzeRepository(ref, { hints, log: runtime.isInteractive ? (message: string) => runtime.stderr(message) : undefined });
+        report = await intel.analyzeRepository(ref, { hints, log: runtime.isInteractive ? (message: string) => runtime.stderr(plain(message)) : undefined });
       }
       if (report.opportunities.length === 0) {
         const gap = issueGap(report);
@@ -455,7 +456,7 @@ export function buildProgram(runtime: Runtime): Command {
             opportunity = selectOpportunity(report, { opportunity: answer || String(recommended) });
           } catch (error) {
             if (attempt >= 3) throw error;
-            runtime.stdout(error instanceof Error ? error.message : String(error));
+            runtime.stdout(plain(error instanceof Error ? error.message : String(error)));
           }
         }
       }
@@ -467,7 +468,7 @@ export function buildProgram(runtime: Runtime): Command {
       // The engine clones the repository, unless the report came from `analyze --local`, in which case it
       // attaches a git worktree to that checkout. The person approves what will actually happen.
       const localPath = report.profile.repo.localPath;
-      const where = localPath ? `a git worktree of ${localPath}` : "a local clone";
+      const where = localPath ? `a git worktree of ${plain(localPath)}` : "a local clone";
       const isolationWords = [
         options.checkIsolation ? ISOLATION_WORDS[options.checkIsolation] : undefined,
         options.installNetwork === "open" ? "the repository's install allowed to reach any host" : undefined,
@@ -527,8 +528,8 @@ export function buildProgram(runtime: Runtime): Command {
         runtime.stdout(`Not published. The change stays in ${result.runDir}.`);
         return;
       }
-      const published = await engine.publishRun(result.runId, { workdir, approved: true, draft: true, log: (line) => runtime.stderr(line) });
-      runtime.stdout(`Draft pull request: ${published.url}`);
+      const published = await engine.publishRun(result.runId, { workdir, approved: true, draft: true, log: (line) => runtime.stderr(plain(line)) });
+      runtime.stdout(`Draft pull request: ${plain(published.url)}`);
     });
 
   program
@@ -588,7 +589,7 @@ export function buildProgram(runtime: Runtime): Command {
         const bytes = Math.max(0, before - directorySize(run.dir));
         freed += bytes;
         cleaned += 1;
-        runtime.stdout(`Cleaned ${runId} (${run.result.status}): freed ${formatBytes(bytes)}`);
+        runtime.stdout(`Cleaned ${runId} (${plain(String(run.result.status))}): freed ${formatBytes(bytes)}`);
       }
       if (cleaned > 1) runtime.stdout(`Freed ${formatBytes(freed)} from ${cleaned} runs.`);
       if (failed > 0) throw new Error(`${failed} of ${targets.length} run${targets.length === 1 ? "" : "s"} could not be cleaned`);
@@ -624,7 +625,7 @@ export function buildProgram(runtime: Runtime): Command {
       const workdir = resolveWorkdir(runtime, options.workdir);
       const run = readRun(workdir, runId);
       if (!run) throw new Error(`no run "${runId}" under ${workdir}; \`gitgoblin runs\` lists them.`);
-      if (run.result.status !== "awaiting_approval") throw new Error(`run ${runId} is ${run.result.status} (${run.result.reason}), so there is nothing to publish.`);
+      if (run.result.status !== "awaiting_approval") throw new Error(`run ${runId} is ${run.result.status} (${plain(run.result.reason)}), so there is nothing to publish.`);
       const engine = await loadEngine(runtime.loadModule);
       if (!engine) throw new Error("publish needs @gitgoblin/engine, not available in this install.");
 
@@ -637,8 +638,8 @@ export function buildProgram(runtime: Runtime): Command {
         runtime.stdout("Not published.");
         return;
       }
-      const published = await engine.publishRun(runId, { workdir, approved: true, draft, log: (line) => runtime.stderr(line) });
-      runtime.stdout(`${draft ? "Draft pull request" : "Pull request"}: ${published.url}`);
+      const published = await engine.publishRun(runId, { workdir, approved: true, draft, log: (line) => runtime.stderr(plain(line)) });
+      runtime.stdout(`${draft ? "Draft pull request" : "Pull request"}: ${plain(published.url)}`);
     });
 
   return program;
@@ -656,7 +657,8 @@ export async function run(argv: string[], runtime: Runtime = defaultRuntime): Pr
       const code = (error as { exitCode: number; code: string }).code;
       return code === "commander.helpDisplayed" || code === "commander.version" || code === "commander.help" ? 0 : 2;
     }
-    runtime.stderr(`error: ${explainFailure(error, runtime)}`);
+    // Errors quote run files, issue titles and engine messages; print them as plain text.
+    runtime.stderr(`error: ${plain(explainFailure(error, runtime))}`);
     return 1;
   }
 }
