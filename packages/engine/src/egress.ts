@@ -23,6 +23,15 @@ export const REGISTRY_HOSTS: readonly string[] = [
   "github.com", "codeload.github.com", "objects.githubusercontent.com", ".githubusercontent.com",
 ];
 
+/** Where Playwright downloads its browsers from; allowed only for the opt-in browser step. */
+export const PLAYWRIGHT_HOSTS: readonly string[] = [
+  "cdn.playwright.dev",
+  "playwright.download.prss.microsoft.com",
+  "playwright.azureedge.net",
+  "playwright-akamai.azureedge.net",
+  "playwright-verizon.azureedge.net",
+];
+
 export function hostAllowed(host: string, allowed: readonly string[]): boolean {
   const h = host.toLowerCase().replace(/\.$/, "");
   if (net.isIP(h.replace(/^\[|\]$/g, ""))) return false; // registries are reached by name, never by address

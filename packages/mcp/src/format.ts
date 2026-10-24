@@ -18,6 +18,15 @@ function truncate(text: string, max: number): string {
   return clean.length <= max ? clean : `${clean.slice(0, max - 1)}…`;
 }
 
+/** Items shown per list in a briefing; repository-controlled lists can be arbitrarily long. */
+const LIST_CAP = 12;
+
+/** The first `max` items, then how many more there are. */
+export function listSome(items: string[], max: number): string {
+  const shown = items.slice(0, max).join(", ");
+  return items.length > max ? `${shown} and ${items.length - max} more` : shown;
+}
+
 /** Up to three reasons that helped and the one that hurt most. */
 export function strongestReasons(reasons: Reason[], positive = 3, negative = 1): Reason[] {
   const sorted = [...reasons].sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight));
@@ -168,7 +177,7 @@ function profileLines(p: RepositoryProfile): string[] {
     c.formatter && `format with ${c.formatter}`,
   ].filter((x): x is string => typeof x === "string");
   if (conventionBits.length > 0) lines.push(`conventions: ${conventionBits.join(", ")}`);
-  if (p.instructionFiles.length > 0) lines.push(`agent instruction files: ${p.instructionFiles.join(", ")}`);
+  if (p.instructionFiles.length > 0) lines.push(`agent instruction files: ${listSome(p.instructionFiles, 10)}`);
   for (const n of p.notes.slice(0, 3)) lines.push(`note: ${n}`);
   return lines;
 }
@@ -229,7 +238,7 @@ export function compactReport(report: AnalysisReport, max: number): CompactRepor
       dco: rules.dco,
       tests_required: rules.requiresTests,
       changelog_required: rules.requiresChangelog,
-      rejected_changes: rules.rejectedChanges,
+      rejected_changes: rules.rejectedChanges.slice(0, 10),
     },
     opportunities: report.opportunities.slice(0, max).map((o) => ({
       id: o.id,
@@ -243,7 +252,7 @@ export function compactReport(report: AnalysisReport, max: number): CompactRepor
       evidence: o.evidence.slice(0, 3).map((e) => e.locator),
     })),
     skipped: report.skipped.length,
-    notes: report.budget.notes,
+    notes: report.budget.notes.slice(0, 10),
   };
 }
 
@@ -284,19 +293,19 @@ export function formatOpportunity(report: AnalysisReport, o: ContributionOpportu
   if (o.files.length) lines.push("", `Files to read first: ${o.files.slice(0, 8).join(", ")}`);
   if (o.approach.length) {
     lines.push("", "Approach:");
-    o.approach.forEach((step, i) => lines.push(`  ${i + 1}. ${step}`));
+    o.approach.slice(0, LIST_CAP).forEach((step, i) => lines.push(`  ${i + 1}. ${truncate(step, 300)}`));
   }
   if (o.acceptanceCriteria.length) {
     lines.push("", "Acceptance criteria:");
-    for (const c of o.acceptanceCriteria) lines.push(`  - ${c}`);
+    for (const c of o.acceptanceCriteria.slice(0, LIST_CAP)) lines.push(`  - ${truncate(c, 300)}`);
   }
   if (o.etiquette.length) {
     lines.push("", "Etiquette for this project:");
-    for (const e of o.etiquette) lines.push(`  - ${e}`);
+    for (const e of o.etiquette.slice(0, LIST_CAP)) lines.push(`  - ${truncate(e, 300)}`);
   }
   if (o.risks.length) {
     lines.push("", "Risks:");
-    for (const r of o.risks) lines.push(`  - ${r}`);
+    for (const r of o.risks.slice(0, LIST_CAP)) lines.push(`  - ${truncate(r, 300)}`);
   }
   lines.push("", "How to work on the project:", `  clone: git clone https://${p.repo.host}/${p.repo.owner}/${p.repo.name}.git  (default branch ${p.defaultBranch}, analyzed at ${p.headSha.slice(0, 10)})`);
   for (const e of p.ecosystems) {
