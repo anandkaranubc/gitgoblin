@@ -94,6 +94,66 @@ describe("GitHubClient.repoDetails", () => {
   });
 });
 
+describe("GitHubClient.repoDetails when GitHub cannot compute a batch", () => {
+  const node = fixture<{ data: Record<string, unknown> }>("github-graphql-details.json").data["r0"];
+  const refs = (n: number) => Array.from({ length: n }, (_, i) => ({ host: "github.com", owner: "o", name: `r${i}` }));
+  /** The repository names one GraphQL call asked for. */
+  const asked = (body: string | undefined) => {
+    const variables = (JSON.parse(body ?? "{}") as { variables: Record<string, unknown> }).variables;
+    return Object.keys(variables).filter((k) => /^n\d+$/.test(k)).map((k) => String(variables[k]));
+  };
+  /** Answers every repository asked for, unless `fails` says the call should fail. */
+  const answer = (fails: (names: string[], index: number) => Response | undefined) => (call: { body: string | undefined }, index: number) => {
+    const names = asked(call.body);
+    return fails(names, index) ?? jsonResponse({ data: Object.fromEntries(names.map((_, i) => [`r${i}`, node])) });
+  };
+  const badGateway = () => new Response("", { status: 502 });
+
+  it("asks for at most 10 repositories per request", async () => {
+    const { github, calls } = makeGitHub(answer(() => undefined), "t0k");
+    const details = await github.repoDetails(refs(25));
+    expect(calls.map((c) => asked(c.body).length)).toEqual([10, 10, 5]);
+    expect(details.size).toBe(25);
+  });
+
+  it("splits a batch that timed out and keeps every repository", async () => {
+    const { github, calls } = makeGitHub(answer((names) => (names.length === 10 ? badGateway() : undefined)), "t0k");
+    const details = await github.repoDetails(refs(10));
+    expect(calls.map((c) => asked(c.body).length)).toEqual([10, 5, 5]);
+    expect(details.size).toBe(10);
+  });
+
+  it("leaves out only the repository GitHub cannot compute", async () => {
+    const { github, calls } = makeGitHub(answer((names) => (names.includes("r7") ? badGateway() : undefined)), "t0k");
+    const details = await github.repoDetails(refs(20));
+    expect(details.size).toBe(19);
+    expect(details.has("github.com/o/r7")).toBe(false);
+    expect(calls.length).toBeLessThanOrEqual(12);
+  });
+
+  it("gives up after six failures in a row when nothing was fetched", async () => {
+    const { github, calls } = makeGitHub(() => badGateway(), "t0k");
+    await expect(github.repoDetails(refs(40))).rejects.toMatchObject({ status: 502 });
+    expect(calls).toHaveLength(6);
+  });
+
+  it("keeps what earlier batches fetched when GitHub starts failing", async () => {
+    const { github, calls } = makeGitHub(answer((_names, index) => (index > 0 ? badGateway() : undefined)), "t0k");
+    const details = await github.repoDetails(refs(40));
+    expect(details.size).toBe(10);
+    expect(calls).toHaveLength(7);
+  });
+
+  it("does not split on rate limits or bad credentials", async () => {
+    const limited = makeGitHub(() => jsonResponse({ data: null, errors: [{ type: "RATE_LIMITED", message: "API rate limit exceeded" }] }), "t0k");
+    await expect(limited.github.repoDetails(refs(10))).rejects.toBeInstanceOf(RateLimitError);
+    expect(limited.calls).toHaveLength(1);
+    const denied = makeGitHub(() => jsonResponse({ message: "Bad credentials" }, { status: 401 }), "t0k");
+    await expect(denied.github.repoDetails(refs(10))).rejects.toMatchObject({ status: 401 });
+    expect(denied.calls).toHaveLength(1);
+  });
+});
+
 describe("GitHubClient.graphql", () => {
   it("returns partial data when GitHub reports errors alongside it", async () => {
     const { github } = makeGitHub(

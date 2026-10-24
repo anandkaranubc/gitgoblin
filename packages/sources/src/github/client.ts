@@ -6,7 +6,12 @@ const API_VERSION = "2022-11-28";
 const SEARCH_TTL_MS = 10 * 60 * 1000;
 const REPO_TTL_MS = 60 * 60 * 1000;
 const DETAILS_TTL_MS = 60 * 60 * 1000;
-const GRAPHQL_BATCH_SIZE = 20;
+// GitHub stops a GraphQL query after about ten seconds and answers 502. The details of 20 ordinary
+// repositories took 10.2 s to compute, 10 took 4.7 s and 5 took 3.0 s (measured 2026-10-24).
+const GRAPHQL_BATCH_SIZE = 10;
+// Failed requests in a row before repoDetails stops asking. Halving a batch of 10 down to the one
+// repository GitHub cannot compute takes 5 failures; a sixth means GitHub itself is failing.
+const MAX_FAILURES_IN_A_ROW = 6;
 
 /** Labels that commonly mark issues suitable for newcomers. */
 export const STARTER_ISSUE_LABELS = [
@@ -202,6 +207,18 @@ export class GraphQLError extends Error {
   }
 }
 
+/**
+ * Failures a smaller batch may get past: GitHub's 502 for a query that ran too long, other 5xx, a
+ * network error or timeout on our side, and GraphQL errors without data (resource limits). Rate
+ * limits, bad credentials and other 4xx answers would fail the same way for any batch.
+ */
+function splittable(error: unknown): boolean {
+  if (error instanceof RateLimitError) return false;
+  if (error instanceof HttpError) return error.status >= 500;
+  if (error instanceof GraphQLError) return true;
+  return !(error instanceof MissingTokenError);
+}
+
 function isRateLimitError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const type = (error as { type?: unknown }).type;
@@ -274,7 +291,7 @@ export class GitHubClient {
   async graphql<T = unknown>(
     query: string,
     variables: Record<string, unknown> = {},
-    options: { ttlMs?: number | undefined } = {},
+    options: { ttlMs?: number | undefined; retries?: number | undefined } = {},
   ): Promise<T> {
     if (!this.#token) throw new MissingTokenError("The GitHub GraphQL API");
     const url = `${this.#baseUrl}/graphql`;
@@ -284,6 +301,7 @@ export class GitHubClient {
       headers: this.#headers(),
       body,
       ttlMs: options.ttlMs,
+      retries: options.retries,
     });
     if (response.data === undefined || response.data === null) {
       this.http.forget("POST", url, body);
@@ -335,30 +353,63 @@ export class GitHubClient {
   }
 
   /**
-   * Fetches contribution-related details for many repositories in a few
-   * GraphQL calls. Missing or inaccessible repositories are left out of the map.
+   * Fetches contribution-related details for many repositories in a few GraphQL calls. Missing or
+   * inaccessible repositories are left out of the map, and so are repositories whose details GitHub
+   * would not compute: a batch that times out (502) or fails is split in half and asked again, down
+   * to single repositories, so one heavy repository costs only its own details. After six failures in
+   * a row it stops and returns what it has. It throws when nothing could be fetched, and at once for
+   * rate limits and authentication errors.
    */
   async repoDetails(refs: RepoRef[]): Promise<Map<string, GitHubRepoDetails>> {
     const result = new Map<string, GitHubRepoDetails>();
-    for (let start = 0; start < refs.length; start += GRAPHQL_BATCH_SIZE) {
-      const batch = refs.slice(start, start + GRAPHQL_BATCH_SIZE);
-      const declarations = batch.map((_, i) => `$o${i}: String!, $n${i}: String!`).join(", ");
-      const selections = batch.map((_, i) => `r${i}: repository(owner: $o${i}, name: $n${i}) { ...RepoDetails }`).join("\n");
-      const query = `query Details(${declarations}, $starterLabels: [String!]) {\n${selections}\n}\n${DetailsFragment}`;
-      const variables: Record<string, unknown> = { starterLabels: STARTER_ISSUE_LABELS };
-      batch.forEach((ref, i) => {
-        variables[`o${i}`] = ref.owner;
-        variables[`n${i}`] = ref.name;
-      });
-      const data = await this.graphql<Record<string, unknown>>(query, variables, { ttlMs: DETAILS_TTL_MS });
-      batch.forEach((ref, i) => {
-        const node = data[`r${i}`];
-        if (!node) return;
-        const parsed = DetailsNodeSchema.safeParse(node);
-        if (parsed.success) result.set(repoId(ref), toDetails(parsed.data));
-      });
+    let fetched = 0;
+    let failuresInARow = 0;
+    let lastError: unknown;
+    const pending: RepoRef[][] = [];
+    for (let start = 0; start < refs.length; start += GRAPHQL_BATCH_SIZE) pending.push(refs.slice(start, start + GRAPHQL_BATCH_SIZE));
+    while (pending.length > 0) {
+      const batch = pending.shift() ?? [];
+      try {
+        // Splitting is the retry: repeating the same heavy query would only time out again.
+        const data = await this.#detailsBatch(batch);
+        fetched += 1;
+        failuresInARow = 0;
+        batch.forEach((ref, i) => {
+          const node = data[`r${i}`];
+          if (!node) return;
+          const parsed = DetailsNodeSchema.safeParse(node);
+          if (parsed.success) result.set(repoId(ref), toDetails(parsed.data));
+        });
+      } catch (error) {
+        if (!splittable(error)) throw error;
+        lastError = error;
+        failuresInARow += 1;
+        // GitHub itself is failing, not one heavy batch: stop instead of multiplying requests, and
+        // keep what earlier batches fetched.
+        if (failuresInARow >= MAX_FAILURES_IN_A_ROW) {
+          if (fetched === 0) throw error;
+          break;
+        }
+        if (batch.length > 1) {
+          const half = Math.ceil(batch.length / 2);
+          pending.unshift(batch.slice(0, half), batch.slice(half));
+        }
+      }
     }
+    if (fetched === 0 && lastError !== undefined) throw lastError;
     return result;
+  }
+
+  #detailsBatch(batch: RepoRef[]): Promise<Record<string, unknown>> {
+    const declarations = batch.map((_, i) => `$o${i}: String!, $n${i}: String!`).join(", ");
+    const selections = batch.map((_, i) => `r${i}: repository(owner: $o${i}, name: $n${i}) { ...RepoDetails }`).join("\n");
+    const query = `query Details(${declarations}, $starterLabels: [String!]) {\n${selections}\n}\n${DetailsFragment}`;
+    const variables: Record<string, unknown> = { starterLabels: STARTER_ISSUE_LABELS };
+    batch.forEach((ref, i) => {
+      variables[`o${i}`] = ref.owner;
+      variables[`n${i}`] = ref.name;
+    });
+    return this.graphql<Record<string, unknown>>(query, variables, { ttlMs: DETAILS_TTL_MS, retries: 0 });
   }
 
   #headers(): Record<string, string> {
