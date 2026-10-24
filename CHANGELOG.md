@@ -19,11 +19,16 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - `analyze` gives Bun projects `bun run build` and `bun run test`, not Bun's own bundler and test
   runner, and no longer invents `tsc --noEmit` for a TypeScript project without a root
   `tsconfig.json`. Before, `contribute` could start with two failing checks the project never had.
+- `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
+  requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
+  of putting it at the top. One failed run is reported as a single failure, not as "failing since".
 
 ## @gitgoblin/mcp 0.1.8 - Unreleased
 
 - The analyze tool's build and test commands for Bun projects run the project's scripts, and it no
   longer invents a TypeScript check when the repository root has no `tsconfig.json`.
+- A failing CI workflow that needs repository secrets forks do not get is no longer ranked as an
+  easy fix for outsiders, and a single failed run is not called a failing streak.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
