@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
 import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
-import { forwardedCommand, REGISTRY_HOSTS, startEgressProxy, proxyEnv, upstreamProxyFrom, type EgressProxy } from "./egress.ts";
+import { forwardedCommand, PLAYWRIGHT_HOSTS, REGISTRY_HOSTS, startEgressProxy, proxyEnv, upstreamProxyFrom, type EgressProxy } from "./egress.ts";
 import { execShell, tail } from "./exec.ts";
 import { commandEnv, isInside, isSafeCommand, scrubEnv } from "./guard.ts";
 import { hostSandboxFor, OFFLINE_ENV, specFor, type CheckIsolation, type HostIsolation } from "./hostbox.ts";
@@ -114,6 +114,13 @@ export interface RunOptions {
    * sandbox the install's network cannot be limited.
    */
   installNetwork?: "registries" | "open";
+  /**
+   * After the install, download the browsers a Playwright-based test suite needs
+   * (`npx --no-install playwright install`, using the project's own Playwright), allowing
+   * Playwright's download hosts for that step only. Browsers land in the shared cache, so this costs
+   * time once per Playwright version. Off by default; the run says when the tests need it.
+   */
+  installBrowsers?: boolean;
   /**
    * Hosts the install may reach, besides the public package registries
    * (REGISTRY_HOSTS), for example a private registry. Entries starting with "." match subdomains.
@@ -241,6 +248,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   const phases: PhaseSummary[] = [];
   let checkIsolation: string | undefined;
   let installRestored: string[] = [];
+  const setupNotes: string[] = [];
   let lastNotes: ImplementationNotes | undefined;
   let costUsd = 0;
   let workspace: Workspace | undefined;
@@ -336,11 +344,12 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       // network namespace, which cannot reach a proxy on the host's loopback, so there the install's
       // network stays open and the run says so.
       let egress: EgressProxy | undefined;
-      const hosts = [...REGISTRY_HOSTS, ...(options.installHosts ?? [])];
+      const hosts = [...REGISTRY_HOSTS, ...(options.installHosts ?? []), ...(options.installBrowsers ? PLAYWRIGHT_HOSTS : [])];
       // sandbox-exec: the proxy on the host's 127.0.0.1, which the sandbox allows. bubblewrap: the
       // install has its own network namespace, so the proxy listens on a Unix socket in a folder bound
       // into the sandbox and a forwarder inside offers it on the namespace's 127.0.0.1.
       const egressDir = path.join(journal.dir, "egress");
+      const socketPath = path.join(egressDir, "proxy.sock");
       let installCommand = task.commands.install;
       let installEnv: Record<string, string> = hostEnv;
       const limitInstall = (options.installNetwork ?? "registries") === "registries";
@@ -351,7 +360,6 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
         installEnv = { ...hostEnv, ...proxyEnv(egress.url) };
       } else if (limitInstall && hostBox.kind === "bwrap") {
         mkdirSync(egressDir, { recursive: true });
-        const socketPath = path.join(egressDir, "proxy.sock");
         egress = await startEgressProxy(hosts, { ...egressOptions, socketPath });
         const forwarded = forwardedCommand(task.commands.install, socketPath);
         installCommand = forwarded.command;
@@ -363,9 +371,24 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
         ? { cwd: workspace.path, env: installEnv, ...timeout, ...wrapFor(false, hostBox.kind === "bwrap" ? [egressDir] : []) }
         : { cwd: workspace.path, env: installEnv, ...timeout, ...wrapFor(true) };
       let install: Awaited<ReturnType<typeof execShell>>;
+      let browsers: Awaited<ReturnType<typeof execShell>> | undefined;
       let denied: string[] = [];
       try {
         install = await execShell(installCommand, installOptions);
+        // Playwright's browsers, when asked for and the project installed Playwright: the project's own
+        // version (--no-install never fetches Playwright itself), through the same proxy.
+        if (options.installBrowsers && install.exitCode === 0 && existsSync(path.join(workspace.path, "node_modules", "playwright-core", "package.json"))) {
+          reporter.phase("install", "Playwright browsers");
+          const browserCommand = "npx --no-install playwright install";
+          if (egress && hostBox.kind === "bwrap") {
+            const forwarded = forwardedCommand(browserCommand, socketPath);
+            browsers = await execShell(forwarded.command, { ...installOptions, env: { ...hostEnv, ...forwarded.env } });
+          } else {
+            browsers = await execShell(browserCommand, installOptions);
+          }
+          journal.event("install", "browsers", { exitCode: browsers.exitCode, durationMs: browsers.durationMs, timedOut: browsers.timedOut });
+          if (browsers.exitCode !== 0) reporter.warn(`installing Playwright's browsers failed (exit ${browsers.exitCode}); see install-output.txt`);
+        }
       } finally {
         if (egress) {
           denied = egress.denied();
@@ -374,7 +397,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       }
       if (egress) checkIsolation = `${hostBox.kind} (${strict ? "strict; " : ""}install limited to package registries${denied.length ? `, refused ${denied.length}: ${denied.slice(0, 5).join(", ")}` : ""})`;
       else if (hostBox.kind !== "none") checkIsolation = `${hostBox.kind} (${strict ? "strict; " : ""}install network open)`;
-      journal.text("install-output.txt", denied.length ? `${install.output}\n[gitgoblin] the install tried to reach hosts that are not package registries, refused: ${denied.join(", ")}\n` : install.output);
+      const installLog = browsers ? `${install.output}\n[gitgoblin] npx --no-install playwright install\n${browsers.output}` : install.output;
+      journal.text("install-output.txt", denied.length ? `${installLog}\n[gitgoblin] the install tried to reach hosts that are not package registries, refused: ${denied.join(", ")}\n` : installLog);
       // An install can rewrite tracked files (npm drops lockfile entries for workspaces missing from
       // the tree, formatters run in postinstall). That is not the contribution: put them back as
       // committed, so every diff from here on is measured against the repository's own files.
@@ -396,6 +420,14 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const baseline = compareWithBaseline(baselineChecks, undefined, { files: 0, insertions: 0, deletions: 0, changedFiles: [] });
     journal.artifact("baseline", baseline);
     for (const c of baselineChecks.filter((c) => c.status !== "pass")) reporter.warn(`baseline ${c.name}: ${c.status}`);
+    // A browser test suite whose browsers are missing fails before testing anything; say what fixes it.
+    if (baselineChecks.some((c) => c.status !== "pass" && /ms-playwright/.test(c.outputTail) && /Executable doesn't exist|browserType\.launch|Please run the following command to download new browsers/.test(c.outputTail))) {
+      const hint = options.installBrowsers
+        ? "the tests need Playwright's browsers and installing them did not make them available; see install-output.txt"
+        : "the tests need Playwright's browsers, which are not installed: run again with --install-browsers (downloads them from Playwright's servers into your cache), or run `npx playwright install` once yourself";
+      setupNotes.push(hint);
+      reporter.warn(hint);
+    }
     // A failed install that leaves the checks broken means nothing the agent does could be verified;
     // stop here, before any model spend, with the log a person needs.
     if (installFailure && baselineChecks.length > 0 && baselineChecks.every((c) => c.status !== "pass")) {
@@ -568,6 +600,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
         ...(delivery ? { prTitle: delivery.prTitle } : {}),
         ...(checkIsolation ? { checkIsolation } : {}),
         ...(installRestored.length ? { installRestored } : {}),
+        ...(setupNotes.length ? { setupNotes } : {}),
         ...(lastNotes ? { notes: lastNotes } : {}),
       }),
     );
