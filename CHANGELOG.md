@@ -5,6 +5,21 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
+## gitgoblin 0.1.1 - Unreleased
+
+**Fixes**
+
+- `analyze` gives Bun projects `bun run build` and `bun run test`, not Bun's own bundler and test
+  runner, and no longer invents `tsc --noEmit` for a TypeScript project without a root
+  `tsconfig.json`. Before, `contribute` could start with two failing checks the project never had.
+
+## @gitgoblin/mcp 0.1.8 - Unreleased
+
+**Fixes**
+
+- The analyze tool's build and test commands for Bun projects run the project's scripts, and it no
+  longer invents a TypeScript check when the repository root has no `tsconfig.json`.
+
 ## gitgoblin 0.1.0 - 2026-10-24
 
 The first release of `gitgoblin`: find open-source work worth doing, check the evidence, and prepare
