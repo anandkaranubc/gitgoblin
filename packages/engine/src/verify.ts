@@ -1,4 +1,4 @@
-import { execShell, tail, type ExecOptions } from "./exec.ts";
+import { excerpt, execShell, keptOutput, type ExecOptions } from "./exec.ts";
 import type { Check, Commands, DiffStats, TestCounts, Verification } from "./types.ts";
 
 export interface CheckSpec {
@@ -28,6 +28,8 @@ export interface RunChecksOptions {
   timeoutMs?: number;
   wrap?: ExecOptions["wrap"];
   onCheck?: (check: Check) => void;
+  /** Receives everything a check printed that was kept, for a log file; `outputTail` holds only an excerpt. */
+  onOutput?: (check: Check, output: string) => void;
 }
 
 export async function runChecks(specs: CheckSpec[], opts: RunChecksOptions): Promise<Check[]> {
@@ -40,12 +42,13 @@ export async function runChecks(specs: CheckSpec[], opts: RunChecksOptions): Pro
       status: result.timedOut ? "timeout" : result.exitCode === 0 ? "pass" : "fail",
       exitCode: result.exitCode,
       durationMs: result.durationMs,
-      outputTail: tail(result.output),
+      outputTail: excerpt(result),
     };
     // A summary from cut-off output could be missing an earlier suite's line, so counts need the whole output.
     const tests = result.truncated ? undefined : testCounts(result.output);
     if (tests) check.tests = tests;
     checks.push(check);
+    opts.onOutput?.(check, keptOutput(result));
     opts.onCheck?.(check);
   }
   return checks;

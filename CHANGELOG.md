@@ -16,6 +16,9 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
   web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
   tests, or fewer passing ones, as a regression. The pull request shows both counts.
+- Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
+  `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
+  now holds the start of the output as well as the end, so the first error survives a long log.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
