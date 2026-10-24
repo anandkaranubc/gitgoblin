@@ -6,7 +6,7 @@ order: 5
 
 # Status
 
-gitgoblin is in preview, built in the open. Discovery and repository analysis work today, from the `gitgoblin` command in a clone and from any agent that runs local MCP servers. `gitgoblin contribute` carries one opportunity on to a prepared pull request; it is experimental and costs money per run. Nothing is on npm yet. This page is kept honest by hand; when it disagrees with the [README](https://github.com/anandkaranubc/gitgoblin#what-works-today), the README wins.
+gitgoblin is in preview, built in the open. Discovery and repository analysis work today, from the `gitgoblin` command and from any agent that runs local MCP servers. `gitgoblin contribute` carries one opportunity on to a prepared pull request; it is experimental and costs money per run. Both install from npm: `npm install -g gitgoblin` for the command, `npx -y @gitgoblin/mcp` for the MCP server. This page is kept honest by hand; when it disagrees with the [README](https://github.com/anandkaranubc/gitgoblin#what-works-today), the README wins.
 
 Last updated 2026-10-23.
 
@@ -23,7 +23,6 @@ Last updated 2026-10-23.
 
 ## Being built now
 
-- Publishing `gitgoblin` and `@gitgoblin/mcp` to npm, so neither needs a clone or a release URL.
 - Calibrating the scores behind `analyze`, so rankings across repositories mean the same thing, and cutting the false positives that audits and backtests find.
 - The maintainer opt-out list in [docs/excluded-projects.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/excluded-projects.md), enforced in discovery and the engine rather than only by people.
 - Detecting a project's policy on AI-generated contributions. Until then, the person approving a contribution checks it by hand.

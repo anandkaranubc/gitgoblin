@@ -1,17 +1,17 @@
 # Getting started
 
-This takes you from a fresh clone to a ranked list of repositories, then to a report on one repository with concrete work to do. It takes about ten minutes. Step 8 turns one item of that report into a pull request you approve.
+This takes you from installing gitgoblin to a ranked list of repositories, then to a report on one repository with concrete work to do. It takes about ten minutes. Step 8 turns one item of that report into a pull request you approve.
 
 ## 1. Install
 
-You need [Node.js](https://nodejs.org) 24 or newer and git. There is no published package yet, so run it from a clone:
+You need [Node.js](https://nodejs.org) 24 or newer and git. Install the command from npm:
 
 ```sh
-git clone https://github.com/anandkaranubc/gitgoblin.git
-cd gitgoblin
-npm install
-npx gitgoblin --help
+npm install -g gitgoblin
+gitgoblin --help
 ```
+
+Or run it without installing: `npx gitgoblin --help`. The examples below use `npx gitgoblin`, which works either way. To work on gitgoblin itself, run it from a clone instead; [CONTRIBUTING.md](../CONTRIBUTING.md) shows how.
 
 ## 2. Pick a goal
 
@@ -149,7 +149,14 @@ Useful flags: `--json --out report.json` saves the full report as data (what ste
 
 ## 8. Prepare a contribution
 
-This is the experimental part. It runs an AI agent against a local clone, costs money per run, and needs an Anthropic API key or Claude Code login, a git identity, and the [GitHub CLI](https://cli.github.com) logged in for publishing. Read [etiquette.md](etiquette.md) first: you are about to prepare a change for someone else's project.
+This is the experimental part. It runs an AI agent against a local clone, and every run costs money, capped by `--max-cost` (default: the engine's own limit, $10). It needs:
+
+- the Claude Agent SDK, installed next to the CLI: `npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`
+- an Anthropic API key or a Claude Code login
+- a git identity, because the engine commits the change
+- the [GitHub CLI](https://cli.github.com) logged in (`gh auth login`), for publishing
+
+Read [etiquette.md](etiquette.md) first: you are about to prepare a change for someone else's project.
 
 ```sh
 npx gitgoblin contribute jd/tenacity --report report.json
