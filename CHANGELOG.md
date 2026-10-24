@@ -10,12 +10,24 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - `contribute --install-browsers` downloads the browsers a project's Playwright test suite needs,
   with the project's own Playwright, after the install; the run says when the tests need them.
   0.1.0 offered this only through `gitgoblin-engine run --install-browsers`.
+- `contribute` warns before its first question when a launcher the project's commands need (`bun`,
+  `cargo`, `pnpm` and the like) is not installed, instead of failing at the install after cloning.
+- `discover` prints its warnings (a refused search, GitHub details that could not be read) on stderr
+  even when progress is hidden, so a ranking in a pipe or script is not silently partial.
 - The npm page now opens with how to install and run the command from npm, instead of how to run
   it from a clone of the repository.
+- `analyze` gives Bun projects `bun run build` and `bun run test`, not Bun's own bundler and test
+  runner, and no longer invents `tsc --noEmit` for a TypeScript project without a root
+  `tsconfig.json`. Before, `contribute` could start with two failing checks the project never had.
 - When a project's tests already fail before the change, `contribute` no longer takes "also fails on
   the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
   web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
   tests, or fewer passing ones, as a regression. The pull request shows both counts.
+
+## @gitgoblin/mcp 0.1.8 - Unreleased
+
+- The analyze tool's build and test commands for Bun projects run the project's scripts, and it no
+  longer invents a TypeScript check when the repository root has no `tsconfig.json`.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
@@ -30,8 +42,7 @@ a pull request a maintainer would want to merge.
   including the share of pull requests the project merges (`acceptance`), which in backtests
   predicted whether a newcomer's pull request would be merged better than stars did; `goals` lists
   what each goal weighs. `discover --json` includes the warnings about refused or rate-limited
-  searches and missing GitHub details, so a script can tell a partial ranking from a complete one;
-  text output prints them on stderr.
+  searches, so a script can tell a partial ranking from a complete one.
 - `analyze` profiles a repository (what it is, how active it is, how it treats outside
   contributors, how to build and test it, its conventions) and lists opportunities, each with
   evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo, Codeberg among them; other
