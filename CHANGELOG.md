@@ -5,6 +5,14 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
+## gitgoblin 0.1.1 - Unreleased
+
+- `contribute --install-browsers` downloads the browsers a project's Playwright test suite needs,
+  with the project's own Playwright, after the install; the run says when the tests need them.
+  0.1.0 offered this only through `gitgoblin-engine run --install-browsers`.
+- The npm page now opens with how to install and run the command from npm, instead of how to run
+  it from a clone of the repository.
+
 ## gitgoblin 0.1.0 - 2026-10-24
 
 The first release of `gitgoblin`: find open-source work worth doing, check the evidence, and prepare
@@ -54,9 +62,8 @@ a pull request a maintainer would want to merge.
 - Files the repository's own install rewrites (a lockfile npm trims, say) are put back as committed
   before anything else runs, so a prepared change never carries that churn; the run report names them.
 - Projects that test in real browsers through Playwright: the run says when the tests need
-  Playwright's browsers, and `gitgoblin contribute --install-browsers` (or `gitgoblin-engine run
-  --install-browsers`) downloads them with the project's own Playwright, allowing Playwright's
-  download servers for that step only.
+  Playwright's browsers, and `gitgoblin-engine run --install-browsers` downloads them with the
+  project's own Playwright, allowing Playwright's download servers for that step only.
 
 **Safety**
 
