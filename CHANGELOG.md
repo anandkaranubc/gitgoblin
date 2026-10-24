@@ -92,7 +92,7 @@ money, capped by `--max-cost`. `discover`, `contribute` and `publish` work with 
 Opportunity scores are still being calibrated. `contribute` has so far prepared pull requests on one
 real repository, on macOS, so treat what it prepares as a draft to review.
 
-## @gitgoblin/mcp 0.1.7 - Unreleased
+## @gitgoblin/mcp 0.1.7 - 2026-10-24
 
 - Reads public repositories only. Each repository is confirmed public with an anonymous request
   to its forge before any work, and `discover_repositories` leaves out results it cannot confirm, so
