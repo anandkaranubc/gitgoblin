@@ -9,6 +9,7 @@
  *
  * Usage: node scripts/backtest-code.ts owner/name [owner/name...] [--days 180]
  */
+import { cloneDirFor } from "../src/git/repo.ts";
 import { execFile } from "node:child_process";
 import { parseArgs } from "node:util";
 import { join } from "node:path";
@@ -69,7 +70,7 @@ for (const repo of positionals) {
 
 async function backtestRepo(repo: string): Promise<void> {
   const [owner, name] = repo.split("/") as [string, string];
-  const dir = join(cacheDir, "repos", `${owner}__${name}`);
+  const dir = cloneDirFor(cacheDir, { host: "github.com", owner, name });
   // Make sure the clone exists and is current, then find the commit from N days ago on the default branch.
   await analyzeRepository(repo, { skipSamples: true, checkLinks: false, dependencyChecks: false, maxOpportunities: 1 });
   const head = (await git(dir, ["rev-parse", "origin/HEAD"])).trim();
