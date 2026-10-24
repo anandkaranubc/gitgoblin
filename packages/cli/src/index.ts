@@ -430,8 +430,9 @@ export function buildProgram(runtime: Runtime): Command {
       `what the repository's install may reach under an OS sandbox, one of ${INSTALL_NETWORKS.join(", ")} (default registries: package registries only; open allows any host, for projects that install from elsewhere)`,
       installNetworkArgument,
     )
+    .option("--install-browsers", "after the install, download the browsers a Playwright test suite needs, with the project's own Playwright, from Playwright's servers (off by default; the run says when the tests need them)")
     .option("-g, --goal <goal>", "discovery goal used for hints", goalArgument, "contribute")
-    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: string; workdir?: string; model?: string; effort?: Effort; checkIsolation?: CheckIsolation; installNetwork?: InstallNetwork; goal: Goal }) => {
+    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: string; workdir?: string; model?: string; effort?: Effort; checkIsolation?: CheckIsolation; installNetwork?: InstallNetwork; installBrowsers?: boolean; goal: Goal }) => {
       if (!runtime.canPrompt) {
         throw new Error("contribute needs an interactive terminal: it asks before running an agent and again before publishing anything.");
       }
@@ -483,6 +484,7 @@ export function buildProgram(runtime: Runtime): Command {
       const isolationWords = [
         options.checkIsolation ? ISOLATION_WORDS[options.checkIsolation] : undefined,
         options.installNetwork === "open" ? "the repository's install allowed to reach any host" : undefined,
+        options.installBrowsers ? "Playwright's browsers downloaded from Playwright's servers" : undefined,
       ]
         .filter(Boolean)
         .join(", and ");
@@ -504,6 +506,7 @@ export function buildProgram(runtime: Runtime): Command {
           ...(options.effort ? { effort: options.effort } : {}),
           ...(options.checkIsolation ? { checkIsolation: options.checkIsolation } : {}),
           ...(options.installNetwork ? { installNetwork: options.installNetwork } : {}),
+          ...(options.installBrowsers ? { installBrowsers: true } : {}),
           // Newer engines pass what they know about the install and the baseline as a second argument.
           approvePlan: async (plan, context?: PlanContextLike) => {
             const warning = describeEnvironment(context);
