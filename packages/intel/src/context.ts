@@ -21,6 +21,8 @@ export interface AnalysisOptions {
   hints?: AnalysisHints | undefined;
   /** Clock, for reproducible tests. */
   now?: Date | undefined;
+  /** Upper bound for cloning or updating the repository (default 10 minutes); a caller with its own deadline sets less. */
+  cloneTimeoutMs?: number | undefined;
   /** Skip issue, PR and CI sampling; only clone-based analysis runs. Useful for historical code backtests. */
   skipSamples?: boolean | undefined;
   /** Report every cluster instead of capping repetitive kinds (test gaps, TODOs, triage). For evaluation runs. */
