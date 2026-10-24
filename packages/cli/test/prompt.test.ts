@@ -24,7 +24,7 @@ describe("discardTypeAhead", () => {
     expect(result).toEqual({ discarded: 2, interrupted: false });
     input.write("publish\n");
     input.resume();
-    const [chunk] = await new Promise<Buffer[]>((done) => input.once("data", (data: Buffer) => done([data])));
+    const chunk = await new Promise<Buffer>((done) => input.once("data", done));
     expect(chunk.toString()).toBe("publish\n");
   });
 
