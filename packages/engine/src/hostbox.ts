@@ -190,8 +190,11 @@ export function sandboxExecProfile(spec: HostSandboxSpec): string {
   lines.push("(deny file-write*)");
   for (const dir of [spec.workspace, ...spec.extraWrite]) lines.push(`(allow file-write* (subpath ${sbpl(dir)}))`);
   lines.push(
-    '(allow file-write* (literal "/dev/null") (literal "/dev/tty") (literal "/dev/stdout") (literal "/dev/stderr") (literal "/dev/zero") (literal "/dev/random") (literal "/dev/urandom") (literal "/dev/dtracehelper"))',
-    '(allow file-write* (regex #"^/dev/fd/") (regex #"^/dev/ttys") (regex #"^/dev/pty") (regex #"^/private/var/run/"))',
+    '(allow file-write* (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr") (literal "/dev/zero") (literal "/dev/random") (literal "/dev/urandom") (literal "/dev/dtracehelper"))',
+    '(allow file-write* (regex #"^/dev/fd/") (regex #"^/private/var/run/"))',
+    // Commands run detached with pipes, never on a terminal. A terminal device by path would let code
+    // type escape sequences into, or read keystrokes from, the person's other tabs.
+    '(deny file-read* file-write* file-ioctl (literal "/dev/tty") (regex #"^/dev/ttys") (regex #"^/dev/pty") (regex #"^/dev/tty[p-w]") (regex #"^/dev/cu\\.") (regex #"^/dev/tty\\."))',
     `(deny file-write* (subpath ${sbpl(path.join(spec.workspace, ".git"))}))`,
   );
   // Order matters (last match wins): deny the home directory, allow the toolchains back, then deny

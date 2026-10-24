@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -190,4 +190,32 @@ describe.skipIf(!available)("offline checks (OS)", () => {
     expect(r.exitCode).not.toBe(0);
     expect(Date.now() - started).toBeLessThan(30_000);
   }, 60_000);
+});
+
+/** A terminal device this user can open outside any sandbox, if there is one. */
+function openableTerminal(): string | undefined {
+  for (const name of readdirSync("/dev").filter((d) => /^ttys\d+$/.test(d))) {
+    try {
+      closeSync(openSync(`/dev/${name}`, "r+"));
+      return `/dev/${name}`;
+    } catch {
+      // not ours
+    }
+  }
+  return undefined;
+}
+
+describe.skipIf(available?.kind !== "sandbox-exec" || !openableTerminal())("host sandbox and terminals (macOS)", () => {
+  it("keeps repository commands away from the person's terminals", async () => {
+    // A terminal device lets code type into or read from another tab: escape sequences that rewrite
+    // the screen or set the clipboard, or keystrokes. Sandboxed commands run detached with no terminal.
+    const tty = openableTerminal()!;
+    const ws = mkdtempSync(path.join(os.tmpdir(), "gg-tty-"));
+    const run = (command: string) => execShell(command, { cwd: ws, env, wrap: (c) => available!.wrap(c, specFor(ws, false)) });
+    const write = await run(`printf '' > ${tty} && echo WROTE || echo refused`);
+    expect(write.output).not.toContain("WROTE");
+    const read = await run(`node -e "try { require('fs').openSync('${tty}', 'r'); console.log('OPENED') } catch (e) { console.log('refused', e.code) }"`);
+    expect(read.output).not.toContain("OPENED");
+    expect((await run("echo still works > out.txt && cat out.txt")).output).toContain("still works");
+  });
 });

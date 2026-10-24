@@ -17,7 +17,8 @@ a pull request a maintainer would want to merge.
   name, and says why each one ranked where it did. `explain` shows every signal behind one score,
   including the share of pull requests the project merges (`acceptance`), which in backtests
   predicted whether a newcomer's pull request would be merged better than stars did; `goals` lists
-  what each goal weighs.
+  what each goal weighs. `discover --json` includes the warnings about refused or rate-limited
+  searches, so a script can tell a partial ranking from a complete one.
 - `analyze` profiles a repository (what it is, how active it is, how it treats outside
   contributors, how to build and test it, its conventions) and lists opportunities, each with
   evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo, Codeberg among them; other
@@ -41,7 +42,8 @@ a pull request a maintainer would want to merge.
 - `contribute` has an AI agent investigate, plan, implement and verify one opportunity in a local
   clone, gets an independent review, and prepares a pull request written for the maintainers who
   will read it. It asks before running the agent, before implementing the plan and before
-  publishing; nothing is pushed or posted without that last yes.
+  publishing; nothing is pushed or posted until you type `publish` at that last question, and keys
+  pressed before a question appears are discarded, so a `y` typed ahead cannot answer it.
 - The opportunity picker marks the ones the engine would refuse (`!`, dependency bumps among them:
   the agent works offline and cannot regenerate a lockfile, so it stops before spending anything)
   and the ones intel doubts (`?`), and Enter skips both. Once one is chosen, `contribute` says which of
@@ -59,11 +61,17 @@ a pull request a maintainer would want to merge.
 - Repository content is treated as untrusted: reads stay inside the clone, link checks reach only
   public addresses, and every parser of issue, README and source text runs in linear time, so a
   crafted file cannot stall it.
+  Everything the command prints that came from outside (repository descriptions, issue titles,
+  registry data, the agent's progress and messages, run files, errors) has escape sequences and
+  invisible control characters removed, so it cannot rewrite the terminal or set the clipboard.
 - The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
   `bwrap` on Linux when installed): tests run offline, and the install reaches package registries
   only, through your `HTTPS_PROXY` if you use one; `contribute --install-network open` allows any
   host, and a refused host is named with that flag when an install fails. `--check-isolation strict`,
   for repositories you do not trust, also hides your home directory from them.
+- On macOS the repository's commands cannot open your terminals, so they cannot type into or read
+  from your other tabs; progress lines and prepared pull requests carry no escape sequences or
+  invisible characters.
 
 **Everyday use**
 
@@ -92,7 +100,8 @@ real repository, on macOS, so treat what it prepares as a draft to review.
 - Each analysis runs in a child process with an empty home directory, so your git configuration and
   credential helpers never apply to a repository's clone. A timeout or a cancellation kills the
   child and everything it started, git included. At most two analyses run at once.
-- Clones are kept per forge, and the least recently used are deleted beyond 20 per forge.
+- Clones are kept per forge, and the least recently used are deleted beyond 20 per forge. Clones left by
+  earlier versions are deleted. A clone that takes more than four minutes gives up with a clear error.
 - Every result opens with a reminder that repository text is data, not instructions. Invisible
   format characters, including zero-width and Unicode tag characters, are stripped, and results are
   capped in size.
