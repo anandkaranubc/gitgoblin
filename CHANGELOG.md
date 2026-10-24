@@ -10,6 +10,11 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - `contribute --install-browsers` downloads the browsers a project's Playwright test suite needs,
   with the project's own Playwright, after the install; the run says when the tests need them.
   0.1.0 offered this only through `gitgoblin-engine run --install-browsers`.
+- Safety: the repository's commands can no longer reach other programs' Unix sockets. Before, code
+  in a repository could talk to Docker's daemon (and through it start a container with your disk
+  mounted) or to your SSH agent, despite the OS sandbox. Sockets the commands create in their own
+  writable places still work, so builds that use tsx or turbo's daemon no longer fail on macOS with
+  `listen EPERM`.
 - `contribute` warns before its first question when a launcher the project's commands need (`bun`,
   `cargo`, `pnpm` and the like) is not installed, instead of failing at the install after cloning.
 - `discover` prints its warnings (a refused search, GitHub details that could not be read) on stderr
