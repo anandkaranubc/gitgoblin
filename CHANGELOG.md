@@ -5,6 +5,12 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
+## gitgoblin 0.1.2 - Unreleased
+
+- `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
+  requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
+  of putting it at the top. One failed run is reported as a single failure, not as "failing since".
+
 ## gitgoblin 0.1.1 - 2026-10-24
 
 - `discover contribute` gets each repository's GitHub details again (starter issues, contributing
@@ -32,6 +38,8 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 - The analyze tool's build and test commands for Bun projects run the project's scripts, and it no
   longer invents a TypeScript check when the repository root has no `tsconfig.json`.
+- A failing CI workflow that needs repository secrets forks do not get is no longer ranked as an
+  easy fix for outsiders, and a single failed run is not called a failing streak.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
