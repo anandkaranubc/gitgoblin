@@ -163,7 +163,7 @@ describe.skipIf(process.platform === "win32")("the contribute journey against th
   it("runs a fixture bug to a prepared pull request, shows it, and publishes as a dry run; then runs/show find it", { timeout: 120_000 }, async () => {
     const repo = createFixtureRepo();
     const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-journey-"));
-    const { runtime, out, err, asked } = journeyRuntime(repo, ["y", "y", "y"]);
+    const { runtime, out, err, asked } = journeyRuntime(repo, ["y", "y", "publish"]);
 
     expect(await run(["contribute", "acme/fixture", "--issue", "7", "--workdir", workdir], runtime)).toBe(0);
 
