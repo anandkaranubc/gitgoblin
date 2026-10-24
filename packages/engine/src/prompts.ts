@@ -1,5 +1,5 @@
 import type { ChangePlan, ImplementationNotes, Review, Task, Verification } from "./types.ts";
-import { describeChecks } from "./verify.ts";
+import { describeChecks, describeCounts } from "./verify.ts";
 
 export interface RepositoryGuidance {
   /** Repo-relative path and content of CONTRIBUTING.md, AGENTS.md, CLAUDE.md and similar. */
@@ -160,7 +160,12 @@ export function fixVerificationPrompt(verification: Verification): string {
     "# Verification failed",
     "The engine ran the repository's checks on your change. Fix the failures below without widening the scope. If a failure is pre-existing and unrelated, say so in `knownGaps` instead of changing unrelated code.",
     "",
-    ...failed.map((c) => `## ${c.name} (${c.status}): \`${c.command}\`\n${fence(c.outputTail)}`),
+    ...failed.map((c) => {
+      const counts = describeCounts(verification, c.name);
+      // A suite that already failed before the change only blocks it when the change made it worse; say so.
+      const worse = counts && verification.regressions.includes(c.name) ? `\nThis check also failed on the base commit, but the change made it worse: ${counts}.` : "";
+      return `## ${c.name} (${c.status}): \`${c.command}\`${worse}\n${fence(c.outputTail)}`;
+    }),
     "",
     "Return ImplementationNotes when done.",
   ].join("\n");
