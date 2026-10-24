@@ -90,7 +90,9 @@ Escalations and stops still write a full report so a human can pick up where the
   credential, including model keys, and by default inside an OS sandbox of their own (`hostbox.ts`:
   `sandbox-exec` on macOS, bubblewrap on Linux when installed). Inside it, writes are limited to the
   workspace (never its `.git`), the temp directory and tool caches under the home directory;
-  credential paths are unreadable; the network is cut except on localhost, and during the install
+  credential paths are unreadable; Unix sockets work only in those writable places, so other
+  programs' sockets (Docker's daemon, SSH, GPG and keyring agents, D-Bus, X11) stay out of reach
+  (bubblewrap gets empty `/tmp` and `/run`); the network is cut except on localhost, and during the install
   phase it reaches package registries only, through an allowlisting CONNECT proxy (`egress.ts`;
   refused hosts are recorded; `installNetwork: "open"` lifts it; the proxy chains through the
   operator's `HTTPS_PROXY`). Python projects get a virtualenv and Ruby projects a `BUNDLE_PATH` under the run

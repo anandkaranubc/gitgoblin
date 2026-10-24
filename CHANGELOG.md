@@ -7,6 +7,11 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.1.2 - Unreleased
 
+- Safety: the repository's commands can no longer reach other programs' Unix sockets. Before, code
+  in a repository could talk to Docker's daemon (and through it start a container with your disk
+  mounted) or to your SSH agent, despite the OS sandbox. Sockets the commands create in their own
+  writable places still work, so builds that use tsx or turbo's daemon no longer fail on macOS with
+  `listen EPERM`.
 - `discover contribute` gets each repository's GitHub details again (starter issues, contributing
   guide, recent merges). It asked for 20 repositories per request, which GitHub timed out on with
   HTTP 502, and one failed request dropped the details of every candidate. It now asks for 10 at a
