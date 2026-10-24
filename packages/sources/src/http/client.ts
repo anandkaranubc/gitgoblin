@@ -67,6 +67,11 @@ export interface RequestOptions {
   ttlMs?: number | undefined;
   /** How long a 404 is remembered. Defaults to ttlMs. */
   notFoundTtlMs?: number | undefined;
+  /**
+   * How many times a 5xx or a network failure is retried before the request fails (at most 2, the
+   * default). A caller that has a better fallback than repeating the same request sets 0.
+   */
+  retries?: number | undefined;
 }
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000;
@@ -215,6 +220,7 @@ export class HttpClient {
       const result = await this.#fetchWithRetries(url, { method, headers, body: options.body }, key, cached, {
         ttlMs,
         notFoundTtlMs: options.notFoundTtlMs ?? ttlMs,
+        retryDelaysMs: RETRY_DELAYS_MS.slice(0, Math.max(0, options.retries ?? RETRY_DELAYS_MS.length)),
       });
       return { ...result, key };
     } finally {
@@ -265,7 +271,7 @@ export class HttpClient {
     init: { method: string; headers: Record<string, string>; body: string | undefined },
     key: string,
     cached: CacheEntry | undefined,
-    ttl: { ttlMs: number; notFoundTtlMs: number },
+    ttl: { ttlMs: number; notFoundTtlMs: number; retryDelaysMs: number[] },
   ): Promise<{ body: string; fromCache: boolean }> {
     let attempt = 0;
     let waitedForRateLimit = false;
@@ -279,7 +285,7 @@ export class HttpClient {
           signal: AbortSignal.timeout(this.#requestTimeoutMs),
         });
       } catch (error) {
-        const retryDelay = RETRY_DELAYS_MS[attempt];
+        const retryDelay = ttl.retryDelaysMs[attempt];
         if (retryDelay !== undefined) {
           this.#onEvent({ type: "retry", url, attempt: ++attempt, delayMs: retryDelay, reason: String(error) });
           await this.#sleep(retryDelay);
@@ -329,7 +335,7 @@ export class HttpClient {
       }
 
       if (response.status >= 500) {
-        const retryDelay = RETRY_DELAYS_MS[attempt];
+        const retryDelay = ttl.retryDelaysMs[attempt];
         if (retryDelay !== undefined) {
           this.#onEvent({ type: "retry", url, attempt: ++attempt, delayMs: retryDelay, reason: `HTTP ${response.status}` });
           await this.#sleep(retryDelay);

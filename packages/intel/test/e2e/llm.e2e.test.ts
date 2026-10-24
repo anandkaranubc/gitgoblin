@@ -20,6 +20,6 @@ describe.skipIf(!enabled)("language-model issue review (live)", () => {
       expect(o.issue?.number).toBeDefined();
     }
     expect(report.budget.notes.some((n) => n.startsWith("llm:"))).toBe(true);
-    expect(report.budget.notes.some((n) => /language-model review stopped/.test(n))).toBe(false);
+    expect(report.budget.notes.some((n) => /language-model review (stopped|failed)/.test(n))).toBe(false);
   }, 300_000);
 });

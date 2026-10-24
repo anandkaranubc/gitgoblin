@@ -12,9 +12,17 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   mounted) or to your SSH agent, despite the OS sandbox. Sockets the commands create in their own
   writable places still work, so builds that use tsx or turbo's daemon no longer fail on macOS with
   `listen EPERM`.
+- `discover contribute` gets each repository's GitHub details again (starter issues, contributing
+  guide, recent merges). It asked for 20 repositories per request, which GitHub timed out on with
+  HTTP 502, and one failed request dropped the details of every candidate. It now asks for 10 at a
+  time, splits a request GitHub cannot finish, and keeps what it fetched.
 - `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
   requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
   of putting it at the top. One failed run is reported as a single failure, not as "failing since".
+- `analyze --llm` asks about one issue per call, so text in one issue cannot sway the verdict on
+  another, and uses a review only when its supporting quote is really in the issue. It stops at the
+  first timeout or server error instead of retrying each issue, and the report says how many issues
+  went unreviewed.
 
 ## gitgoblin 0.1.1 - 2026-10-24
 
