@@ -101,10 +101,19 @@ describe("model input and output hygiene", () => {
   });
 
   it("accepts a quote only when it occurs in the issue or its comments", () => {
-    expect(quoteOccurs("PR welcome", issue)).toBe(true);
-    expect(quoteOccurs("looks   REAL", issue)).toBe(true);
+    expect(quoteOccurs("confirmed,   PR WELCOME", issue)).toBe(true);
     expect(quoteOccurs("maintainers agreed to merge", issue)).toBe(false);
     expect(quoteOccurs("", issue)).toBe(false);
+  });
+
+  it("needs a phrase, not a word or two that occur in nearly every issue", () => {
+    expect(quoteOccurs("PR welcome", issue)).toBe(false);
+    expect(quoteOccurs("looks real", issue)).toBe(false);
+    expect(quoteOccurs("Crash", issue)).toBe(false);
+    // Scripts written without spaces: a short run of characters is a phrase.
+    const cjk = { ...issue, body: "导入模块时程序崩溃了，没有任何错误信息" } as IssueSample;
+    expect(quoteOccurs("导入模块时程序崩溃了", cjk)).toBe(true);
+    expect(quoteOccurs("崩溃", cjk)).toBe(false);
   });
 });
 

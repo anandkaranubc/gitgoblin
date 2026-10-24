@@ -7,6 +7,18 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.1.2 - Unreleased
 
+- Safety: the repository's commands can no longer reach other programs' Unix sockets. Before, code
+  in a repository could talk to Docker's daemon (and through it start a container with your disk
+  mounted) or to your SSH agent, despite the OS sandbox. Sockets the commands create in their own
+  writable places still work, so builds that use tsx or turbo's daemon no longer fail on macOS with
+  `listen EPERM`.
+- When a project's tests already fail before the change, `contribute` no longer takes "also fails on
+  the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
+  web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
+  tests, or fewer passing ones, as a regression. The pull request shows both counts.
+- Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
+  `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
+  now holds the start of the output as well as the end, so the first error survives a long log.
 - `discover contribute` gets each repository's GitHub details again (starter issues, contributing
   guide, recent merges). It asked for 20 repositories per request, which GitHub timed out on with
   HTTP 502, and one failed request dropped the details of every candidate. It now asks for 10 at a
@@ -18,13 +30,9 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   another, and uses a review only when its supporting quote is really in the issue. It stops at the
   first timeout or server error instead of retrying each issue, and the report says how many issues
   went unreviewed.
-- When a project's tests already fail before the change, `contribute` no longer takes "also fails on
-  the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
-  web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
-  tests, or fewer passing ones, as a regression. The pull request shows both counts.
-- Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
-  `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
-  now holds the start of the output as well as the end, so the first error survives a long log.
+- On GitLab, `analyze` no longer offers an issue as untouched when GitLab counts merge requests for
+  it that could not be read; it says to check them first. Large Gitea and Forgejo repositories get
+  the same shallow clone as large GitHub ones.
 
 ## gitgoblin 0.1.1 - 2026-10-24
 
@@ -47,6 +55,8 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   longer invents a TypeScript check when the repository root has no `tsconfig.json`.
 - A failing CI workflow that needs repository secrets forks do not get is no longer ranked as an
   easy fix for outsiders, and a single failed run is not called a failing streak.
+- On GitLab, an issue with merge requests that could not be read is no longer offered as untouched,
+  and large Gitea and Forgejo repositories are cloned shallowly like large GitHub ones.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 

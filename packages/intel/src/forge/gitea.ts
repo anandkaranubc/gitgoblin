@@ -7,6 +7,8 @@ interface GtRepo {
   description: string; stars_count: number; forks_count: number; archived: boolean; has_issues: boolean; open_issues_count: number;
   open_pr_counter: number; default_branch: string; created_at: string; updated_at: string; fork: boolean; template: boolean; mirror: boolean;
   topics?: string[]; owner: GtUser; html_url: string; website?: string;
+  /** Repository size in KiB. */
+  size?: number;
 }
 interface GtIssue {
   number: number; title: string; body: string | null; state: string; created_at: string; updated_at: string; closed_at: string | null;
@@ -109,7 +111,7 @@ export async function fetchGitea(host: string, owner: string, name: string, opti
     owner, name, defaultBranch: repo.default_branch || "main", description: repo.description || undefined, homepage: repo.website || undefined,
     topics: repo.topics ?? [], stars: repo.stars_count, forks: repo.forks_count, watchers: 0, openIssuesAndPrs: repo.open_issues_count + repo.open_pr_counter,
     license: undefined, archived: repo.archived, disabled: false, isFork: repo.fork, isTemplate: repo.template, hasIssues: repo.has_issues,
-    sizeKb: 0, createdAt: repo.created_at, pushedAt: repo.updated_at,
+    sizeKb: typeof repo.size === "number" && repo.size > 0 ? repo.size : 0, createdAt: repo.created_at, pushedAt: repo.updated_at,
   };
   const samples: GitHubSamples = {
     isMirror: repo.mirror,

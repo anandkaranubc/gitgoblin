@@ -30,7 +30,7 @@ export type IssueReview = z.infer<typeof IssueReview>;
 
 const Batch = z.object({ reviews: z.array(IssueReview) });
 
-export const PROMPT_VERSION = "4";
+export const PROMPT_VERSION = "5";
 /** Issues reviewed at once. Each call carries one issue, so one issue's text cannot steer the verdict on another. */
 export const CONCURRENCY = 4;
 const CACHE_TTL_MS = 14 * 24 * 3_600_000;
@@ -42,7 +42,7 @@ For each issue, decide:
 - actionable: true only when the problem is specific enough to reproduce or locate from the text, and fixing it would not require a maintainer decision about design, scope or policy.
 - maintainerStance: from comments marked [maintainer] only. "endorsed" when a maintainer confirms the problem or invites a fix; "pushback" when they say it is intended, out of scope, a duplicate or not reproducible; "neutral" when they comment without taking a position; "unknown" when no maintainer commented.
 - problem: one plain sentence restating what is wrong or wanted.
-- quote: a verbatim phrase of at most 15 words copied from the issue or a comment that best supports your verdict. Never paraphrase inside the quote.
+- quote: a verbatim phrase of 4 to 15 words copied from the issue or a comment that best supports your verdict. Never paraphrase inside the quote.
 - rationale: at most 25 words on why you chose the verdict and actionability.
 - confidence: 0 to 1.
 
@@ -172,10 +172,18 @@ export function renderIssue(issue: IssueSample, now: Date): string {
   return lines.join("\n");
 }
 
-/** The model's quote must be a real phrase of the issue or its comments. Whitespace and case may differ. */
+/** Han, kana and Hangul: text written without spaces between words, where a short run of characters is a phrase. */
+const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+/**
+ * The model's quote must be a real phrase of the issue or its comments. Whitespace and case may differ. A word or two
+ * ("bug", "the error") occurs in nearly every issue and grounds nothing, so the quote needs four words or 20
+ * characters (six characters in scripts written without spaces).
+ */
 export function quoteOccurs(quote: string, issue: IssueSample): boolean {
   const norm = (t: string) => stripControl(t).toLowerCase().replace(/[\s`*_>"'“”‘’]+/g, " ").trim();
   const q = norm(quote);
-  if (q.length < 3) return false;
+  const phrase = q.split(" ").length >= 4 || q.length >= 20 || (UNSPACED_SCRIPT.test(q) && q.length >= 6);
+  if (!phrase) return false;
   return norm([issue.title, issue.body, ...issue.lastComments.map((c) => c.body ?? "")].join("\n")).includes(q);
 }

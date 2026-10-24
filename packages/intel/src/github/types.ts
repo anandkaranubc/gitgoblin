@@ -74,6 +74,8 @@ export interface IssueSample {
   linkedPrs: LinkedPr[];
   /** False when the item has comments that could not be read (forge APIs without a token); reply and response statistics skip it. */
   commentsFetched?: boolean | undefined;
+  /** Pull or merge requests the forge counts for the issue that could not be read (lookup failed or not made). */
+  unreadLinkedPrs?: number | undefined;
 }
 
 export interface ReviewSample {

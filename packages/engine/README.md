@@ -48,7 +48,8 @@ and `gh auth login` for publishing. The agent's bash runs in the Agent SDK sandb
 pass `--no-sandbox` (together with `GITGOBLIN_UNSAFE_NO_SANDBOX=1`) only on platforms without one. The repository's own install and check commands
 run on your machine with a credential-free environment and, by default, inside an OS sandbox
 (`sandbox-exec` on macOS, `bwrap` on Linux when installed): writes limited to the checkout and tool
-caches, credential files hidden, checks offline, and the install able to reach package registries
+caches, credential files hidden, other programs' sockets (Docker's daemon, SSH and other agents)
+out of reach, checks offline, and the install able to reach package registries
 only, through a proxy the engine runs (`--install-network open` lets it reach any host;
 `RunOptions.installHosts` adds a private registry; the proxy goes through your `HTTPS_PROXY` when
 one is set). Python projects get a virtualenv under the run directory (so `pip install -e .` never
