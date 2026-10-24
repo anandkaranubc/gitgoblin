@@ -112,6 +112,14 @@ describe("HttpClient resilience", () => {
     expect(events.at(-1)?.type).toBe("stale");
   });
 
+  it("lets a caller skip the retries for server errors", async () => {
+    const { fetch, calls } = fetchStub(() => new Response("bad gateway", { status: 502 }));
+    const { client, events } = makeClient(fetch);
+    await expect(client.json(URL_A, { retries: 0 })).rejects.toMatchObject({ status: 502 });
+    expect(calls).toHaveLength(1);
+    expect(events.filter((e) => e.type === "retry")).toHaveLength(0);
+  });
+
   it("surfaces network failures when nothing is cached", async () => {
     const { fetch } = fetchStub(() => {
       throw new TypeError("fetch failed");
