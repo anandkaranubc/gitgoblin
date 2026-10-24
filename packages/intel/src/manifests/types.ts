@@ -38,6 +38,8 @@ export interface NodeManifest {
   packageManager: "npm" | "pnpm" | "yarn" | "bun";
   tooling: string[];
   workspaces: boolean;
+  /** Workspace packages with their own test script, when the root has workspaces. */
+  workspaceTests: { dir: string; name: string | undefined; script: string }[];
 }
 
 export interface GoManifest {

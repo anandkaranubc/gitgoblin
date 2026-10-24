@@ -30,6 +30,8 @@ a pull request a maintainer would want to merge.
 
 **Contribute (experimental)**
 
+- In a monorepo whose root has no test script, `analyze` reports the test command of the workspace
+  packages that have one (`npm test -w packages/x`, or every workspace through the package manager).
 - `contribute` has an AI agent investigate, plan, implement and verify one opportunity in a local
   clone, gets an independent review, and prepares a pull request written for the maintainers who
   will read it. It asks before running the agent, before implementing the plan and before
