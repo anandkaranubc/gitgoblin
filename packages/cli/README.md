@@ -123,6 +123,7 @@ ahead during the run cannot answer a question you have not read. When the engine
 | `--model <id>`, `--effort <level>` | Model and effort for the engine; effort is `low`, `medium`, `high`, `xhigh` or `max`. |
 | `--check-isolation <mode>` | How the repository's own install and test commands run on your machine: `auto` (default, an OS sandbox when one is available), `sandbox` (required), `strict` (required, and your home directory is hidden except toolchains and caches; use it for repositories you do not trust) or `none`. Anything but the default is stated in the first question. |
 | `--install-network <mode>` | What the repository's install may reach when an OS sandbox is in use: `registries` (default, package registries only, including GitHub-hosted dependencies) or `open` (any host, for projects that install from elsewhere; stated in the first question). When the install fails because a host was refused, `contribute` names it and this flag. |
+| `--install-browsers` | After the install, download the browsers a Playwright test suite needs (web-test-runner's Playwright launcher, `@playwright/test`, Vitest browser mode), using the project's own Playwright and allowing Playwright's download servers for that step only. Off by default; when the tests fail for want of browsers, the run says so and names this flag. Stated in the first question. |
 | `-g, --goal <goal>` | Discovery goal used for the hints. |
 
 Without `--opportunity` or `--issue` it lists the opportunities, best first, with

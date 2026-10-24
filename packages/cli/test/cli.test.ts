@@ -903,6 +903,19 @@ describe("contribute --install-network", () => {
     expect(open.asked[0]).toContain("with the repository's install allowed to reach any host");
   });
 
+  it("downloads Playwright's browsers only when asked, and says so in the first question", async () => {
+    const siblings = fakeSiblings();
+    const plainRun = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], plainRun.runtime)).toBe(0);
+    expect((siblings.calls[1]?.args[1] as RunOptions).installBrowsers).toBeUndefined();
+    expect(plainRun.asked[0]).not.toMatch(/Playwright/);
+
+    const browsers = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--install-browsers", "--install-network", "open", "--workdir", siblings.workdir], browsers.runtime)).toBe(0);
+    expect((siblings.calls.at(-1)?.args[1] as RunOptions).installBrowsers).toBe(true);
+    expect(browsers.asked[0]).toContain("with the repository's install allowed to reach any host, and Playwright's browsers downloaded from Playwright's servers");
+  });
+
   it("rejects an unknown value as a usage error", async () => {
     const siblings = fakeSiblings();
     const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
