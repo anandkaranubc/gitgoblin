@@ -5,7 +5,7 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
-## gitgoblin 0.1.1 - Unreleased
+## gitgoblin 0.1.1 - 2026-10-24
 
 - `contribute --install-browsers` downloads the browsers a project's Playwright test suite needs,
   with the project's own Playwright, after the install; the run says when the tests need them.
