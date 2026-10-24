@@ -36,7 +36,8 @@ a pull request a maintainer would want to merge.
   publishing; nothing is pushed or posted without that last yes.
 - The opportunity picker marks the ones the engine would refuse (`!`, dependency bumps among them:
   the agent works offline and cannot regenerate a lockfile, so it stops before spending anything)
-  and the ones intel doubts (`?`), and Enter skips both. `runs`, `show` and `publish` come back to prepared changes later;
+  and the ones intel doubts (`?`), and Enter skips both. Once one is chosen, `contribute` says which of
+  the project's own commands will check the change, and warns when there is no test command. `runs`, `show` and `publish` come back to prepared changes later;
   `publish` can be run again after a partial failure, and `clean` frees the disk a finished run's
   clone takes while keeping its report and diff.
 - Files the repository's own install rewrites (a lockfile npm trims, say) are put back as committed

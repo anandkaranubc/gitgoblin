@@ -127,7 +127,8 @@ kind, score, effort, id and the first piece of evidence, and marks the ones the
 engine will refuse at intake: an issue someone is already working on, a triage
 item that needs a reply rather than a patch, a pull request that needs its
 author's consent first, a dependency update (the agent works offline and cannot
-regenerate the lockfile). When intel has a specific reason to doubt a finding (its
+regenerate the lockfile). Once you choose, it says which of the project's own commands the engine will run
+to check the change, and warns when no test command was found. When intel has a specific reason to doubt a finding (its
 confidence is below 0.5, for example because code an issue quotes is gone from the
 default branch), a `?` line shows that reason. Press Enter to take the first
 opportunity the engine would accept and intel does not doubt; a typo gets you

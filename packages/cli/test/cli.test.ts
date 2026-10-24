@@ -895,3 +895,14 @@ describe("contribute --install-network", () => {
     expect(err.join("\n")).toMatch(/registries, open/);
   });
 });
+
+describe("contribute says what will be checked", () => {
+  it("prints the checks right after the chosen opportunity", async () => {
+    const siblings = fakeSiblings();
+    const { runtime, out } = fakeRuntime({}, { modules: siblings.modules, answers: ["n"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    const lines = out.join("\n").split("\n");
+    const at = lines.findIndex((l) => l.startsWith("Opportunity: "));
+    expect(lines[at + 1]).toBe("The engine will check the change with the project's own commands: cargo build, cargo test.");
+  });
+});
