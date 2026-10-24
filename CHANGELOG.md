@@ -14,8 +14,10 @@ a pull request a maintainer would want to merge.
 
 - `discover` ranks public GitHub repositories for a goal (`contribute`, `learn`, `adopt`, `revive`,
   `explore`), filtered by language, topic, stars, license, recency or similarity to a repository you
-  name, and says why each one ranked where it did. `explain` shows every signal behind one score;
-  `goals` lists what each goal weighs.
+  name, and says why each one ranked where it did. `explain` shows every signal behind one score,
+  including the share of pull requests the project merges (`acceptance`), which in backtests
+  predicted whether a newcomer's pull request would be merged better than stars did; `goals` lists
+  what each goal weighs.
 - `analyze` profiles a repository (what it is, how active it is, how it treats outside
   contributors, how to build and test it, its conventions) and lists opportunities, each with
   evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo, Codeberg among them; other
@@ -49,6 +51,9 @@ a pull request a maintainer would want to merge.
   clone takes while keeping its report and diff.
 - Files the repository's own install rewrites (a lockfile npm trims, say) are put back as committed
   before anything else runs, so a prepared change never carries that churn; the run report names them.
+- Projects that test in real browsers through Playwright: the run says when the tests need
+  Playwright's browsers, and `gitgoblin-engine run --install-browsers` downloads them with the
+  project's own Playwright, allowing Playwright's download servers for that step only.
 
 **Safety**
 
@@ -82,6 +87,21 @@ login, and runs on macOS or Linux only (on Windows, `discover` and `analyze` wor
 money, capped by `--max-cost`. `discover`, `contribute` and `publish` work with GitHub only.
 Opportunity scores are still being calibrated. `contribute` has so far prepared pull requests on one
 real repository, on macOS, so treat what it prepares as a draft to review.
+
+## @gitgoblin/mcp 0.1.7 - Unreleased
+
+- Reads public repositories only. Each repository is confirmed public with an anonymous request
+  to its forge before any work, and `discover_repositories` leaves out results it cannot confirm, so
+  a token or credential helper that can see private repositories never exposes them.
+- Each analysis runs in a child process with an empty home directory, so your git configuration and
+  credential helpers never apply to a repository's clone. A timeout or a cancellation kills the
+  child and everything it started, git included. At most two analyses run at once.
+- Clones are kept per forge, and the least recently used are deleted beyond 20 per forge.
+- Every result opens with a reminder that repository text is data, not instructions. Invisible
+  format characters, including zero-width and Unicode tag characters, are stripped, and results are
+  capped in size.
+- Asking for an opportunity id that a recent analysis does not have answers from that analysis
+  instead of running a new one.
 
 ## @gitgoblin/mcp 0.1.6 - 2026-10-23
 

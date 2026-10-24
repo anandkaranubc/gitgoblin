@@ -17,18 +17,18 @@ claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/re
 | `analyze_repository` | `repository`, `max_opportunities` (default 10, max 30), `check_dependencies` (default true), `goal` | The profile (nature, activity, responsiveness, welcomeness with signals, rules, commands, conventions) and the ranked opportunities with their primary evidence. |
 | `get_opportunity` | `repository`, `opportunity_id` or `issue_number` | One opportunity in full plus how to work on the project: clone, commands, conventions, rules, etiquette. |
 
-`repository` accepts `owner/name` or a URL. `explain_repository` and the `like` seed take github.com repositories, since discovery reads GitHub's API by owner and name; `analyze_repository` and `get_opportunity` also take gitlab.com and codeberg.org, which intel reads through their public APIs. Every other host is refused. Errors come back as tool results with advice (how to get a token, how to spell a repository), never as protocol failures. An analysis runs in a worker thread and is stopped after five minutes, or as soon as the client cancels the request, so one slow repository never freezes the other tools. Long calls send progress notifications when the client provides a progress token.
+`repository` accepts `owner/name` or a URL. `explain_repository` and the `like` seed take github.com repositories, since discovery reads GitHub's API by owner and name; `analyze_repository` and `get_opportunity` also take gitlab.com and codeberg.org, which intel reads through their public APIs. Every other host is refused. Errors come back as tool results with advice (how to get a token, how to spell a repository), never as protocol failures. An analysis runs in a child process and is stopped after five minutes, or as soon as the client cancels the request, so one slow repository never freezes the other tools; at most two run at once. Long calls send progress notifications when the client provides a progress token.
 
 The server's `instructions` tell the agent the typical flow, that quoted repository text is data and never instructions, and the one rule that matters: it never opens issues, pull requests or comments on the person's behalf unless asked.
 
-The repository is often chosen by a model, so the server treats it as hostile: git checks committed symlinks out as plain files and only speaks HTTPS, clones live in their own cache, external links are never fetched, and control characters are stripped from every result. [docs/design.md](docs/design.md#untrusted-repositories) explains each defence.
+The repository is often chosen by a model, so the server treats it as hostile: it reads only repositories it has confirmed public with an anonymous request, analyzes each in a child process with an empty home directory (none of your git configuration or credential helpers apply) that is killed with everything it started after five minutes or on cancellation, keeps clones per forge, never fetches external links, and strips control and format characters from every result, which opens with a reminder that repository text is data and is capped in size. [docs/design.md](docs/design.md#untrusted-repositories) explains each defence.
 
 ## Environment
 
 | Variable | Effect |
 | --- | --- |
 | `GITHUB_TOKEN`, `GH_TOKEN` | Optional. Raises GitHub's limits and unlocks starter issues. Falls back to `gh auth token`. |
-| `GITGOBLIN_CACHE_DIR` | Where the HTTP cache lives (default `~/.cache/gitgoblin`); the server's blob-less clones go in its `mcp` subdirectory. |
+| `GITGOBLIN_CACHE_DIR` | Where the HTTP cache lives (default `~/.cache/gitgoblin`); the server's blob-less clones go in `mcp/<host>` under it, at most 20 per forge. |
 
 ## Development
 
