@@ -19,6 +19,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - `analyze` gives Bun projects `bun run build` and `bun run test`, not Bun's own bundler and test
   runner, and no longer invents `tsc --noEmit` for a TypeScript project without a root
   `tsconfig.json`. Before, `contribute` could start with two failing checks the project never had.
+- When a project's tests already fail before the change, `contribute` no longer takes "also fails on
+  the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
+  web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
+  tests, or fewer passing ones, as a regression. The pull request shows both counts.
 
 ## @gitgoblin/mcp 0.1.8 - Unreleased
 

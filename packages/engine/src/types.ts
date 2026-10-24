@@ -169,6 +169,14 @@ export interface Check {
   exitCode: number | null;
   durationMs: number;
   outputTail: string;
+  /** Test counts from the runner's summary line, when the engine recognises the runner and saw the whole output. */
+  tests?: TestCounts;
+}
+
+export interface TestCounts {
+  failed: number;
+  /** Absent for runners that do not print passing tests by default (go test). */
+  passed?: number;
 }
 
 export interface DiffStats {
@@ -180,13 +188,18 @@ export interface DiffStats {
 
 export interface Verification {
   checks: Check[];
-  /** Names of checks that passed at baseline and fail now. */
+  /**
+   * Names of checks that passed at baseline and fail now, or that failed at baseline too but now
+   * report more failing tests or fewer passing ones.
+   */
   regressions: string[];
   /** True when nothing regressed and the reproduction (if any) passes. */
   ok: boolean;
   diff: DiffStats;
   /** Names of checks that already failed at baseline, so a reader does not blame the change for them. */
   preexisting?: string[];
+  /** For checks that fail both at baseline and now and report test counts both times: the counts. */
+  testCounts?: { name: string; baseline: TestCounts; now: TestCounts }[];
 }
 
 /** What `prepare` wrote and `publish` reads back; validated on the way back in because the file sat on disk. */
