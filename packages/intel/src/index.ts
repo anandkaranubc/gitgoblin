@@ -7,8 +7,11 @@ import { AnalysisReport, type ContributionOpportunity, RepoRef, type RepoRefInpu
 import { evaluate } from "./evaluate/index.ts";
 import { scanRepo } from "./fs/scan.ts";
 import { ensureClone, openRepo, looksLikeSha } from "./git/repo.ts";
+export { cloneDirFor } from "./git/repo.ts";
+export { PrivateRepositoryError } from "./github/fetch.ts";
 import { FetchGitHubApi, type GitHubApi, GitHubError, discoverToken } from "./github/client.ts";
 import { sharedGitHubApi } from "./github/sources-adapter.ts";
+import { classifyHost } from "./util/net.ts";
 import { detectForge, fetchForge } from "./forge/index.ts";
 import { type LlmClient, createAnthropicLlm } from "./llm/client.ts";
 import { fetchLanguages, fetchReleases, fetchRepoMeta, fetchSamples, fetchWorkflowRuns } from "./github/fetch.ts";
@@ -71,8 +74,11 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
     });
   } else {
     const forgeOptions = { fetchImpl: opts.fetchImpl ?? fetch, cache: new DiskCache(join(opts.cacheDir, "forge")), cacheTtlMs: opts.cacheTtlMs };
-    const kind = opts.skipSamples ? undefined : await detectForge(ref.host, forgeOptions);
+    // A host that resolves to a private address is not queried: a hostile name must not aim requests at the operator's network.
+    const privateHost = !opts.skipSamples && (await classifyHost(ref.host)) !== "public";
+    const kind = opts.skipSamples || privateHost ? undefined : await detectForge(ref.host, forgeOptions);
     if (opts.skipSamples) budget.note(`${ref.host}: forge API not queried (samples skipped by request); analysis uses the clone only`);
+    else if (privateHost) budget.note(`${ref.host} does not resolve to a public address, so its API is not queried; analysis uses the clone only`);
     else if (kind) {
       try {
         log(`fetching issues and merge requests from the ${kind} API on ${ref.host}`);
@@ -98,7 +104,7 @@ async function run(ref: RepoRef, github: GitHubApi, opts: ReturnType<typeof reso
   } else {
     const large = (meta?.sizeKb ?? 0) > 300_000;
     log(`cloning (blob:none)${large ? ", shallow history" : ""}`);
-    const clone = await ensureClone(ref, { cacheDir: opts.cacheDir, depth: large ? 2000 : undefined }).catch((error: unknown) => {
+    const clone = await ensureClone(ref, { cacheDir: opts.cacheDir, depth: large ? 2000 : undefined, timeoutMs: options.cloneTimeoutMs }).catch((error: unknown) => {
       // Other forges have no metadata call to fail first; git's own message is the signal.
       if (/repository '[^']*' not found|not found|could not read Username|Authentication failed/i.test((error as Error).message ?? "")) throw new RepositoryNotFoundError(ref);
       throw error;

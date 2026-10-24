@@ -27,6 +27,7 @@ Run options:
   --clone-depth N     shallow clone with N commits of history, for very large repositories
   --install-network   registries (default under an OS sandbox: the install reaches package
                       registries only) or open (any host, for repositories that need it)
+  --install-browsers  after the install, download the browsers a Playwright test suite needs
   --check-isolation   how the repository's own commands run on this machine: auto (default: OS
                       sandbox when available), sandbox (required), strict (required, and your home
                       directory is hidden except toolchains and caches), none
@@ -72,6 +73,7 @@ async function main(argv: string[]): Promise<void> {
         "no-sandbox": { type: "boolean" },
         "check-isolation": { type: "string" },
         "install-network": { type: "string" },
+        "install-browsers": { type: "boolean" },
         "clone-depth": { type: "string" },
       },
     });
@@ -104,6 +106,7 @@ async function main(argv: string[]): Promise<void> {
       ...(checkIsolation ? { checkIsolation } : {}),
       ...(cloneDepth ? { cloneDepth } : {}),
       ...(installNetwork ? { installNetwork } : {}),
+      ...(values["install-browsers"] ? { installBrowsers: true } : {}),
       ...(values["confirm-plan"]
         ? {
             approvePlan: async (plan, context) => {

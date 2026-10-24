@@ -70,7 +70,8 @@ export function computeSignals(repo: EnrichedRepo, now: number): ComputedSignals
   if (stats && stats.totalCommitters > 0) {
     evidence.contributors = stats.totalCommitters;
     if (stats.dds !== undefined) evidence.topContributorShare = clamp01(1 - stats.dds);
-    const spread = stats.dds ?? 0;
+    // ecosyste.ms has reported dds above 1; it is a share, so keep it one.
+    const spread = clamp01(stats.dds ?? 0);
     signals.busFactor = 0.6 * spread + 0.4 * logScale(stats.totalCommitters, 50);
   } else if (details) {
     evidence.contributors = details.mentionableUsers;
@@ -172,6 +173,14 @@ export function computeSignals(repo: EnrichedRepo, now: number): ComputedSignals
 
   // License.
   signals.license = assessLicense(facts.license ?? details?.license ?? ecosystems?.license).score;
+
+  // Every signal is a 0..1 quality whatever a source sends: a non-number is unknown, anything else is clamped.
+  for (const name of Object.keys(signals) as (keyof Signals)[]) {
+    const value = signals[name];
+    if (value === undefined) continue;
+    if (!Number.isFinite(value)) delete signals[name];
+    else signals[name] = clamp01(value);
+  }
 
   return { signals, evidence };
 }

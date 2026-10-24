@@ -7,7 +7,10 @@ import { describe, expect, it } from "vitest";
 import type { AnalyzeOptions, ServerDeps } from "../src/deps.ts";
 import { createServer, toQuery } from "../src/server.ts";
 import { VERSION } from "../src/version.ts";
-import { runInWorker } from "../src/isolate.ts";
+import { fileURLToPath } from "node:url";
+import { runInChild } from "../src/isolate.ts";
+import type { Visibility } from "../src/public.ts";
+import { DATA_NOTICE } from "../src/server.ts";
 
 const fixtureReport = JSON.parse(readFileSync(new URL("../../intel/fixtures/tenacity.report.json", import.meta.url), "utf8")) as AnalysisReport;
 
@@ -49,10 +52,11 @@ interface Recorded {
   explained: { ref: RepoRef; goal: string }[];
   analyzed: { ref: RepoRef; options: AnalyzeOptions }[];
   closed: number;
+  checked: RepoRef[];
 }
 
-function fakeDeps(overrides: { discover?: (q: DiscoveryQuery) => Promise<DiscoveryResult[]>; explain?: (ref: RepoRef) => Promise<DiscoveryResult | undefined>; analyze?: ServerDeps["analyze"]; now?: () => number } = {}) {
-  const recorded: Recorded = { queries: [], explained: [], analyzed: [], closed: 0 };
+function fakeDeps(overrides: { discover?: (q: DiscoveryQuery) => Promise<DiscoveryResult[]>; explain?: (ref: RepoRef) => Promise<DiscoveryResult | undefined>; analyze?: ServerDeps["analyze"]; now?: () => number; isPublic?: (ref: RepoRef) => Promise<Visibility> } = {}) {
+  const recorded: Recorded = { queries: [], explained: [], analyzed: [], closed: 0, checked: [] };
   const deps: ServerDeps = {
     now: overrides.now,
     async openDiscovery(onProgress) {
@@ -75,6 +79,10 @@ function fakeDeps(overrides: { discover?: (q: DiscoveryQuery) => Promise<Discove
       recorded.analyzed.push({ ref, options });
       options.log?.("cloning");
       return overrides.analyze ? overrides.analyze(ref, options) : fixtureReport;
+    },
+    isPublic: async (ref) => {
+      recorded.checked.push(ref);
+      return overrides.isPublic ? overrides.isPublic(ref) : { public: true };
     },
   };
   return { deps, recorded };
@@ -268,7 +276,8 @@ describe("untrusted repositories", () => {
       for (const name of ["analyze_repository", "explain_repository"]) {
         const result = await client.callTool({ name, arguments: { repository } });
         expect(result.isError, `${name} ${repository}`).toBe(true);
-        expect(textOf(result)).toMatch(/is not one of the forges this tool reads/);
+        // Address hosts may be refused by the repository parser or by the forge check; either way, no work.
+        expect(textOf(result)).toMatch(/is not one of the forges this tool reads|is not a repository/);
       }
     }
     const seeded = await client.callTool({ name: "discover_repositories", arguments: { like: "https://192.168.1.10/a/b" } });
@@ -347,7 +356,7 @@ describe("stuck analyses", () => {
   it("keeps the other tools answering while an analysis hangs, then reports the timeout", async () => {
     const { deps } = fakeDeps();
     deps.analyze = (ref, options) =>
-      runInWorker(new URL("./fixtures/worker-fixture.ts", import.meta.url), { mode: "hang" }, {
+      runInChild(fileURLToPath(new URL("./fixtures/child-fixture.ts", import.meta.url)), { mode: "hang" }, {
         timeoutMs: 1_500,
         signal: options.signal,
         label: `Analysis of ${ref.owner}/${ref.name}`,
@@ -361,6 +370,66 @@ describe("stuck analyses", () => {
     const result = await stuck;
     expect(result.isError).toBe(true);
     expect(textOf(result)).toMatch(/Analysis of acme\/widget stopped after/);
+  });
+});
+
+describe("public repositories only", () => {
+  const privateRepo = async (ref: RepoRef): Promise<Visibility> => (ref.name === "internal-billing" ? { public: false, reason: "no public repository by that name" } : { public: true });
+
+  it("refuses a repository it cannot confirm is public before any work", async () => {
+    const { deps, recorded } = fakeDeps({ isPublic: privateRepo });
+    const { client } = await connect(deps);
+    for (const name of ["analyze_repository", "explain_repository", "get_opportunity"]) {
+      const result = await client.callTool({ name, arguments: { repository: "acme/internal-billing", opportunity_id: "opp-x" } });
+      expect(result.isError, name).toBe(true);
+      expect(textOf(result)).toMatch(/not a repository gitgoblin can confirm is public \(no public repository by that name\)/);
+    }
+    expect(recorded.analyzed).toHaveLength(0);
+    expect(recorded.explained).toHaveLength(0);
+  });
+
+  it("leaves out discovery results it cannot confirm are public, and says so", async () => {
+    const secret = sampleResult();
+    secret.repo = { ...secret.repo, name: "internal-billing", url: "https://github.com/acme/internal-billing" };
+    const { deps } = fakeDeps({ isPublic: privateRepo, discover: async () => [sampleResult(), secret] });
+    const { client } = await connect(deps);
+    const result = await client.callTool({ name: "discover_repositories", arguments: {} });
+    const structured = result.structuredContent as { count: number; omitted: number; results: { repository: string }[] };
+    expect(structured.results.map((r) => r.repository)).toEqual(["acme/widget"]);
+    expect(structured.omitted).toBe(1);
+    expect(textOf(result)).not.toContain("internal-billing");
+    expect(textOf(result)).toContain("1 result was left out because gitgoblin could not confirm it is public.");
+  });
+});
+
+describe("result hygiene", () => {
+  it("opens every result with the data notice", async () => {
+    const { client } = await connect(fakeDeps().deps);
+    for (const [name, args] of [["discover_repositories", {}], ["explain_repository", { repository: "acme/widget" }], ["analyze_repository", { repository: "jd/tenacity" }]] as const) {
+      const result = await client.callTool({ name, arguments: args });
+      expect(textOf(result).startsWith(DATA_NOTICE), name).toBe(true);
+    }
+  });
+
+  it("caps a repository that lists forty thousand instruction files", async () => {
+    const flood = structuredClone(fixtureReport);
+    flood.profile.instructionFiles = Array.from({ length: 40_000 }, (_, i) => `.cursor/rules/rule-${i}.mdc`);
+    const { deps } = fakeDeps({ analyze: async () => flood });
+    const { client } = await connect(deps);
+    const result = await client.callTool({ name: "analyze_repository", arguments: { repository: "jd/tenacity" } });
+    expect(textOf(result).length).toBeLessThan(25_000);
+    expect(textOf(result)).toContain("and 39990 more");
+  });
+
+  it("answers an unknown id from the recent analysis instead of analyzing again", async () => {
+    const { deps, recorded } = fakeDeps();
+    const { client } = await connect(deps);
+    await client.callTool({ name: "analyze_repository", arguments: { repository: "jd/tenacity" } });
+    for (let i = 0; i < 3; i++) {
+      const unknown = await client.callTool({ name: "get_opportunity", arguments: { repository: "jd/tenacity", opportunity_id: `opp-nope-${i}` } });
+      expect(unknown.isError).toBe(true);
+    }
+    expect(recorded.analyzed).toHaveLength(1);
   });
 });
 
