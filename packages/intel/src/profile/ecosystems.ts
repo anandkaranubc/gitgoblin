@@ -33,16 +33,18 @@ export function describeEcosystems(manifests: Manifests, inventory: FileInventor
 
   if (node) {
     const pm = node.packageManager;
-    const run = (script: string) => (pm === "npm" ? `npm run ${script}` : `${pm} ${script}`);
+    // Always "<pm> run <script>": a bare "bun build" or "bun test" runs Bun's bundler or test runner, not the script.
+    const run = (script: string) => `${pm} run ${script}`;
     const commands: Commands = { install: nodeInstall(pm, inventory) };
-    if (node.scripts.test && !/no test specified/.test(node.scripts.test)) commands.test = pm === "npm" ? "npm test" : `${pm} test`;
+    if (node.scripts.test && !/no test specified/.test(node.scripts.test)) commands.test = pm === "npm" ? "npm test" : run("test");
     else if (node.workspaceTests.length) commands.test = workspaceTestCommand(pm, node.workspaceTests, inventory);
     if (node.scripts.build) commands.build = run("build");
     if (node.scripts.lint) commands.lint = run("lint");
     if (node.scripts.format) commands.format = run("format");
     if (node.scripts.typecheck) commands.typecheck = run("typecheck");
     else if (node.scripts["type-check"]) commands.typecheck = run("type-check");
-    else if (node.tooling.includes("typescript") && !node.scripts.build?.includes("tsc")) commands.typecheck = "npx tsc --noEmit";
+    // Without a root tsconfig.json, tsc prints its help and fails: a check the project never had. Leave it out.
+    else if (inventory.byPath.has("tsconfig.json") && node.tooling.includes("typescript") && !node.scripts.build?.includes("tsc")) commands.typecheck = `${pm === "bun" ? "bunx" : "npx"} tsc --noEmit`;
     result.push({
       name: "node",
       manifests: node.paths,
