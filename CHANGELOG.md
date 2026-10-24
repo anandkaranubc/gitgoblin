@@ -5,7 +5,13 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
-## gitgoblin 0.1.1 - Unreleased
+## gitgoblin 0.1.2 - Unreleased
+
+- `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
+  requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
+  of putting it at the top. One failed run is reported as a single failure, not as "failing since".
+
+## gitgoblin 0.1.1 - 2026-10-24
 
 - `contribute --install-browsers` downloads the browsers a project's Playwright test suite needs,
   with the project's own Playwright, after the install; the run says when the tests need them.
@@ -19,9 +25,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - `analyze` gives Bun projects `bun run build` and `bun run test`, not Bun's own bundler and test
   runner, and no longer invents `tsc --noEmit` for a TypeScript project without a root
   `tsconfig.json`. Before, `contribute` could start with two failing checks the project never had.
-- `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
-  requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
-  of putting it at the top. One failed run is reported as a single failure, not as "failing since".
+- When a project's tests already fail before the change, `contribute` no longer takes "also fails on
+  the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
+  web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
+  tests, or fewer passing ones, as a regression. The pull request shows both counts.
 
 ## @gitgoblin/mcp 0.1.8 - Unreleased
 
