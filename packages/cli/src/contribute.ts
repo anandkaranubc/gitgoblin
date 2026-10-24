@@ -90,7 +90,7 @@ export function selectOpportunity(report: AnalysisReport, choice: Choice): Contr
       return found;
     }
     const found = all.find((o) => o.id.toLowerCase() === wanted.toLowerCase());
-    if (!found) throw new Error(`No opportunity "${wanted}". Available: ${all.map((o) => `${o.id} (${o.title})`).join("; ")}`);
+    if (!found) throw new Error(`No opportunity "${plain(wanted)}". Available: ${all.map((o) => `${o.id} (${plain(o.title)})`).join("; ")}`);
     return found;
   }
   return all.length === 1 ? all[0] : undefined;

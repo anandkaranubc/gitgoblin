@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -145,5 +145,14 @@ describe("an install limited to package registries", () => {
 
     writeRun(workdir, "20261023-210000-bbbb", { status: "stopped", install: { exitCode: 0, output: "ok", network: "registries", refused: ["example.org"] } });
     expect(installSummary(readRun(workdir, "20261023-210000-bbbb")!.install!)).toBeUndefined();
+  });
+});
+
+describe("the title shown for approval", () => {
+  it("is the one publishing sends: delivery.json's, not pr-title.txt's", () => {
+    const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-runs-"));
+    const dir = writeRun(workdir, "20261024-000001-prep");
+    writeFileSync(join(dir, "delivery.json"), JSON.stringify({ prTitle: "fix: the title that is published", branch: "gitgoblin/x", commitSha: "0", commitMessage: "m", prBody: "b" }));
+    expect(readRun(workdir, "20261024-000001-prep")?.prTitle).toBe("fix: the title that is published");
   });
 });
