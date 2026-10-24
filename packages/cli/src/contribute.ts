@@ -1,3 +1,5 @@
+import { accessSync, constants, statSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { styleText } from "node:util";
 import type { ChangePlan, RunResult } from "@gitgoblin/engine";
 import type { AnalysisReport, ContributionOpportunity, RepositoryProfile } from "@gitgoblin/intel";
@@ -202,11 +204,57 @@ const CHECK_ORDER = ["typecheck", "lint", "build", "test"] as const;
  * engine makes (packages/engine/src/intake.ts: the first command set that can run tests, else the
  * first). Said before anything runs, because verification is only as strong as these commands.
  */
-export function checksLine(profile: RepositoryProfile): string {
+/** The command set the engine runs: the first ecosystem with a test command, else the first one. */
+function chosenCommands(profile: RepositoryProfile): Record<string, string | undefined> {
   const sets = profile.ecosystems.map((e) => e.commands as Record<string, string | undefined>);
-  const chosen = sets.find((c) => c.test) ?? sets[0] ?? {};
+  return sets.find((c) => c.test) ?? sets[0] ?? {};
+}
+
+export function checksLine(profile: RepositoryProfile): string {
+  const chosen = chosenCommands(profile);
   const commands = CHECK_ORDER.map((name) => chosen[name]).filter((c): c is string => typeof c === "string" && c.length > 0).map(plain);
   if (commands.length === 0) return "No check commands were found, so the engine cannot verify the change against the project's own checks.";
   const noTests = chosen.test ? "" : " No test command was found; unless the agent finds one while investigating, the project's tests will not run.";
   return `The engine will check the change with the project's own commands: ${commands.join(", ")}.${noTests}`;
+}
+
+/**
+ * Launchers the engine expects to find on this machine. It installs a project's dependencies, and
+ * puts a Python project's virtualenv on PATH, but never installs these; a project whose commands
+ * start with one that is missing fails at its install, minutes into a run.
+ */
+const TOOLCHAINS = new Set(["node", "npm", "npx", "pnpm", "yarn", "bun", "bunx", "deno", "cargo", "go", "uv", "poetry", "pdm", "hatch", "make", "cmake", "mvn", "gradle", "bundle", "ruby", "rake", "composer", "php", "dotnet", "swift", "mix"]);
+
+/** The program a command starts, after any leading VAR=value assignments. */
+function programOf(command: string): string | undefined {
+  return command
+    .trim()
+    .split(/\s+/)
+    .find((word) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word));
+}
+
+/** Toolchain launchers the engine's install and checks start, which `isAvailable` says this machine lacks. */
+export function missingToolchains(profile: RepositoryProfile, isAvailable: (name: string) => boolean): string[] {
+  const commands = Object.values(chosenCommands(profile)).filter((c): c is string => typeof c === "string");
+  const programs = new Set(commands.map(programOf).filter((p): p is string => p !== undefined && TOOLCHAINS.has(p)));
+  return [...programs].filter((p) => !isAvailable(p)).sort();
+}
+
+export function toolchainWarning(missing: string[]): string {
+  const names = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(", ")} and ${missing.at(-1)}`;
+  return `Warning: ${names} ${missing.length === 1 ? "is" : "are"} not installed on this machine (not on PATH). The project's install and checks need ${missing.length === 1 ? "it" : "them"}, so install ${missing.length === 1 ? "it" : "them"} first, or the run will stop after the install fails.`;
+}
+
+/** Whether an executable file `name` is in one of PATH's directories. */
+export function onPath(name: string, path: string): boolean {
+  return path.split(delimiter).some((dir) => {
+    if (!dir) return false;
+    try {
+      const file = join(dir, name);
+      accessSync(file, constants.X_OK);
+      return statSync(file).isFile();
+    } catch {
+      return false;
+    }
+  });
 }
