@@ -1,5 +1,5 @@
 import type { ContributionOpportunity, RepositoryProfile, ScoreFactor, SkippedFinding } from "../contracts.ts";
-import type { Finding } from "../analyzers/types.ts";
+import type { Finding, FindingSignals } from "../analyzers/types.ts";
 import { stableId } from "../util/text.ts";
 
 export const WEIGHTS = { value: 0.35, feasibility: 0.15, welcomeness: 0.25, confidence: 0.15, novelty: 0.1 } as const;
@@ -93,11 +93,15 @@ export function cluster(findings: Finding[]): Finding[] {
 }
 
 export function scoreFactors(finding: Finding, profile: RepositoryProfile): ScoreFactor[] {
-  const s = finding.signals;
+  return signalFactors(finding.signals, profile.welcomeness);
+}
+
+/** The five score factors for a finding's signals in a repository with the given welcomeness. */
+export function signalFactors(s: FindingSignals, repo: Pick<RepositoryProfile["welcomeness"], "score" | "level">): ScoreFactor[] {
   const factor = s.welcomenessFactor ?? 1;
-  const welcomeness = clamp(profile.welcomeness.score * factor, 0.02, 1);
+  const welcomeness = clamp(repo.score * factor, 0.02, 1);
   const welcomenessReason = [
-    `repository is ${profile.welcomeness.level} (${profile.welcomeness.score.toFixed(2)})`,
+    `repository is ${repo.level} (${repo.score.toFixed(2)})`,
     s.welcomenessReason ?? (factor !== 1 ? `adjusted x${factor}` : undefined),
   ].filter(Boolean).join("; ");
   return [

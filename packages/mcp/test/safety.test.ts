@@ -2,9 +2,10 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { cloneDirFor } from "@gitgoblin/intel";
 import { defaultCacheDir } from "@gitgoblin/sources";
 import { afterAll, describe, expect, it } from "vitest";
-import { analysisEnv, mcpCacheDir, pruneClones } from "../src/deps.ts";
+import { analysisEnv, mcpCacheDir, pruneClones, removeLegacyClones } from "../src/deps.ts";
 import { ANALYSIS_HOSTS, capDeep, capText, DISCOVERY_HOSTS, MAX_RESULT_CHARS, stripControl, stripControlDeep } from "../src/safety.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "gitgoblin-mcp-safety-"));
@@ -42,23 +43,41 @@ describe("analysisEnv", () => {
 });
 
 describe("clone cache", () => {
-  it("keeps one directory per forge", () => {
-    expect(mcpCacheDir("Codeberg.org", { GITGOBLIN_CACHE_DIR: "/tmp/gg" })).toBe(join("/tmp/gg", "mcp", "codeberg.org"));
-    expect(mcpCacheDir("github.com", { GITGOBLIN_CACHE_DIR: "/tmp/gg" })).not.toBe(mcpCacheDir("codeberg.org", { GITGOBLIN_CACHE_DIR: "/tmp/gg" }));
+  it("keeps the server's clones apart from the command line's, keyed by forge by intel", () => {
+    expect(mcpCacheDir({ GITGOBLIN_CACHE_DIR: "/tmp/gg" })).toBe(join("/tmp/gg", "mcp"));
+    const root = mcpCacheDir({ GITGOBLIN_CACHE_DIR: "/tmp/gg" });
+    expect(cloneDirFor(root, { host: "codeberg.org", owner: "o", name: "r" })).not.toBe(cloneDirFor(root, { host: "github.com", owner: "o", name: "r" }));
   });
 
-  it("deletes the least recently used clones beyond the limit, never one in use", () => {
+  it("deletes one forge's least recently used clones beyond the limit, never one in use", () => {
     const root = join(scratch, "cache");
-    const repos = join(root, "repos");
+    const clone = (host: string, owner: string, name: string) => cloneDirFor(root, { host, owner, name });
     for (let i = 0; i < 5; i++) {
-      mkdirSync(join(repos, `o__r${i}`), { recursive: true });
-      utimesSync(join(repos, `o__r${i}`), 1_000 + i, 1_000 + i);
+      mkdirSync(clone("github.com", `o${i % 2}`, `r${i}`), { recursive: true });
+      utimesSync(clone("github.com", `o${i % 2}`, `r${i}`), 1_000 + i, 1_000 + i);
     }
-    const removed = pruneClones(root, 2, new Set([join(repos, "o__r0")]));
-    expect(removed.sort()).toEqual([join(repos, "o__r1"), join(repos, "o__r2")]);
-    expect(existsSync(join(repos, "o__r0"))).toBe(true);
-    expect(existsSync(join(repos, "o__r4"))).toBe(true);
-    expect(pruneClones(join(scratch, "missing"), 2, new Set())).toEqual([]);
+    mkdirSync(clone("codeberg.org", "o", "old"), { recursive: true });
+    utimesSync(clone("codeberg.org", "o", "old"), 1, 1);
+    const removed = pruneClones(root, "github.com", 2, new Set([clone("github.com", "o0", "r0")]));
+    expect(removed.sort()).toEqual([clone("github.com", "o1", "r1"), clone("github.com", "o0", "r2")].sort());
+    expect(existsSync(clone("github.com", "o0", "r0"))).toBe(true);
+    expect(existsSync(clone("github.com", "o0", "r4"))).toBe(true);
+    expect(existsSync(clone("codeberg.org", "o", "old"))).toBe(true);
+    expect(pruneClones(join(scratch, "missing"), "github.com", 2, new Set())).toEqual([]);
+  });
+});
+
+describe("legacy clones", () => {
+  it("deletes clones left in earlier layouts and keeps the current ones", () => {
+    const root = join(scratch, "legacy");
+    mkdirSync(join(root, "repos", "dnkl__foot", "src"), { recursive: true });
+    mkdirSync(join(root, "github.com", "repos", "jd__tenacity"), { recursive: true });
+    const current = cloneDirFor(root, { host: "github.com", owner: "jd", name: "tenacity" });
+    mkdirSync(current, { recursive: true });
+    const removed = removeLegacyClones(root, ["github.com", "gitlab.com", "codeberg.org"]);
+    expect(removed.sort()).toEqual([join(root, "github.com"), join(root, "repos", "dnkl__foot")].sort());
+    expect(existsSync(current)).toBe(true);
+    expect(removeLegacyClones(join(scratch, "nothing-here"), ["github.com"])).toEqual([]);
   });
 });
 

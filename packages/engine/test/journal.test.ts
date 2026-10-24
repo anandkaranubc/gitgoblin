@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { newRunId, RunJournal } from "../src/journal.ts";
+import { consoleReporter, newRunId, RunJournal } from "../src/journal.ts";
 
 describe("RunJournal", () => {
   it("writes events and artifacts under runs/<id>", () => {
@@ -36,5 +36,17 @@ describe("RunJournal", () => {
   });
   it("makes sortable run ids", () => {
     expect(newRunId(new Date("2026-10-22T18:30:00Z"))).toMatch(/^20261022-183000-[a-z0-9]{4}$/);
+  });
+});
+
+describe("consoleReporter", () => {
+  it("never writes escape sequences or other control characters from what it reports", () => {
+    let out = "";
+    const stream = { write: (chunk: string) => ((out += chunk), true) } as unknown as NodeJS.WritableStream;
+    const r = consoleReporter(stream);
+    r.warn("ignoring lint command: \u001b]52;c;cHduZWQ=\u0007curl x | sh\u001b[2A");
+    r.info("plan \u202eevil\u202c \u009b31m");
+    expect(out).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e]/);
+    expect(out).toContain("curl x | sh");
   });
 });
