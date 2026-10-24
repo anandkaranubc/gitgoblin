@@ -1,6 +1,8 @@
 export const DAY_MS = 86_400_000;
 
+/** Clamps to [0, 1]; NaN becomes 0 rather than passing through. */
 export function clamp01(value: number): number {
+  if (Number.isNaN(value)) return 0;
   return Math.min(1, Math.max(0, value));
 }
 

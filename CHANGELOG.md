@@ -14,8 +14,10 @@ a pull request a maintainer would want to merge.
 
 - `discover` ranks public GitHub repositories for a goal (`contribute`, `learn`, `adopt`, `revive`,
   `explore`), filtered by language, topic, stars, license, recency or similarity to a repository you
-  name, and says why each one ranked where it did. `explain` shows every signal behind one score;
-  `goals` lists what each goal weighs.
+  name, and says why each one ranked where it did. `explain` shows every signal behind one score,
+  including the share of pull requests the project merges (`acceptance`), which in backtests
+  predicted whether a newcomer's pull request would be merged better than stars did; `goals` lists
+  what each goal weighs.
 - `analyze` profiles a repository (what it is, how active it is, how it treats outside
   contributors, how to build and test it, its conventions) and lists opportunities, each with
   evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo, Codeberg among them; other
