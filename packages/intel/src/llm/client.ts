@@ -37,7 +37,8 @@ export function createAnthropicLlm(options: AnthropicLlmOptions = {}): LlmClient
   let sdk: Promise<{ client: Anthropic; zodOutputFormat: typeof import("@anthropic-ai/sdk/helpers/zod").zodOutputFormat }> | undefined;
   const load = () =>
     (sdk ??= Promise.all([import("@anthropic-ai/sdk"), import("@anthropic-ai/sdk/helpers/zod")]).then(([{ default: AnthropicClient }, helpers]) => ({
-      client: new AnthropicClient(),
+      // One retry and a two-minute ceiling per call: a stalled request should end the review, not the analysis.
+      client: new AnthropicClient({ timeout: 120_000, maxRetries: 1 }),
       zodOutputFormat: helpers.zodOutputFormat,
     })));
   return {
@@ -48,7 +49,7 @@ export function createAnthropicLlm(options: AnthropicLlmOptions = {}): LlmClient
       const response = await client.messages.parse({
         model,
         max_tokens: 16000,
-        // The system prompt is identical across batches, so it is the cache prefix.
+        // The system prompt is identical across calls, so it is the cache prefix.
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: user }],
         output_config: { format: zodOutputFormat(schema) },
