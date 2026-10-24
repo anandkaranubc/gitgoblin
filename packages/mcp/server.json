@@ -3,7 +3,7 @@
   "name": "io.github.anandkaranubc/gitgoblin",
   "title": "gitgoblin",
   "description": "Discover open-source repositories worth your time and evidence-backed contribution opportunities.",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "websiteUrl": "https://anandkaranubc.github.io/gitgoblin/",
   "repository": {
     "url": "https://github.com/anandkaranubc/gitgoblin",
@@ -12,9 +12,28 @@
   },
   "packages": [
     {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@gitgoblin/mcp",
+      "version": "0.1.7",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "GITHUB_TOKEN",
+          "description": "Optional GitHub token that can read public repositories. Raises rate limits from 60 to 5000 requests per hour and unlocks starter-issue data. A GitHub CLI login works too.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    },
+    {
       "registryType": "mcpb",
-      "identifier": "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin.mcpb",
-      "fileSha256": "bbb243c80471fbb6b5b21992007954b53fb25733fc77024552bb647558e1c857",
+      "identifier": "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.7/gitgoblin.mcpb",
+      "fileSha256": "17dc27a107c25bcc5ae4d35759486fca71a3d1c7f9a299cce974a8d8b2c2cea9",
       "transport": {
         "type": "stdio"
       },

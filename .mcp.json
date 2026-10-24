@@ -3,7 +3,7 @@
     "gitgoblin": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz"]
+      "args": ["-y", "@gitgoblin/mcp"]
     }
   }
 }

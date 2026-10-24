@@ -58,10 +58,10 @@ No configuration is needed; a GitHub token, or a `gh` login, raises the rate lim
 gitgoblin also runs as an MCP server, so the agent you already use can discover repositories, analyze them and brief you on one piece of work. For Claude Code:
 
 ```sh
-claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz
+claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
 ```
 
-[docs/agents.md](docs/agents.md) has the command for Codex, Cursor, Gemini CLI, VS Code and other clients, says which ones were checked, and covers the skill that teaches agents when to use the tools. Do not use `npx -y @gitgoblin/mcp` until that npm name is published: `npx -y` runs whatever package first claims it.
+[docs/agents.md](docs/agents.md) has the command for Codex, Cursor, Gemini CLI, VS Code and other clients, says which ones were checked, and covers the skill that teaches agents when to use the tools.
 
 ## What works today
 
