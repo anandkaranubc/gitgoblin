@@ -7,15 +7,16 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.1.1 - Unreleased
 
-**Fixes**
-
+- `contribute --install-browsers` downloads the browsers a project's Playwright test suite needs,
+  with the project's own Playwright, after the install; the run says when the tests need them.
+  0.1.0 offered this only through `gitgoblin-engine run --install-browsers`.
+- The npm page now opens with how to install and run the command from npm, instead of how to run
+  it from a clone of the repository.
 - `analyze` gives Bun projects `bun run build` and `bun run test`, not Bun's own bundler and test
   runner, and no longer invents `tsc --noEmit` for a TypeScript project without a root
   `tsconfig.json`. Before, `contribute` could start with two failing checks the project never had.
 
 ## @gitgoblin/mcp 0.1.8 - Unreleased
-
-**Fixes**
 
 - The analyze tool's build and test commands for Bun projects run the project's scripts, and it no
   longer invents a TypeScript check when the repository root has no `tsconfig.json`.
@@ -69,9 +70,8 @@ a pull request a maintainer would want to merge.
 - Files the repository's own install rewrites (a lockfile npm trims, say) are put back as committed
   before anything else runs, so a prepared change never carries that churn; the run report names them.
 - Projects that test in real browsers through Playwright: the run says when the tests need
-  Playwright's browsers, and `gitgoblin contribute --install-browsers` (or `gitgoblin-engine run
-  --install-browsers`) downloads them with the project's own Playwright, allowing Playwright's
-  download servers for that step only.
+  Playwright's browsers, and `gitgoblin-engine run --install-browsers` downloads them with the
+  project's own Playwright, allowing Playwright's download servers for that step only.
 
 **Safety**
 
