@@ -81,7 +81,7 @@ maturity              ██████████ 1.00 +0.07  created 11 year
 usage                 ██████░░░░ 0.60 +0.02  5.5k forks, 490 dependents via cargo:grep-regex
 license               ██████████ 1.00 +0.07  Unlicense (permissive)`;
 
-const mcpInstall = "claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz";
+const mcpInstall = "claude mcp add gitgoblin -- npx -y @gitgoblin/mcp";
 
 const never = [
   "push, or change a remote",
@@ -99,7 +99,7 @@ const faq = [
   },
   {
     q: "Does it work yet?",
-    a: "Discovery and repository analysis do: gitgoblin discover ranks public repositories for a goal with the reasons behind each ranking, explain shows why one ranked where it did, and analyze profiles one repository and lists its evidence-backed opportunities, with scores still being calibrated. gitgoblin contribute carries one opportunity on to a prepared pull request; it is experimental and each run costs money. The same discovery and analysis work from your AI agent through the MCP server. Nothing is on npm yet, so the command runs from a clone. Analysis also reads GitLab and Gitea or Forgejo repositories; discovery and publishing are GitHub-only for now.",
+    a: "Discovery and repository analysis do: gitgoblin discover ranks public repositories for a goal with the reasons behind each ranking, explain shows why one ranked where it did, and analyze profiles one repository and lists its evidence-backed opportunities, with scores still being calibrated. gitgoblin contribute carries one opportunity on to a prepared pull request; it is experimental and each run costs money. The same discovery and analysis work from your AI agent through the MCP server. Install it with npm install -g gitgoblin. Analysis also reads GitLab and Gitea or Forgejo repositories; discovery and publishing are GitHub-only for now.",
   },
   {
     q: "Which model does it use, and what does it see?",
@@ -134,7 +134,7 @@ const faq = [
           <a class="btn btn--quiet" href="#how">See how it works</a>
         </div>
         <p class="hero__status">
-          Preview: discovery and analysis work today, contributing is experimental, nothing on npm yet. MIT licensed.
+          Preview: discovery and analysis work today, contributing is experimental. MIT licensed.
           <a href={href("/docs/status/")}>What works today</a>
         </p>
       </div>
@@ -296,17 +296,15 @@ const faq = [
     <div class="wrap start">
       <div>
         <h2 id="start-title">Try it today</h2>
-        <p>You need Node.js 24 or newer and git. Nothing is on npm yet, so run it from a clone.</p>
-        <pre><code>git clone {repo.url}.git
-cd gitgoblin
-npm install
-npx gitgoblin discover contribute --language typescript</code></pre>
+        <p>You need Node.js 24 or newer and git.</p>
+        <pre><code>npm install -g gitgoblin
+gitgoblin discover contribute --language typescript</code></pre>
         <p>
           That ranks ten repositories for contributing, with the reasons behind each rank. To see every signal behind one
           repository's score:
         </p>
         <figure class="run">
-          <figcaption>npx gitgoblin explain BurntSushi/ripgrep --goal adopt</figcaption>
+          <figcaption>gitgoblin explain BurntSushi/ripgrep --goal adopt</figcaption>
           <pre><code set:html={explainOutput} /></pre>
         </figure>
         <p>

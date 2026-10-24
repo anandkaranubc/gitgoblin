@@ -7,6 +7,11 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.1.1 - Unreleased
 
+- `contribute --install-browsers` downloads the browsers a project's Playwright test suite needs,
+  with the project's own Playwright, after the install; the run says when the tests need them.
+  0.1.0 offered this only through `gitgoblin-engine run --install-browsers`.
+- The npm page now opens with how to install and run the command from npm, instead of how to run
+  it from a clone of the repository.
 - When a project's tests already fail before the change, `contribute` no longer takes "also fails on
   the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
   web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
@@ -25,7 +30,8 @@ a pull request a maintainer would want to merge.
   including the share of pull requests the project merges (`acceptance`), which in backtests
   predicted whether a newcomer's pull request would be merged better than stars did; `goals` lists
   what each goal weighs. `discover --json` includes the warnings about refused or rate-limited
-  searches, so a script can tell a partial ranking from a complete one.
+  searches and missing GitHub details, so a script can tell a partial ranking from a complete one;
+  text output prints them on stderr.
 - `analyze` profiles a repository (what it is, how active it is, how it treats outside
   contributors, how to build and test it, its conventions) and lists opportunities, each with
   evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo, Codeberg among them; other
@@ -60,9 +66,8 @@ a pull request a maintainer would want to merge.
 - Files the repository's own install rewrites (a lockfile npm trims, say) are put back as committed
   before anything else runs, so a prepared change never carries that churn; the run report names them.
 - Projects that test in real browsers through Playwright: the run says when the tests need
-  Playwright's browsers, and `gitgoblin contribute --install-browsers` (or `gitgoblin-engine run
-  --install-browsers`) downloads them with the project's own Playwright, allowing Playwright's
-  download servers for that step only.
+  Playwright's browsers, and `gitgoblin-engine run --install-browsers` downloads them with the
+  project's own Playwright, allowing Playwright's download servers for that step only.
 
 **Safety**
 

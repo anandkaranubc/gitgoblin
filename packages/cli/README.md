@@ -1,21 +1,30 @@
-# gitgoblin (CLI)
+# gitgoblin
 
-The command-line front door to gitgoblin. In a clone it runs from source on
-Node 24, with no build step; the npm package is the same code bundled into plain
-JavaScript (see [Packaging](#packaging)).
+Find open-source projects worth your time, work out what they need, and prepare a pull request
+you approve. Needs [Node.js](https://nodejs.org) 24 or newer and git.
 
 ```sh
-npm install                      # from the repository root
-npx gitgoblin discover contribute --language rust
-npx gitgoblin explain BurntSushi/ripgrep --goal adopt
-npx gitgoblin analyze jd/tenacity
-npx gitgoblin contribute jd/tenacity
+npm install -g gitgoblin
+gitgoblin discover contribute --language rust
+gitgoblin explain BurntSushi/ripgrep --goal adopt
+gitgoblin analyze jd/tenacity
 ```
 
-The commands follow the journey: `discover` finds repositories, `analyze` works out what one
-needs, `contribute` has the engine draft one change and asks you before anything is published,
-and `runs`, `show` and `publish` let you come back to a prepared change later. `discover` (in a
-terminal) and `analyze` end by saying what to type next.
+`npx gitgoblin <command>` works without installing. The commands follow the journey: `discover`
+finds repositories, `analyze` works out what one needs, and `discover` (in a terminal) and `analyze`
+end by saying what to type next.
+
+`contribute` is experimental: an AI agent drafts one change in a local clone, and it asks before
+running the agent, before implementing the plan, and before publishing anything. It needs the Claude
+Agent SDK next to the CLI (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`) and costs money
+per run. `runs`, `show` and `publish` come back to a prepared change later, and `clean` frees the
+disk a finished run's clone takes.
+
+More: [getting started](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/getting-started.md),
+[how gitgoblin behaves in other people's projects](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md),
+[source](https://github.com/anandkaranubc/gitgoblin). To run it from a clone of the repository
+instead, `npm install` at the root and use `npx gitgoblin`; the bundling is described under
+[Packaging](#packaging).
 
 A GitHub token is optional. Without one you get 10 searches per minute, 60 API
 calls per hour, and no starter-issue data. Set `GITHUB_TOKEN` or `GH_TOKEN`, or
@@ -50,7 +59,9 @@ Ranks repositories for a goal and says why. Goals: `contribute`, `learn`,
 Text output, per result: rank, `owner/name`, stars, language, license, score,
 description, URL, up to three reasons that helped (`+`), the one that hurt most
 (`−`), and for `contribute` up to two open starter issues. In a terminal it ends
-with the `analyze` command for the top result.
+with the `analyze` command for the top result. Warnings that make a ranking
+partial, such as a refused search or GitHub details that could not be read, are
+printed on stderr even when progress is hidden.
 
 JSON output is `{ query, results, warnings }`. `warnings` lists searches that
 were refused or rate limited, so a script can tell a partial ranking from a

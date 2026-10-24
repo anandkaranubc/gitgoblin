@@ -13,7 +13,7 @@
 
 gitgoblin is a free, open-source companion for contributing to other people's software. It is for anyone who wants their open-source time to count: a first contribution, a project to learn from or depend on, or a quiet project worth reviving. It digs through public repositories for work that matters, shows the evidence, and helps you do that work to the project's own standards.
 
-> **Status: preview.** Discovery and analysis work today; preparing a contribution with an AI agent is experimental. Nothing is on npm yet, so the command runs from a clone, and the MCP server installs from a GitHub release. See [what works today](#what-works-today).
+> **Status: preview.** Discovery and analysis work today; preparing a contribution with an AI agent is experimental. See [what works today](#what-works-today).
 
 ## Why
 
@@ -30,19 +30,19 @@ gitgoblin looks for those instead. It ranks projects against what you want, read
 
 ## Try it
 
-You need [Node.js](https://nodejs.org) 24 or newer and git. Run it from a clone:
+You need [Node.js](https://nodejs.org) 24 or newer and git.
 
 ```sh
-git clone https://github.com/anandkaranubc/gitgoblin.git
-cd gitgoblin
-npm install
-npx gitgoblin discover contribute --language typescript
+npm install -g gitgoblin
+gitgoblin discover contribute --language typescript
 ```
+
+Or try it without installing: `npx gitgoblin discover contribute --language typescript`.
 
 That prints ten ranked repositories with the reasons behind each ranking. To see every signal for one repository:
 
 ```
-$ npx gitgoblin explain BurntSushi/ripgrep --goal adopt
+$ gitgoblin explain BurntSushi/ripgrep --goal adopt
 BurntSushi/ripgrep  ★ 69k · Rust · Unlicense  score 0.73
 goal: adopt
 
@@ -58,10 +58,10 @@ No configuration is needed; a GitHub token, or a `gh` login, raises the rate lim
 gitgoblin also runs as an MCP server, so the agent you already use can discover repositories, analyze them and brief you on one piece of work. For Claude Code:
 
 ```sh
-claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz
+claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
 ```
 
-[docs/agents.md](docs/agents.md) has the command for Codex, Cursor, Gemini CLI, VS Code and other clients, says which ones were checked, and covers the skill that teaches agents when to use the tools. Do not use `npx -y @gitgoblin/mcp` until that npm name is published: `npx -y` runs whatever package first claims it.
+[docs/agents.md](docs/agents.md) has the command for Codex, Cursor, Gemini CLI, VS Code and other clients, says which ones were checked, and covers the skill that teaches agents when to use the tools.
 
 ## What works today
 

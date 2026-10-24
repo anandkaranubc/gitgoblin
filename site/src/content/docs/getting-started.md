@@ -10,30 +10,33 @@ gitgoblin is in preview. Discovery and repository analysis work today, and the `
 
 ## Discover a repository
 
-You need [Node.js](https://nodejs.org) 24 or newer and git. The command is not on npm yet, so run it from a clone:
+You need [Node.js](https://nodejs.org) 24 or newer and git.
 
 ```sh
-git clone https://github.com/anandkaranubc/gitgoblin.git
-cd gitgoblin
-npm install
-npx gitgoblin discover contribute --language typescript
+npm install -g gitgoblin
+gitgoblin discover contribute --language typescript
 ```
 
-That prints ten ranked repositories with the reasons behind each ranking. `npx gitgoblin goals` lists the five goals, `explain owner/name` shows why one repository ranked where it did, `analyze owner/name` profiles one repository and lists its evidence-backed opportunities, `contribute owner/name` has the engine draft one of them and asks you before anything is run or published, and `--json` prints every signal and the evidence behind it. The repository's [getting started tutorial](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/getting-started.md) covers the filters, the token, the cache and analysis.
+Or run it without installing: `npx gitgoblin discover contribute --language typescript`. That prints ten ranked repositories with the reasons behind each ranking. `gitgoblin goals` lists the five goals, `explain owner/name` shows why one repository ranked where it did, `analyze owner/name` profiles one repository and lists its evidence-backed opportunities, `contribute owner/name` has the engine draft one of them and asks you before anything is run or published, and `--json` prints every signal and the evidence behind it. The repository's [getting started tutorial](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/getting-started.md) covers the filters, the token, the cache and analysis.
 
 ## Use it from your AI agent
 
 gitgoblin also runs as an MCP server, so the agent you already use can discover repositories, analyze them and brief you on one piece of work:
 
 ```sh
-claude mcp add gitgoblin -- npx -y https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.6/gitgoblin-mcp-0.1.6.tgz
+claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
 ```
 
-That installs the server from the [latest release](https://github.com/anandkaranubc/gitgoblin/releases/tag/mcp-v0.1.6). Do not use `npx -y @gitgoblin/mcp` until that npm name is published: `npx -y` runs whatever package first claims it. [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) has the one-liner for Codex, Cursor, Gemini CLI, VS Code and every other client, plus the skill that teaches agents when to use the tools.
+That installs the server from npm. [docs/agents.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/agents.md) has the one-liner for Codex, Cursor, Gemini CLI, VS Code and every other client, plus the skill that teaches agents when to use the tools.
 
 ## Run the tests
 
+To work on gitgoblin itself, run it from a clone:
+
 ```sh
+git clone https://github.com/anandkaranubc/gitgoblin.git
+cd gitgoblin
+npm install
 npm test
 npm run typecheck
 ```
