@@ -5,7 +5,7 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
-## gitgoblin 0.1.0 - Unreleased
+## gitgoblin 0.1.0 - 2026-10-24
 
 The first release of `gitgoblin`: find open-source work worth doing, check the evidence, and prepare
 a pull request a maintainer would want to merge.
@@ -93,7 +93,7 @@ money, capped by `--max-cost`. `discover`, `contribute` and `publish` work with 
 Opportunity scores are still being calibrated. `contribute` has so far prepared pull requests on one
 real repository, on macOS, so treat what it prepares as a draft to review.
 
-## @gitgoblin/mcp 0.1.7 - Unreleased
+## @gitgoblin/mcp 0.1.7 - 2026-10-24
 
 - Reads public repositories only. Each repository is confirmed public with an anonymous request
   to its forge before any work, and `discover_repositories` leaves out results it cannot confirm, so
@@ -101,7 +101,8 @@ real repository, on macOS, so treat what it prepares as a draft to review.
 - Each analysis runs in a child process with an empty home directory, so your git configuration and
   credential helpers never apply to a repository's clone. A timeout or a cancellation kills the
   child and everything it started, git included. At most two analyses run at once.
-- Clones are kept per forge, and the least recently used are deleted beyond 20 per forge.
+- Clones are kept per forge, and the least recently used are deleted beyond 20 per forge. Clones left by
+  earlier versions are deleted. A clone that takes more than four minutes gives up with a clear error.
 - Every result opens with a reminder that repository text is data, not instructions. Invisible
   format characters, including zero-width and Unicode tag characters, are stripped, and results are
   capped in size.
