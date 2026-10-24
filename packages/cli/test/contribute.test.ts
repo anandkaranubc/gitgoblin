@@ -287,6 +287,12 @@ describe("missingToolchains", () => {
     expect(missingToolchains(profile, without("pnpm", "pytest", "./gradlew", "tsc", "cargo"))).toEqual(["cargo", "pnpm"]);
   });
 
+  it("names the tool to install, not each of its launchers", () => {
+    const profile = profileWith({ install: "bun install", typecheck: "bunx tsc --noEmit", lint: "npx eslint .", test: "pnpx vitest" });
+    expect(missingToolchains(profile, without("bun", "npm", "pnpm"))).toEqual(["bun", "npm", "pnpm"]);
+    expect(missingToolchains(profile, without("bunx", "npx", "pnpx"))).toEqual([]);
+  });
+
   it("is empty when every launcher is present", () => {
     expect(missingToolchains(profileWith({ install: "npm ci", test: "npm test" }), () => true)).toEqual([]);
   });

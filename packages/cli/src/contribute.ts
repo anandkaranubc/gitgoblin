@@ -223,7 +223,10 @@ export function checksLine(profile: RepositoryProfile): string {
  * puts a Python project's virtualenv on PATH, but never installs these; a project whose commands
  * start with one that is missing fails at its install, minutes into a run.
  */
-const TOOLCHAINS = new Set(["node", "npm", "npx", "pnpm", "yarn", "bun", "bunx", "deno", "cargo", "go", "uv", "poetry", "pdm", "hatch", "make", "cmake", "mvn", "gradle", "bundle", "ruby", "rake", "composer", "php", "dotnet", "swift", "mix"]);
+const TOOLCHAINS = new Set(["node", "npm", "pnpm", "yarn", "bun", "deno", "cargo", "go", "uv", "poetry", "pdm", "hatch", "make", "cmake", "mvn", "gradle", "bundle", "ruby", "rake", "composer", "php", "dotnet", "swift", "mix"]);
+
+/** Launchers that come with another tool: the tool is what a person installs and what the warning names. */
+const LAUNCHED_BY: Record<string, string> = { bunx: "bun", npx: "npm", pnpx: "pnpm" };
 
 /** The program a command starts, after any leading VAR=value assignments. */
 function programOf(command: string): string | undefined {
@@ -236,7 +239,12 @@ function programOf(command: string): string | undefined {
 /** Toolchain launchers the engine's install and checks start, which `isAvailable` says this machine lacks. */
 export function missingToolchains(profile: RepositoryProfile, isAvailable: (name: string) => boolean): string[] {
   const commands = Object.values(chosenCommands(profile)).filter((c): c is string => typeof c === "string");
-  const programs = new Set(commands.map(programOf).filter((p): p is string => p !== undefined && TOOLCHAINS.has(p)));
+  const programs = new Set(
+    commands
+      .map(programOf)
+      .map((p) => (p === undefined ? undefined : (LAUNCHED_BY[p] ?? p)))
+      .filter((p): p is string => p !== undefined && TOOLCHAINS.has(p)),
+  );
   return [...programs].filter((p) => !isAvailable(p)).sort();
 }
 
