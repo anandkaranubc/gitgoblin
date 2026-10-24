@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { sanitizeText } from "./intake.ts";
 
 export interface Reporter {
   phase(name: string, detail?: string): void;
@@ -9,8 +10,12 @@ export interface Reporter {
 
 export const silentReporter: Reporter = { phase() {}, info() {}, warn() {} };
 
+/**
+ * Progress lines carry text from the model and the repository (a rejected command, a tool call's
+ * argument, a denial reason), so control characters are stripped before they reach a terminal.
+ */
 export function consoleReporter(stream: NodeJS.WritableStream = process.stderr): Reporter {
-  const line = (prefix: string, message: string) => stream.write(`${prefix} ${message}\n`);
+  const line = (prefix: string, message: string) => stream.write(`${prefix} ${sanitizeText(message)}\n`);
   return {
     phase: (name, detail) => line("==>", detail ? `${name}: ${detail}` : name),
     info: (message) => line("   ", message),

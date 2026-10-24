@@ -372,3 +372,16 @@ describe("pull request text, run 7 findings", () => {
     expect(body).toContain("Tabs in the moved line");
   });
 });
+
+describe("invisible characters in what gets published", () => {
+  it("strips bidi, zero-width and control characters from the title, body and commit message", () => {
+    const i = input(base);
+    const tricky = { ...i, template: "- [ ] I signed the CLA\u202e\u200b \u001b[8mhidden\n", notes: { ...i.notes, summary: "Fixed\u2066 it\u2069.\u0007" } };
+    const body = pullRequestBody(tricky);
+    const message = commitMessage(tricky);
+    for (const text of [body, message, pullRequestTitle(tricky)]) {
+      expect(text).not.toMatch(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/);
+    }
+    expect(body).toContain("I signed the CLA");
+  });
+});

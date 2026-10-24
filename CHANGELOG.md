@@ -68,6 +68,9 @@ a pull request a maintainer would want to merge.
   only, through your `HTTPS_PROXY` if you use one; `contribute --install-network open` allows any
   host, and a refused host is named with that flag when an install fails. `--check-isolation strict`,
   for repositories you do not trust, also hides your home directory from them.
+- On macOS the repository's commands cannot open your terminals, so they cannot type into or read
+  from your other tabs; progress lines and prepared pull requests carry no escape sequences or
+  invisible characters.
 
 **Everyday use**
 
