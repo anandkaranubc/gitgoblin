@@ -1,6 +1,7 @@
 import { RANKING_LABELS, RANKINGS } from "./baselines.ts";
 import { type BacktestDataset, type BacktestRow, covered, type Evaluation } from "./discovery-backtest.ts";
 import { SWEEP_FILES, subkind } from "./intel-backtest.ts";
+import { ageSplit, SELECTION_LABELS, strict, summarize } from "./issue-outcomes.ts";
 
 export function table(header: string[], rows: (string | number | undefined)[][]): string {
   const cell = (v: string | number | undefined) => (v === undefined ? "n/a" : typeof v === "number" ? fmt(v) : v);
@@ -204,5 +205,30 @@ export function renderIssueGrading(data: import("./intel-backtest.ts").IssueGrad
     const done = rs.filter((i) => i.fate === "completed_by_pr" || i.fate === "completed_without_pr");
     return [label, rs.length, pct(done.length, rs.length), pct(rs.filter((i) => i.fixedBy === "outsider").length, rs.length)];
   })), "");
+  return lines.join("\n");
+}
+
+export function renderIssueOutcomes(dataset: import("./issue-outcomes.ts").IssueOutcomeDataset, summary: Record<import("./issue-outcomes.ts").Selection, import("./issue-outcomes.ts").SelectionSummary>): string {
+  const lines: string[] = [];
+  const total = dataset.repos.reduce((s, r) => s + r.issues.length, 0);
+  lines.push(`## Issues open at ${dataset.asOf.slice(0, 10)}: which ones outsiders resolved in the next ${dataset.windowDays} days`, "");
+  lines.push(`${total} issues open at T across ${dataset.repos.length} repositories${dataset.repos.some((r) => r.openTruncated) ? ` (the stalest open issues are missing in ${dataset.repos.filter((r) => r.openTruncated).length} busy ones)` : ""}. Each was assessed by intel as it looked at T. "Outsider fix" means closed as completed by a merged pull request from someone who is not an owner, member or collaborator; the interval resamples repositories.`, "");
+  lines.push(table(["selection", "issues", "repositories", "outsider fix", "completed by anyone", "closed as not planned"], (Object.keys(summary) as (keyof typeof summary)[]).map((sel) => {
+    const s = summary[sel];
+    return [SELECTION_LABELS[sel], s.issues, s.repositories, `${(s.outsiderPr.estimate * 100).toFixed(1)}% [${(s.outsiderPr.lower * 100).toFixed(1)}, ${(s.outsiderPr.upper * 100).toFixed(1)}]`, `${(s.completed * 100).toFixed(1)}%`, `${(s.notPlanned * 100).toFixed(1)}%`];
+  })), "");
+  const split = ageSplit(dataset);
+  lines.push(`Among issues intel accepts, by age at T: opened in the last ${split.days} days, ${split.recent.issues} issues, ${(split.recent.rate * 100).toFixed(1)}% fixed by an outsider; older, ${split.older.issues} issues, ${(split.older.rate * 100).toFixed(1)}%. Difference ${(split.difference.estimate * 100).toFixed(1)} points [${(split.difference.lower * 100).toFixed(1)}, ${(split.difference.upper * 100).toFixed(1)}].`, "");
+  if (dataset.repos.some((r) => r.issues.some((i) => i.fixer !== undefined))) {
+    const strictData = strict(dataset);
+    const strictSummary = summarize(strictData);
+    const strictSplit = ageSplit(strictData);
+    lines.push(`Stricter reading (authors with four or more closing pull requests in a repository's window counted as core; reporters fixing their own issue not counted):`, "");
+    lines.push(table(["selection", "issues", "fixed by an outsider"], (Object.keys(strictSummary) as (keyof typeof strictSummary)[]).map((sel) => {
+      const x = strictSummary[sel];
+      return [SELECTION_LABELS[sel], x.issues, `${(x.outsiderPr.estimate * 100).toFixed(1)}% [${(x.outsiderPr.lower * 100).toFixed(1)}, ${(x.outsiderPr.upper * 100).toFixed(1)}]`];
+    })), "");
+    lines.push(`By age under the stricter reading: last ${strictSplit.days} days ${(strictSplit.recent.rate * 100).toFixed(1)}%, older ${(strictSplit.older.rate * 100).toFixed(1)}%, difference ${(strictSplit.difference.estimate * 100).toFixed(1)} points [${(strictSplit.difference.lower * 100).toFixed(1)}, ${(strictSplit.difference.upper * 100).toFixed(1)}].`, "");
+  }
   return lines.join("\n");
 }
