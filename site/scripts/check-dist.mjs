@@ -33,7 +33,8 @@ function targetFile(urlPath) {
 }
 
 for (const page of pages) {
-  const rel = page.slice(dist.length);
+  // Forward slashes on every platform, so the path checks below also hold on Windows.
+  const rel = page.slice(dist.length).replaceAll("\\", "/");
   const html = readFileSync(page, "utf8");
   const need = (re, label) => {
     if (!re.test(html)) problems.push(`${rel}: missing ${label}`);
@@ -45,6 +46,9 @@ for (const page of pages) {
   if (rel === "/404.html") need(/<meta name="robots" content="noindex"/, "noindex");
   else need(/<link rel="canonical"/, "canonical link");
   need(/<meta property="og:image"/, "og:image");
+  // Docs pages are articles for link previews; every other page is the website.
+  const ogType = rel.startsWith("/docs/") ? "article" : "website";
+  need(new RegExp(`<meta property="og:type" content="${ogType}"`), `og:type ${ogType}`);
   need(/<meta name="viewport"/, "viewport");
   const h1s = html.match(/<h1[\s>]/g)?.length ?? 0;
   if (h1s !== 1) problems.push(`${rel}: expected one h1, found ${h1s}`);
