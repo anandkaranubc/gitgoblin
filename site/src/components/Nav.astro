@@ -162,6 +162,12 @@ const links = [
     toggle?.setAttribute("aria-label", current() === "dark" ? "Switch to light theme" : "Switch to dark theme");
   }
 
+  // The browser bar takes the chosen theme's background, whatever the OS preference (brand/tokens.css).
+  function browserBar() {
+    const colour = current() === "dark" ? "#10140f" : "#f4f1e6";
+    document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((meta) => (meta.content = colour));
+  }
+
   toggle?.addEventListener("click", () => {
     const next = current() === "dark" ? "light" : "dark";
     root.dataset.theme = next;
@@ -169,6 +175,7 @@ const links = [
       localStorage.setItem("theme", next);
     } catch {}
     label();
+    browserBar();
   });
   label();
 

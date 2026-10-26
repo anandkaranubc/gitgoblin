@@ -10,9 +10,11 @@ interface Props {
   description?: string;
   /** For pages with no address of their own, like the 404 page: no canonical URL, and kept out of search. */
   noindex?: boolean;
+  /** The Open Graph type link previews use: `article` for docs pages, `website` for the rest. */
+  ogType?: "website" | "article";
 }
 
-const { title, description = defaultDescription, noindex = false } = Astro.props;
+const { title, description = defaultDescription, noindex = false, ogType = "website" } = Astro.props;
 const fullTitle = title === siteName ? `${siteName}: ${tagline}` : `${title} | ${siteName}`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const ogImage = new URL(href("/og.png"), Astro.site);
@@ -35,7 +37,7 @@ const ogImage = new URL(href("/og.png"), Astro.site);
     <link rel="sitemap" href={href("/sitemap-index.xml")} />
     <meta name="theme-color" content="#f4f1e6" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#10140f" media="(prefers-color-scheme: dark)" />
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
     <meta property="og:site_name" content={siteName} />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
@@ -52,10 +54,17 @@ const ogImage = new URL(href("/og.png"), Astro.site);
     <Font cssVariable="--font-sans" preload />
     <Font cssVariable="--font-mono" preload />
     <script is:inline>
-      // Apply a saved theme before first paint; the OS preference applies otherwise.
+      // Apply a saved theme before first paint; the OS preference applies otherwise. The browser bar
+      // colour (the theme-color tags above) follows the saved theme too. Colours: brand/tokens.css.
       try {
         var saved = localStorage.getItem("theme");
-        if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
+        if (saved === "light" || saved === "dark") {
+          document.documentElement.dataset.theme = saved;
+          var colour = saved === "dark" ? "#10140f" : "#f4f1e6";
+          document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
+            meta.setAttribute("content", colour);
+          });
+        }
       } catch (e) {}
       document.documentElement.classList.add("js");
     </script>
