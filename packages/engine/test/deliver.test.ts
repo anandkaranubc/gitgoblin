@@ -293,6 +293,17 @@ describe("pull request text, run 5 findings", () => {
     expect(body).toContain("| `pnpm test` | pass |");
   });
 
+  it("gives the test counts for a suite that already failed", () => {
+    const input = base();
+    input.verification = {
+      ...input.verification,
+      checks: [{ name: "test", command: "pnpm test", status: "fail", exitCode: 1, durationMs: 1, outputTail: "", tests: { failed: 7, passed: 5292 } }],
+      preexisting: ["test"],
+      testCounts: [{ name: "test", baseline: { failed: 7, passed: 5290 }, now: { failed: 7, passed: 5292 } }],
+    };
+    expect(pullRequestBody(input)).toContain("| `pnpm test` | fail (also fails on the base commit: 7 failing and 5292 passing tests, against 7 and 5290 on the base commit) |");
+  });
+
   it("keeps reviewer notes about the change and drops ones about the workspace or addressed to the operator", () => {
     const body = pullRequestBody(base());
     expect(body).toContain("Consider an early return");
@@ -370,5 +381,18 @@ describe("pull request text, run 7 findings", () => {
     });
     expect(body).not.toMatch(/confirmed/i);
     expect(body).toContain("Tabs in the moved line");
+  });
+});
+
+describe("invisible characters in what gets published", () => {
+  it("strips bidi, zero-width and control characters from the title, body and commit message", () => {
+    const i = input(base);
+    const tricky = { ...i, template: "- [ ] I signed the CLA\u202e\u200b \u001b[8mhidden\n", notes: { ...i.notes, summary: "Fixed\u2066 it\u2069.\u0007" } };
+    const body = pullRequestBody(tricky);
+    const message = commitMessage(tricky);
+    for (const text of [body, message, pullRequestTitle(tricky)]) {
+      expect(text).not.toMatch(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/);
+    }
+    expect(body).toContain("I signed the CLA");
   });
 });

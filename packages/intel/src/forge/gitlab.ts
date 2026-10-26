@@ -47,6 +47,8 @@ export async function fetchGitLabPipelines(base: string, ref: string, options: F
 export async function fetchGitLab(host: string, owner: string, name: string, options: ForgeFetchOptions): Promise<ForgeResult> {
   const base = `https://${host}/api/v4/projects/${encodeURIComponent(`${owner}/${name}`)}`;
   const project = await forgeJson<GlProject>(base, options);
+  // An SSO page or proxy can answer 200 with something else; fail clearly instead of mapping undefined fields.
+  if (!project || typeof project !== "object" || typeof project.created_at !== "string") throw new Error(`unexpected project response from ${host}`);
   const [openIssues, closedIssues, openMrs, mergedMrs, closedMrs, labels] = await Promise.all([
     forgeList<GlIssue>(`${base}/issues?state=opened&order_by=updated_at&per_page=50`, options),
     forgeList<GlIssue>(`${base}/issues?state=closed&order_by=updated_at&per_page=30`, options),
@@ -101,6 +103,7 @@ export async function fetchGitLab(host: string, owner: string, name: string, opt
   const toLinked = (m: GlMr) => ({ number: m.iid, url: m.web_url, state: m.state === "merged" ? "MERGED" as const : m.state === "opened" || m.state === "locked" ? "OPEN" as const : "CLOSED" as const, isDraft: m.draft, updatedAt: m.updated_at });
   const toIssue = (i: GlIssue): IssueSample => {
     const notes = issueNotes.get(i.iid) ?? [];
+    const linkedPrs = [...new Map([...(relatedMrs.get(i.iid) ?? []), ...(mrsByIssue.get(i.iid) ?? [])].map((m) => [m.iid, toLinked(m)])).values()];
     const comments = notes.map((n) => commentOf(n.author.username, n.created_at, n.body, maintainers));
     return {
       number: i.iid, title: i.title, url: i.web_url, body: i.description ?? "", createdAt: i.created_at, updatedAt: i.updated_at,
@@ -108,8 +111,11 @@ export async function fetchGitLab(host: string, owner: string, name: string, opt
       association: associationOf(i.author?.username, maintainers), labels: i.labels, assignees: i.assignees.map((a) => a.username),
       reactions: i.upvotes, commentCount: i.user_notes_count, firstComments: comments.slice(0, 3).map((c) => ({ ...c, body: undefined })),
       lastComments: comments.slice(-6),
-      linkedPrs: [...new Map([...(relatedMrs.get(i.iid) ?? []), ...(mrsByIssue.get(i.iid) ?? [])].map((m) => [m.iid, toLinked(m)])).values()],
+      linkedPrs,
       commentsFetched: i.user_notes_count === 0 || issueNotes.has(i.iid),
+      // GitLab counts the merge requests that mention the issue; when none of them could be read (the lookup failed or
+      // the issue was past the ones looked up), say so rather than letting the issue look untouched.
+      ...(i.merge_requests_count > 0 && linkedPrs.length === 0 ? { unreadLinkedPrs: i.merge_requests_count } : {}),
     };
   };
   const toPr = (m: GlMr): PrSample => {

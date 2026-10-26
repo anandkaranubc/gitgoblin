@@ -10,7 +10,7 @@ import { describeLlmError } from "../llm/client.ts";
 import { type IssueReview, reviewIssues } from "../llm/issue-review.ts";
 import { DiskCache } from "../util/cache.ts";
 import { applyIssueDrift, assessIssueDrift, permalinks } from "./issue-drift.ts";
-import { issueBody, problemStatement } from "./issue-text.ts";
+import { asksMaintainersToChoose, issueBody, problemStatement } from "./issue-text.ts";
 import { type Analyzer, type Finding, type FindingSignals, evidence } from "./types.ts";
 
 const BUG_LABEL = /\b(bug|defect|regression|crash|broken|error)\b/i;
@@ -140,6 +140,9 @@ export function assessIssue(issue: IssueSample, now: Date, repoResponsive: boole
       novelty = 0.05;
       noveltyReason = `PR #${openPr.number} is open${openPr.isDraft ? " (draft)" : ""} and active`;
     }
+  } else if (issue.unreadLinkedPrs) {
+    novelty = 0.5;
+    noveltyReason = `the forge lists ${issue.unreadLinkedPrs} merge request${issue.unreadLinkedPrs === 1 ? "" : "s"} for it that could not be read; check them before starting`;
   } else if (issue.assignees.length > 0) {
     novelty = idle > 90 ? 0.5 : 0.2;
     noveltyReason = `assigned to ${issue.assignees.join(", ")}${idle > 90 ? `, but no activity for ${Math.round(idle)} days` : ""}`;
@@ -299,7 +302,7 @@ async function secondOpinion(ctx: AnalysisContext, profile: RepositoryProfile, a
   return reviewIssues({
     llm: ctx.llm, profile, issues, now: ctx.now,
     cache: new DiskCache(join(ctx.options.cacheDir, "llm")),
-    onError: (error) => ctx.budget.note(`language-model review stopped: ${describeLlmError(error)}`),
+    onError: (error, { stopped, failed, total }) => ctx.budget.note(`language-model review ${stopped ? "stopped" : "failed"} for ${failed} of ${total} issues: ${describeLlmError(error)}`),
   });
 }
 
@@ -335,12 +338,26 @@ function mentionedFiles(ctx: AnalysisContext, text: string): string[] {
   return found;
 }
 
-function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessment, profile: RepositoryProfile, languages: string[], hinted: boolean, review?: IssueReview): Finding {
+/** What `issueSignals` needs beyond the issue: facts that come from the checkout, discovery, or a model. */
+export interface IssueSignalInputs {
+  /** Repository files the issue names. */
+  files?: string[];
+  /** Discovery pointed at this issue. */
+  hinted?: boolean;
+  review?: IssueReview | undefined;
+}
+
+/**
+ * How an accepted issue scores: value, feasibility, confidence and novelty with their reasons, from the issue and the
+ * assessment alone, so an outcome backtest can rank issues exactly as a report would. `decision` is set when the
+ * issue asks maintainers to choose between approaches and none has answered.
+ */
+export function issueSignals(issue: IssueSample, a: IssueAssessment, now: Date, inputs: IssueSignalInputs = {}): { signals: FindingSignals; decision: string | undefined } {
+  const { files = [], hinted = false, review } = inputs;
   const feature = a.kind === "feature_request";
-  const age = daysAgo(issue.createdAt, ctx.now);
-  const idle = daysAgo(issue.updatedAt, ctx.now);
+  const age = daysAgo(issue.createdAt, now);
+  const idle = daysAgo(issue.updatedAt, now);
   const bodyLen = issue.body.trim().length;
-  const files = mentionedFiles(ctx, `${issue.title}\n${issue.body}`);
 
   let value = feature ? 0.45 : 0.5;
   const valueWhy: string[] = [feature ? "maintainer-endorsed feature" : "open defect"];
@@ -364,12 +381,36 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
   if (review && review.confidence >= 0.75 && !review.actionable) { feasibility -= 0.15; feasWhy.push(`model: ${review.rationale}`); }
   if (feasWhy.length === 0) feasWhy.push("no reproduction, label or file hints; expect investigation");
 
+  // An issue that ends by asking maintainers to pick an approach needs their answer before code. Until a maintainer
+  // has replied, the work may be rejected whichever option is built: flag it the way the picker can show.
+  const decision = feature || a.endorsed || issue.lastComments.some((c) => isMaintainer(c.association)) ? undefined : asksMaintainersToChoose(issue.body);
+  if (decision) { feasibility -= 0.1; feasWhy.push("waits on a maintainer decision"); }
+
+  const signals: FindingSignals = {
+    value: Math.min(0.95, value), valueReason: valueWhy.join("; "),
+    feasibility: Math.max(0.1, Math.min(0.95, feasibility)), feasibilityReason: feasWhy.join("; "),
+    confidence: decision ? 0.45 : a.rescued ? 0.65 : a.confirmedLabel || a.endorsed ? 0.85 : review && review.confidence >= 0.8 && (review.verdict === "defect" || review.verdict === "docs") ? 0.75 : 0.6,
+    confidenceReason: decision ? `a maintainer decision is pending: ${decision}` : a.rescued ? `the lexical pass was unsure; the model judged it a ${review?.verdict ?? "defect"} (${review?.rationale ?? ""}); verify before investing` : a.confirmedLabel || a.endorsed ? "maintainers labelled or confirmed it" : review && review.confidence >= 0.8 ? `issue text plus model agreement: ${review.rationale}` : "inferred from the issue text alone",
+    novelty: a.novelty, noveltyReason: a.noveltyReason,
+    welcomenessFactor: a.confirmedLabel ? 1.1 : 1,
+    welcomenessReason: a.confirmedLabel ? `help label "${a.confirmedLabel}" invites contributions` : undefined,
+  };
+  return { signals, decision };
+}
+
+function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessment, profile: RepositoryProfile, languages: string[], hinted: boolean, review?: IssueReview): Finding {
+  const feature = a.kind === "feature_request";
+  const age = daysAgo(issue.createdAt, ctx.now);
+  const files = mentionedFiles(ctx, `${issue.title}\n${issue.body}`);
+  const { signals, decision } = issueSignals(issue, a, ctx.now, { files, hinted, review });
+
   const effort = a.easy ? "small" : feature ? (/\b(breaking|architecture|rewrite|redesign)\b/i.test(issue.body) ? "large" : "medium") : a.hasRepro || a.hasTrace ? "small" : "medium";
   const etiquette: string[] = [];
   if (a.novelty < 0.9) etiquette.push(`Comment on #${issue.number} first: ${a.noveltyReason}.`);
   else etiquette.push(`Comment on #${issue.number} that you are starting, so nobody duplicates the work.`);
   if (a.claim && a.claim.daysAgo >= 45) etiquette.push(`Politely ask ${a.claim.comment.author?.login ?? "the earlier claimant"} whether they are still working on it before you start.`);
   const risks: string[] = [];
+  if (decision) risks.push(`The issue asks maintainers to choose between approaches and none has answered; ask which they prefer before writing code (${decision}).`);
   if (age > 365) risks.push(`Opened ${Math.round(age / 365 * 10) / 10} years ago; confirm it still reproduces on the default branch.`);
   if (/earlier PR #\d+ was closed/.test(a.noveltyReason)) risks.push("A previous PR was closed without merging; read its review to learn what maintainers rejected.");
   if (!a.endorsed && !a.confirmedLabel) risks.push("No maintainer has confirmed the issue; ask before investing heavily.");
@@ -379,16 +420,6 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
   if (a.claim) ev.push(evidence(ctx, "issue", `${issue.url}#issuecomment`, { excerpt: truncate(a.claim.comment.body ?? "", 160), note: `claim by ${a.claim.comment.author?.login ?? "unknown"} ${Math.round(a.claim.daysAgo)} days ago` }));
   if (review) ev.push(evidence(ctx, "computed", `llm:${ctx.llm?.model ?? "model"}`, { excerpt: review.quote || "(no supporting phrase found in the issue text)", note: `${review.verdict}, ${review.actionable ? "actionable" : "not directly actionable"}, maintainer stance ${review.maintainerStance} (${review.confidence.toFixed(2)}): ${review.rationale}` }));
   for (const pr of issue.linkedPrs.filter((p) => isSameRepoPr(p.url, `https://${ctx.ref.host}/${ctx.ref.owner}/${ctx.ref.name}`))) ev.push(evidence(ctx, "pull_request", pr.url, { note: `linked PR is ${pr.state.toLowerCase()}${pr.isDraft ? " (draft)" : ""}, updated ${pr.updatedAt.slice(0, 10)}` }));
-
-  const signals: FindingSignals = {
-    value: Math.min(0.95, value), valueReason: valueWhy.join("; "),
-    feasibility: Math.max(0.1, Math.min(0.95, feasibility)), feasibilityReason: feasWhy.join("; "),
-    confidence: a.rescued ? 0.65 : a.confirmedLabel || a.endorsed ? 0.85 : review && review.confidence >= 0.8 && (review.verdict === "defect" || review.verdict === "docs") ? 0.75 : 0.6,
-    confidenceReason: a.rescued ? `the lexical pass was unsure; the model judged it a ${review?.verdict ?? "defect"} (${review?.rationale ?? ""}); verify before investing` : a.confirmedLabel || a.endorsed ? "maintainers labelled or confirmed it" : review && review.confidence >= 0.8 ? `issue text plus model agreement: ${review.rationale}` : "inferred from the issue text alone",
-    novelty: a.novelty, noveltyReason: a.noveltyReason,
-    welcomenessFactor: a.confirmedLabel ? 1.1 : 1,
-    welcomenessReason: a.confirmedLabel ? `help label "${a.confirmedLabel}" invites contributions` : undefined,
-  };
   return {
     kind: a.kind,
     clusterKey: `issue:${issue.number}`,

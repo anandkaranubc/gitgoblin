@@ -5,7 +5,60 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
-## gitgoblin 0.1.0 - Unreleased
+## gitgoblin 0.1.2 - Unreleased
+
+- Safety: the repository's commands can no longer reach other programs' Unix sockets. Before, code
+  in a repository could talk to Docker's daemon (and through it start a container with your disk
+  mounted) or to your SSH agent, despite the OS sandbox. Sockets the commands create in their own
+  writable places still work, so builds that use tsx or turbo's daemon no longer fail on macOS with
+  `listen EPERM`.
+- When a project's tests already fail before the change, `contribute` no longer takes "also fails on
+  the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
+  web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
+  tests, or fewer passing ones, as a regression. The pull request shows both counts.
+- Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
+  `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
+  now holds the start of the output as well as the end, so the first error survives a long log.
+- `discover contribute` gets each repository's GitHub details again (starter issues, contributing
+  guide, recent merges). It asked for 20 repositories per request, which GitHub timed out on with
+  HTTP 502, and one failed request dropped the details of every candidate. It now asks for 10 at a
+  time, splits a request GitHub cannot finish, and keeps what it fetched.
+- `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
+  requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
+  of putting it at the top. One failed run is reported as a single failure, not as "failing since".
+- `analyze --llm` asks about one issue per call, so text in one issue cannot sway the verdict on
+  another, and uses a review only when its supporting quote is really in the issue. It stops at the
+  first timeout or server error instead of retrying each issue, and the report says how many issues
+  went unreviewed.
+- On GitLab, `analyze` no longer offers an issue as untouched when GitLab counts merge requests for
+  it that could not be read; it says to check them first. Large Gitea and Forgejo repositories get
+  the same shallow clone as large GitHub ones.
+
+## gitgoblin 0.1.1 - 2026-10-24
+
+- `contribute --install-browsers` downloads the browsers a project's Playwright test suite needs,
+  with the project's own Playwright, after the install; the run says when the tests need them.
+  0.1.0 offered this only through `gitgoblin-engine run --install-browsers`.
+- `contribute` warns before its first question when a launcher the project's commands need (`bun`,
+  `cargo`, `pnpm` and the like) is not installed, instead of failing at the install after cloning.
+- `discover` prints its warnings (a refused search, GitHub details that could not be read) on stderr
+  even when progress is hidden, so a ranking in a pipe or script is not silently partial.
+- The npm page now opens with how to install and run the command from npm, instead of how to run
+  it from a clone of the repository.
+- `analyze` gives Bun projects `bun run build` and `bun run test`, not Bun's own bundler and test
+  runner, and no longer invents `tsc --noEmit` for a TypeScript project without a root
+  `tsconfig.json`. Before, `contribute` could start with two failing checks the project never had.
+
+## @gitgoblin/mcp 0.1.8 - Unreleased
+
+- The analyze tool's build and test commands for Bun projects run the project's scripts, and it no
+  longer invents a TypeScript check when the repository root has no `tsconfig.json`.
+- A failing CI workflow that needs repository secrets forks do not get is no longer ranked as an
+  easy fix for outsiders, and a single failed run is not called a failing streak.
+- On GitLab, an issue with merge requests that could not be read is no longer offered as untouched,
+  and large Gitea and Forgejo repositories are cloned shallowly like large GitHub ones.
+
+## gitgoblin 0.1.0 - 2026-10-24
 
 The first release of `gitgoblin`: find open-source work worth doing, check the evidence, and prepare
 a pull request a maintainer would want to merge.
@@ -14,8 +67,11 @@ a pull request a maintainer would want to merge.
 
 - `discover` ranks public GitHub repositories for a goal (`contribute`, `learn`, `adopt`, `revive`,
   `explore`), filtered by language, topic, stars, license, recency or similarity to a repository you
-  name, and says why each one ranked where it did. `explain` shows every signal behind one score;
-  `goals` lists what each goal weighs.
+  name, and says why each one ranked where it did. `explain` shows every signal behind one score,
+  including the share of pull requests the project merges (`acceptance`), which in backtests
+  predicted whether a newcomer's pull request would be merged better than stars did; `goals` lists
+  what each goal weighs. `discover --json` includes the warnings about refused or rate-limited
+  searches, so a script can tell a partial ranking from a complete one.
 - `analyze` profiles a repository (what it is, how active it is, how it treats outside
   contributors, how to build and test it, its conventions) and lists opportunities, each with
   evidence you can check. It reads GitHub, GitLab and Gitea or Forgejo, Codeberg among them; other
@@ -24,26 +80,51 @@ a pull request a maintainer would want to merge.
   is marked as possibly fixed; a dependency update an open pull request already makes is skipped;
   generated files and code that only quotes a pattern are not reported. `--llm` adds a second
   opinion from Claude on issue triage; it is off by default, needs an API key and costs money.
+- `analyze` reads public repositories only, and runs git without your own git configuration (no
+  credential helpers, LFS downloads, hooks or transports other than https), so a repository you
+  analyze cannot use your setup. Clones are kept per host, so a same-named repository elsewhere
+  cannot stand in for the one you asked for.
+- The install command `analyze` reports installs what the project declares for development (PEP 735
+  dependency groups or real extras, not an assumed `.[dev]`) and installs from a committed lockfile
+  without rewriting it (`npm ci`, `pnpm install --frozen-lockfile`, and the yarn and bun equivalents).
 
 **Contribute (experimental)**
 
+- In a monorepo whose root has no test script, `analyze` reports the test command of the workspace
+  packages that have one (`npm test -w packages/x`, or every workspace through the package manager).
 - `contribute` has an AI agent investigate, plan, implement and verify one opportunity in a local
   clone, gets an independent review, and prepares a pull request written for the maintainers who
   will read it. It asks before running the agent, before implementing the plan and before
-  publishing; nothing is pushed or posted without that last yes.
-- The opportunity picker marks the ones the engine would refuse (`!`) and the ones intel doubts
-  (`?`), and Enter skips both. `runs`, `show` and `publish` come back to prepared changes later;
+  publishing; nothing is pushed or posted until you type `publish` at that last question, and keys
+  pressed before a question appears are discarded, so a `y` typed ahead cannot answer it.
+- The opportunity picker marks the ones the engine would refuse (`!`, dependency bumps among them:
+  the agent works offline and cannot regenerate a lockfile, so it stops before spending anything)
+  and the ones intel doubts (`?`), and Enter skips both. Once one is chosen, `contribute` says which of
+  the project's own commands will check the change, and warns when there is no test command. `runs`, `show` and `publish` come back to prepared changes later;
   `publish` can be run again after a partial failure, and `clean` frees the disk a finished run's
   clone takes while keeping its report and diff.
+- Files the repository's own install rewrites (a lockfile npm trims, say) are put back as committed
+  before anything else runs, so a prepared change never carries that churn; the run report names them.
+- Projects that test in real browsers through Playwright: the run says when the tests need
+  Playwright's browsers, and `gitgoblin-engine run --install-browsers` downloads them with the
+  project's own Playwright, allowing Playwright's download servers for that step only.
 
 **Safety**
 
 - Repository content is treated as untrusted: reads stay inside the clone, link checks reach only
   public addresses, and every parser of issue, README and source text runs in linear time, so a
   crafted file cannot stall it.
+  Everything the command prints that came from outside (repository descriptions, issue titles,
+  registry data, the agent's progress and messages, run files, errors) has escape sequences and
+  invisible control characters removed, so it cannot rewrite the terminal or set the clipboard.
 - The repository's own install and test commands run in an OS sandbox (`sandbox-exec` on macOS,
-  `bwrap` on Linux when installed). `--check-isolation strict`, for repositories you do not trust,
-  also hides your home directory from them and limits the install to package registries.
+  `bwrap` on Linux when installed): tests run offline, and the install reaches package registries
+  only, through your `HTTPS_PROXY` if you use one; `contribute --install-network open` allows any
+  host, and a refused host is named with that flag when an install fails. `--check-isolation strict`,
+  for repositories you do not trust, also hides your home directory from them.
+- On macOS the repository's commands cannot open your terminals, so they cannot type into or read
+  from your other tabs; progress lines and prepared pull requests carry no escape sequences or
+  invisible characters.
 
 **Everyday use**
 
@@ -59,9 +140,26 @@ a pull request a maintainer would want to merge.
 
 Node.js 24 or newer and git. `contribute` also needs the Claude Agent SDK, installed next to the CLI
 (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`), and an Anthropic API key or Claude Code
-login; each run costs money, capped by `--max-cost`. `discover`, `contribute` and `publish` work with
-GitHub only. Opportunity scores are still being calibrated. `contribute` has so far prepared pull
-requests on one real repository, on macOS, so treat what it prepares as a draft to review.
+login, and runs on macOS or Linux only (on Windows, `discover` and `analyze` work); each run costs
+money, capped by `--max-cost`. `discover`, `contribute` and `publish` work with GitHub only.
+Opportunity scores are still being calibrated. `contribute` has so far prepared pull requests on one
+real repository, on macOS, so treat what it prepares as a draft to review.
+
+## @gitgoblin/mcp 0.1.7 - 2026-10-24
+
+- Reads public repositories only. Each repository is confirmed public with an anonymous request
+  to its forge before any work, and `discover_repositories` leaves out results it cannot confirm, so
+  a token or credential helper that can see private repositories never exposes them.
+- Each analysis runs in a child process with an empty home directory, so your git configuration and
+  credential helpers never apply to a repository's clone. A timeout or a cancellation kills the
+  child and everything it started, git included. At most two analyses run at once.
+- Clones are kept per forge, and the least recently used are deleted beyond 20 per forge. Clones left by
+  earlier versions are deleted. A clone that takes more than four minutes gives up with a clear error.
+- Every result opens with a reminder that repository text is data, not instructions. Invisible
+  format characters, including zero-width and Unicode tag characters, are stripped, and results are
+  capped in size.
+- Asking for an opportunity id that a recent analysis does not have answers from that analysis
+  instead of running a new one.
 
 ## @gitgoblin/mcp 0.1.6 - 2026-10-23
 

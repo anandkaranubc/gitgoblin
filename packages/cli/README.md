@@ -1,21 +1,30 @@
-# gitgoblin (CLI)
+# gitgoblin
 
-The command-line front door to gitgoblin. In a clone it runs from source on
-Node 24, with no build step; the npm package is the same code bundled into plain
-JavaScript (see [Packaging](#packaging)).
+Find open-source projects worth your time, work out what they need, and prepare a pull request
+you approve. Needs [Node.js](https://nodejs.org) 24 or newer and git.
 
 ```sh
-npm install                      # from the repository root
-npx gitgoblin discover contribute --language rust
-npx gitgoblin explain BurntSushi/ripgrep --goal adopt
-npx gitgoblin analyze jd/tenacity
-npx gitgoblin contribute jd/tenacity
+npm install -g gitgoblin
+gitgoblin discover contribute --language rust
+gitgoblin explain BurntSushi/ripgrep --goal adopt
+gitgoblin analyze jd/tenacity
 ```
 
-The commands follow the journey: `discover` finds repositories, `analyze` works out what one
-needs, `contribute` has the engine draft one change and asks you before anything is published,
-and `runs`, `show` and `publish` let you come back to a prepared change later. `discover` (in a
-terminal) and `analyze` end by saying what to type next.
+`npx gitgoblin <command>` works without installing. The commands follow the journey: `discover`
+finds repositories, `analyze` works out what one needs, and `discover` (in a terminal) and `analyze`
+end by saying what to type next.
+
+`contribute` is experimental: an AI agent drafts one change in a local clone, and it asks before
+running the agent, before implementing the plan, and before publishing anything. It needs the Claude
+Agent SDK next to the CLI (`npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`) and costs money
+per run. `runs`, `show` and `publish` come back to a prepared change later, and `clean` frees the
+disk a finished run's clone takes.
+
+More: [getting started](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/getting-started.md),
+[how gitgoblin behaves in other people's projects](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md),
+[source](https://github.com/anandkaranubc/gitgoblin). To run it from a clone of the repository
+instead, `npm install` at the root and use `npx gitgoblin`; the bundling is described under
+[Packaging](#packaging).
 
 A GitHub token is optional. Without one you get 10 searches per minute, 60 API
 calls per hour, and no starter-issue data. Set `GITHUB_TOKEN` or `GH_TOKEN`, or
@@ -50,10 +59,13 @@ Ranks repositories for a goal and says why. Goals: `contribute`, `learn`,
 Text output, per result: rank, `owner/name`, stars, language, license, score,
 description, URL, up to three reasons that helped (`+`), the one that hurt most
 (`−`), and for `contribute` up to two open starter issues. In a terminal it ends
-with the `analyze` command for the top result.
+with the `analyze` command for the top result. Warnings that make a ranking
+partial, such as a refused search or GitHub details that could not be read, are
+printed on stderr even when progress is hidden.
 
-JSON output is `{ query, results }` where each result is a `DiscoveryResult`
-from `@gitgoblin/core`: `repo`, `goal`, `score` (0..1, comparable within a
+JSON output is `{ query, results, warnings }`. `warnings` lists searches that
+were refused or rate limited, so a script can tell a partial ranking from a
+complete one. Each result is a `DiscoveryResult` from `@gitgoblin/core`: `repo`, `goal`, `score` (0..1, comparable within a
 goal), `reasons[]` (`signal`, `weight`, `detail`), `signals`, `evidence`, and
 `issues[]` when available.
 
@@ -108,7 +120,9 @@ One opportunity, end to end: analyze (or reuse a saved report), choose, let
 a local clone, read what it did, and open a draft pull request only after you
 say so. It needs an interactive terminal, and asks three times: before running
 the agent (it costs money), before implementing the plan, and before publishing.
-There is no flag to skip any of them. When the engine reports that the repository's install failed or that checks were already failing before any change, the plan question says so, because a change implemented then cannot be verified against the project's own checks.
+There is no flag to skip any of them. Publishing takes the word `publish`, not
+`y`, and keys pressed before a question appears are discarded, so a `y` typed
+ahead during the run cannot answer a question you have not read. When the engine reports that the repository's install failed or that checks were already failing before any change, the plan question says so, because a change implemented then cannot be verified against the project's own checks.
 
 | Option | Meaning |
 | --- | --- |
@@ -119,6 +133,8 @@ There is no flag to skip any of them. When the engine reports that the repositor
 | `--workdir <dir>` | Where runs and clones live (default `$GITGOBLIN_WORKDIR` or `~/.gitgoblin`). |
 | `--model <id>`, `--effort <level>` | Model and effort for the engine; effort is `low`, `medium`, `high`, `xhigh` or `max`. |
 | `--check-isolation <mode>` | How the repository's own install and test commands run on your machine: `auto` (default, an OS sandbox when one is available), `sandbox` (required), `strict` (required, and your home directory is hidden except toolchains and caches; use it for repositories you do not trust) or `none`. Anything but the default is stated in the first question. |
+| `--install-network <mode>` | What the repository's install may reach when an OS sandbox is in use: `registries` (default, package registries only, including GitHub-hosted dependencies) or `open` (any host, for projects that install from elsewhere; stated in the first question). When the install fails because a host was refused, `contribute` names it and this flag. |
+| `--install-browsers` | After the install, download the browsers a Playwright test suite needs (web-test-runner's Playwright launcher, `@playwright/test`, Vitest browser mode), using the project's own Playwright and allowing Playwright's download servers for that step only. Off by default; when the tests fail for want of browsers, the run says so and names this flag. Stated in the first question. |
 | `-g, --goal <goal>` | Discovery goal used for the hints. |
 
 Without `--opportunity` or `--issue` it lists the opportunities, best first, with
@@ -126,7 +142,10 @@ kind, score, effort, id and the first piece of evidence, and marks the ones the
 engine will refuse at intake: an issue someone is already working on, a triage
 item that needs a reply rather than a patch, a pull request that needs its
 author's consent first, a dependency update (the agent works offline and cannot
-regenerate the lockfile). When intel has a specific reason to doubt a finding (its
+regenerate the lockfile). Once you choose, it says which of the project's own commands the engine will run
+to check the change, warns when no test command was found, and warns when a
+launcher those commands need (`bun`, `pnpm`, `cargo`, `go` and the like) is not
+on your PATH, since the run would otherwise stop at the install after cloning. When intel has a specific reason to doubt a finding (its
 confidence is below 0.5, for example because code an issue quotes is gone from the
 default branch), a `?` line shows that reason. Press Enter to take the first
 opportunity the engine would accept and intel does not doubt; a typo gets you
@@ -135,8 +154,8 @@ asked again.
 While the engine works, its phases and tool calls stream to stderr. When it
 finishes you see the run's report (verification against the project's own
 checks, the independent review, cost), the proposed pull request title and
-description, and the path of the diff. Read the diff before answering yes. If you
-answer no, the change stays in the run directory and `gitgoblin publish <runId>`
+description, and the path of the diff. Read the diff before typing `publish`. If
+you answer anything else, the change stays in the run directory and `gitgoblin publish <runId>`
 opens it later. The exit code is 1 when the run failed; a run the engine stopped
 or escalated exits 0 and says why. When the repository's install failed, the end
 of its log is printed under the status, since it usually names the cause.
@@ -152,7 +171,7 @@ The lifecycle of prepared changes, in the same workdir `contribute` uses
   a patch, `--pr` the pull request title and description, `--install` the output
   of the repository's install command.
 - `publish <runId>` shows the pull request text and the paths to the diff and
-  report, asks, then pushes with your `gh` login (to a fork when you cannot push
+  report, asks you to type `publish`, then pushes with your `gh` login (to a fork when you cannot push
   to the repository) and opens a draft pull request. `--ready` opens it ready for
   review instead. Only a run whose status is `awaiting_approval` can be published.
 

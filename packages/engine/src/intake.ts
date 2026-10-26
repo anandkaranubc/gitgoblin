@@ -91,7 +91,9 @@ const OpportunityProjection = z
 
 /** Removes invisible and bidirectional control characters that can hide instructions in issue text. */
 export function sanitizeText(text: string): string {
-  return text.replace(/[​-‏‪-‮⁠-⁤﻿]|[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
+  // C0 and C1 controls (ESC starts terminal escape sequences; 0x9B is an 8-bit CSI), zero-width and
+  // bidirectional formatting characters including the isolates, and the Arabic letter mark.
+  return text.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF\u061C\u180E]|[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, "");
 }
 
 function sanitizeAll(values: string[] | undefined): string[] {

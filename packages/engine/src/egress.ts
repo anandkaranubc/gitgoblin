@@ -23,6 +23,15 @@ export const REGISTRY_HOSTS: readonly string[] = [
   "github.com", "codeload.github.com", "objects.githubusercontent.com", ".githubusercontent.com",
 ];
 
+/** Where Playwright downloads its browsers from; allowed only for the opt-in browser step. */
+export const PLAYWRIGHT_HOSTS: readonly string[] = [
+  "cdn.playwright.dev",
+  "playwright.download.prss.microsoft.com",
+  "playwright.azureedge.net",
+  "playwright-akamai.azureedge.net",
+  "playwright-verizon.azureedge.net",
+];
+
 export function hostAllowed(host: string, allowed: readonly string[]): boolean {
   const h = host.toLowerCase().replace(/\.$/, "");
   if (net.isIP(h.replace(/^\[|\]$/g, ""))) return false; // registries are reached by name, never by address
@@ -46,6 +55,11 @@ export interface EgressOptions {
    * it on the namespace's 127.0.0.1.
    */
   socketPath?: string;
+  /**
+   * The operator's own HTTP proxy (http://[user:pass@]host:port), for networks that only reach the
+   * internet through one. Allowed tunnels are opened through it; refused ones never reach it.
+   */
+  upstream?: string;
 }
 
 /** The port the in-sandbox forwarder listens on; the namespace is fresh, so any port is free. */
@@ -121,17 +135,39 @@ export function startEgressProxy(allowed: readonly string[] = REGISTRY_HOSTS, op
       client.end("HTTP/1.1 403 Forbidden\r\ncontent-type: text/plain\r\n\r\ngitgoblin: this host is not a package registry\r\n");
       return;
     }
-    const upstream = net.connect(port, host, () => {
+    const established = (upstream: net.Socket, rest: Buffer = Buffer.alloc(0)) => {
       client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      if (rest.length) client.write(rest);
       if (head.length) upstream.write(head);
       upstream.pipe(client);
       client.pipe(upstream);
-    });
+    };
+    const fail = () => {
+      if (!client.destroyed) client.end("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+    };
+    const chain = options.upstream ? new URL(options.upstream) : undefined;
+    const upstream = chain
+      ? net.connect(Number(chain.port || 80), chain.hostname, () => {
+          const auth = chain.username ? `Proxy-Authorization: Basic ${Buffer.from(`${decodeURIComponent(chain.username)}:${decodeURIComponent(chain.password)}`).toString("base64")}\r\n` : "";
+          upstream.write(`CONNECT ${target} HTTP/1.1\r\nHost: ${target}\r\n${auth}\r\n`);
+          let buf = Buffer.alloc(0);
+          const onData = (chunk: Buffer) => {
+            buf = Buffer.concat([buf, chunk]);
+            const end = buf.indexOf("\r\n\r\n");
+            if (end === -1) {
+              if (buf.length > 16 * 1024) fail();
+              return;
+            }
+            upstream.removeListener("data", onData);
+            if (/^HTTP\/1\.[01] 200/.test(buf.subarray(0, end).toString("latin1"))) established(upstream, buf.subarray(end + 4));
+            else fail();
+          };
+          upstream.on("data", onData);
+        })
+      : net.connect(port, host, () => established(upstream));
     sockets.add(upstream);
     upstream.on("close", () => sockets.delete(upstream));
-    upstream.on("error", () => {
-      if (!client.destroyed) client.end("HTTP/1.1 502 Bad Gateway\r\n\r\n");
-    });
+    upstream.on("error", fail);
   });
   return new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -167,4 +203,16 @@ export function proxyEnv(url: string): Record<string, string> {
     NO_PROXY: "",
     no_proxy: "",
   };
+}
+
+/** The operator's HTTPS proxy from the environment, if any; NO_PROXY does not apply to registries. */
+export function upstreamProxyFrom(env: Record<string, string | undefined>): string | undefined {
+  const value = env["HTTPS_PROXY"] || env["https_proxy"] || env["HTTP_PROXY"] || env["http_proxy"];
+  if (!value) return undefined;
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" ? value : undefined;
+  } catch {
+    return undefined;
+  }
 }

@@ -49,7 +49,7 @@ reports a `cache-fallback` event rather than failing. Tokens are never stored.
 - `graphql(query, variables, { ttlMs })`: GraphQL, returns `data` (partial data with errors included), throws `GraphQLError` when nothing came back and `RateLimitError` when the GraphQL budget is exhausted; an errors-only answer is never kept in the cache. Needs a token.
 - `searchRepositories(q, { sort, order, perPage, page })` → `RepoFacts[]` plus total.
 - `getRepository(ref)` → `RepoFacts | undefined`.
-- `repoDetails(refs)`: one GraphQL request per 20 repositories returning contributing guide, code of conduct, templates, open starter issues (with samples), merged pull requests, commit count and last commit, releases. Needs a token.
+- `repoDetails(refs)`: one GraphQL request per 10 repositories (a batch GitHub times out on is split in half and asked again; repositories it still cannot compute are left out) returning contributing guide, code of conduct, templates, open starter issues (with samples), merged pull requests, commit count and last commit, releases. Needs a token.
 - `rateLimits()`: `{ core, search, graphql }` with `remaining`, `limit`, `resetAt`.
 
 Tokens come from `GITHUB_TOKEN`, then `GH_TOKEN`, then `gh auth token`

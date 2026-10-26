@@ -5,7 +5,7 @@ import type { AnalysisReport, ContributionOpportunity } from "@gitgoblin/intel";
 const AT = "2026-10-22T00:00:00Z";
 
 /** Writes the files the engine leaves in runs/<id>/ (see packages/engine/README.md). */
-export function writeRun(workdir: string, runId: string, overrides: { status?: string; reason?: string; title?: string; costUsd?: number; prepared?: boolean; install?: { exitCode: number | null; output: string; timedOut?: boolean }; workspaceBytes?: number } = {}): string {
+export function writeRun(workdir: string, runId: string, overrides: { status?: string; reason?: string; title?: string; costUsd?: number; prepared?: boolean; install?: { exitCode: number | null; output: string; timedOut?: boolean; refused?: string[]; network?: string }; workspaceBytes?: number } = {}): string {
   const dir = join(workdir, "runs", runId);
   mkdirSync(dir, { recursive: true });
   const status = overrides.status ?? "awaiting_approval";
@@ -118,10 +118,10 @@ function defaultOpportunities(): ContributionOpportunity[] {
 }
 
 /** The engine's record of the install step: an event in events.jsonl and the full output beside it. */
-export function writeInstall(dir: string, install: { exitCode: number | null; output: string; timedOut?: boolean }): void {
+export function writeInstall(dir: string, install: { exitCode: number | null; output: string; timedOut?: boolean; refused?: string[]; network?: string }): void {
   const events = [
     { ts: "2026-10-23T16:30:19.000Z", phase: "run", type: "start" },
-    { ts: "2026-10-23T16:30:20.000Z", phase: "install", type: "end", exitCode: install.exitCode, durationMs: 68, timedOut: install.timedOut ?? false, outputTail: install.output.slice(-2000) },
+    { ts: "2026-10-23T16:30:20.000Z", phase: "install", type: "end", exitCode: install.exitCode, durationMs: 68, timedOut: install.timedOut ?? false, outputTail: install.output.slice(-2000), ...(install.network ? { network: install.network } : {}), ...(install.refused ? { refused: install.refused } : {}) },
   ];
   writeFileSync(join(dir, "events.jsonl"), events.map((e) => JSON.stringify(e)).join("\n") + "\n");
   writeFileSync(join(dir, "install-output.txt"), install.output);

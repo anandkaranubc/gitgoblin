@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { assessIssue, reconcile } from "../src/analyzers/issues.ts";
 import type { IssueSample } from "../src/github/types.ts";
 import type { LlmClient } from "../src/llm/client.ts";
-import { type IssueReview, BATCH_SIZE, renderBatch, renderIssue, reviewIssues, quoteOccurs } from "../src/llm/issue-review.ts";
+import { type IssueReview, CONCURRENCY, renderBatch, renderIssue, reviewIssues, quoteOccurs } from "../src/llm/issue-review.ts";
 
 const now = new Date("2026-10-22T00:00:00Z");
 const REPO = "https://github.com/o/r";
@@ -59,16 +59,18 @@ describe("reconcile", () => {
 });
 
 describe("reviewIssues", () => {
-  it("batches, ignores reviews for unknown numbers, and reports failures without throwing", async () => {
+  it("reviews one issue per call, ignores reviews for other numbers, and reports failures once without throwing", async () => {
     const issues = [issue({ number: 1 }), issue({ number: 2 })];
     const llm = fakeLlm([review({ number: 1 }), review({ number: 99 })]);
     const result = await reviewIssues({ llm, profile, issues, now });
     expect([...result.keys()]).toEqual([1]);
-    expect(llm.usage.calls).toBe(1);
+    expect(llm.usage.calls).toBe(2);
     const errors: unknown[] = [];
-    const failed = await reviewIssues({ llm: fakeLlm([], true), profile, issues, now, onError: (e) => errors.push(e) });
+    const infos: unknown[] = [];
+    const failed = await reviewIssues({ llm: fakeLlm([], true), profile, issues, now, onError: (e, info) => { errors.push(e); infos.push(info); } });
     expect(failed.size).toBe(0);
     expect(errors).toHaveLength(1);
+    expect(infos).toEqual([{ stopped: false, failed: 2, total: 2 }]);
   });
 
   it("renders issues with author, user and maintainer roles for comments", () => {
@@ -99,34 +101,80 @@ describe("model input and output hygiene", () => {
   });
 
   it("accepts a quote only when it occurs in the issue or its comments", () => {
-    expect(quoteOccurs("PR welcome", issue)).toBe(true);
-    expect(quoteOccurs("looks   REAL", issue)).toBe(true);
+    expect(quoteOccurs("confirmed,   PR WELCOME", issue)).toBe(true);
     expect(quoteOccurs("maintainers agreed to merge", issue)).toBe(false);
     expect(quoteOccurs("", issue)).toBe(false);
+  });
+
+  it("needs a phrase, not a word or two that occur in nearly every issue", () => {
+    expect(quoteOccurs("PR welcome", issue)).toBe(false);
+    expect(quoteOccurs("looks real", issue)).toBe(false);
+    expect(quoteOccurs("Crash", issue)).toBe(false);
+    // Scripts written without spaces: a short run of characters is a phrase.
+    const cjk = { ...issue, body: "导入模块时程序崩溃了，没有任何错误信息" } as IssueSample;
+    expect(quoteOccurs("导入模块时程序崩溃了", cjk)).toBe(true);
+    expect(quoteOccurs("崩溃", cjk)).toBe(false);
   });
 });
 
 
 describe("review resilience and what the model is shown", () => {
-  it("keeps reviewing after one batch fails, but stops when credentials are missing", async () => {
-    const issues = Array.from({ length: BATCH_SIZE + 1 }, (_, i) => issue({ number: i + 1 }));
+  it("keeps reviewing after one call fails, but stops on missing credentials, server errors and timeouts", async () => {
+    const issues = Array.from({ length: 10 }, (_, i) => issue({ number: i + 1 }));
     let call = 0;
     const flaky: LlmClient = {
       model: "fake", usage: { calls: 0, inputTokens: 0, outputTokens: 0 },
-      async parse() {
+      async parse(_system, user) {
         call++;
         if (call === 1) throw new Error("model output did not match the schema");
-        return { reviews: [review({ number: BATCH_SIZE + 1 })] } as never;
+        return { reviews: [review({ number: Number(/### Issue #(\d+)/.exec(user)![1]) })] } as never;
       },
     };
-    const errors: unknown[] = [];
-    const results = await reviewIssues({ llm: flaky, profile, issues, now, onError: (e) => errors.push(e) });
-    expect(errors).toHaveLength(1);
-    expect([...results.keys()]).toEqual([BATCH_SIZE + 1]);
-    let calls = 0;
-    const noKey: LlmClient = { model: "fake", usage: { calls: 0, inputTokens: 0, outputTokens: 0 }, async parse() { calls++; throw Object.assign(new Error("Unauthorized"), { status: 401 }); } };
-    await reviewIssues({ llm: noKey, profile, issues, now });
-    expect(calls).toBe(1);
+    const infos: unknown[] = [];
+    const results = await reviewIssues({ llm: flaky, profile, issues, now, onError: (_e, info) => infos.push(info) });
+    expect(results.size).toBe(9);
+    expect(infos).toEqual([{ stopped: false, failed: 1, total: 10 }]);
+    for (const fatal of [Object.assign(new Error("Unauthorized"), { status: 401 }), Object.assign(new Error("Overloaded"), { status: 529 }), Object.assign(new Error("Internal"), { status: 500 }), Object.assign(new Error("Request timed out."), { name: "APIConnectionTimeoutError" })]) {
+      let calls = 0;
+      const broken: LlmClient = { model: "fake", usage: { calls: 0, inputTokens: 0, outputTokens: 0 }, async parse() { calls++; throw fatal; } };
+      const seen: { stopped: boolean; failed: number; total: number }[] = [];
+      await reviewIssues({ llm: broken, profile, issues, now, onError: (_e, info) => seen.push(info) });
+      // Calls already in flight finish; nothing new starts.
+      expect(calls).toBeLessThanOrEqual(CONCURRENCY);
+      expect(seen).toEqual([{ stopped: true, failed: 10, total: 10 }]);
+    }
+  });
+
+  it("drops a review whose quote is not in the issue, fresh or cached, and re-checks cached stances", async () => {
+    const made = review({ quote: "the maintainers already agreed to this" });
+    expect((await reviewIssues({ llm: fakeLlm([made]), profile, issues: [issue()], now })).size).toBe(0);
+    const store = new Map<string, unknown>();
+    const cache = { get: async (k: string) => store.get(k), set: async (k: string, v: unknown) => { store.set(k, v); } } as never;
+    await reviewIssues({ llm: fakeLlm([review({ maintainerStance: "endorsed" })]), profile, issues: [issue()], now, cache });
+    expect(store.size).toBe(1);
+    // A cache entry claiming a stance, or quoting text the issue does not have, gets the same checks as a fresh answer.
+    const [key] = store.keys();
+    store.set(key!, review({ maintainerStance: "endorsed" }));
+    const fromCache = await reviewIssues({ llm: fakeLlm([], true), profile, issues: [issue()], now, cache });
+    expect(fromCache.get(7)?.maintainerStance).toBe("unknown");
+    store.set(key!, made);
+    expect((await reviewIssues({ llm: fakeLlm([], true), profile, issues: [issue()], now, cache })).size).toBe(0);
+  });
+
+  it("keeps cached reviews apart for the same owner and name on different forges", async () => {
+    const store = new Map<string, unknown>();
+    const cache = { get: async (k: string) => store.get(k), set: async (k: string, v: unknown) => { store.set(k, v); } } as never;
+    await reviewIssues({ llm: fakeLlm([review()]), profile, issues: [issue()], now, cache });
+    const llm = fakeLlm([review()]);
+    await reviewIssues({ llm, profile: { ...profile, repo: { host: "codeberg.org", owner: "o", name: "r" } }, issues: [issue()], now, cache });
+    expect(llm.usage.calls).toBe(1);
+    expect(store.size).toBe(2);
+  });
+
+  it("shows at most eight labels per issue", () => {
+    const text = renderIssue(issue({ labels: Array.from({ length: 30 }, (_, i) => `label-${i}`) }), now);
+    expect(text).toContain("label-7 and 22 more)");
+    expect(text).not.toContain("label-8");
   });
 
   it("caps model text after parsing instead of rejecting it", async () => {

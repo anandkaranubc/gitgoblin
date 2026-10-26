@@ -1,17 +1,17 @@
 # Getting started
 
-This takes you from a fresh clone to a ranked list of repositories, then to a report on one repository with concrete work to do. It takes about ten minutes. Step 8 turns one item of that report into a pull request you approve.
+This takes you from installing gitgoblin to a ranked list of repositories, then to a report on one repository with concrete work to do. It takes about ten minutes. Step 8 turns one item of that report into a pull request you approve.
 
 ## 1. Install
 
-You need [Node.js](https://nodejs.org) 24 or newer and git. There is no published package yet, so run it from a clone:
+You need [Node.js](https://nodejs.org) 24 or newer and git. Install the command from npm:
 
 ```sh
-git clone https://github.com/anandkaranubc/gitgoblin.git
-cd gitgoblin
-npm install
-npx gitgoblin --help
+npm install -g gitgoblin
+gitgoblin --help
 ```
+
+Or run it without installing: `npx gitgoblin --help`. The examples below use `npx gitgoblin`, which works either way. To work on gitgoblin itself, run it from a clone instead; [CONTRIBUTING.md](../CONTRIBUTING.md) shows how.
 
 ## 2. Pick a goal
 
@@ -149,7 +149,14 @@ Useful flags: `--json --out report.json` saves the full report as data (what ste
 
 ## 8. Prepare a contribution
 
-This is the experimental part. It runs an AI agent against a local clone, costs money per run, and needs an Anthropic API key or Claude Code login, a git identity, and the [GitHub CLI](https://cli.github.com) logged in for publishing. Read [etiquette.md](etiquette.md) first: you are about to prepare a change for someone else's project.
+This is the experimental part. It runs an AI agent against a local clone, and every run costs money, capped by `--max-cost` (default: the engine's own limit, $10). It needs:
+
+- the Claude Agent SDK, installed next to the CLI: `npm install -g gitgoblin @anthropic-ai/claude-agent-sdk`
+- an Anthropic API key or a Claude Code login
+- a git identity, because the engine commits the change
+- the [GitHub CLI](https://cli.github.com) logged in (`gh auth login`), for publishing
+
+Read [etiquette.md](etiquette.md) first: you are about to prepare a change for someone else's project.
 
 ```sh
 npx gitgoblin contribute jd/tenacity --report report.json
@@ -178,14 +185,14 @@ Then it asks three questions, and there is no flag to skip any of them:
 
 1. **Run the agent?** It names the repository and the spending cap (`--max-cost`, default $10, the engine's own limit). Saying no costs nothing. A run that hits the cap stops with nothing to publish, so set it to what you are willing to spend on a finished change rather than lower.
 2. **Implement this plan?** After investigating, the agent proposes a plan: goal, steps, files, tests. You see it in plain words before any code changes, along with a warning if the repository's install failed or its checks were already failing, since a change made then cannot be verified.
-3. **Open a draft pull request?** Only after the change passed the project's own checks against a baseline and an independent review. You see the run's report, the proposed pull request title and description, and the path of the diff. Read the diff. If you say no, nothing is pushed or posted anywhere; the change stays in the run directory. (The repository's code and the issue text have already been sent to the model provider you configured, from your machine, during the run.)
+3. **Open a draft pull request?** Only after the change passed the project's own checks against a baseline and an independent review. You see the run's report, the proposed pull request title and description, and the path of the diff. Read the diff. Publishing takes the word `publish`, not `y`, and keys pressed while the agent worked are discarded before each question, so nothing typed ahead can answer it. If you answer anything else, nothing is pushed or posted anywhere; the change stays in the run directory. (The repository's code and the issue text have already been sent to the model provider you configured, from your machine, during the run.)
 
 Every run lives under `~/.gitgoblin/runs/<id>/` (or `$GITGOBLIN_WORKDIR`). To come back later:
 
 ```sh
 npx gitgoblin runs                       # every run, newest first, with its status
 npx gitgoblin show <runId>               # the report; --diff for the patch, --pr for the PR text, --install for the install log
-npx gitgoblin publish <runId>            # asks, then pushes with your gh login and opens a draft PR
+npx gitgoblin publish <runId>            # asks you to type publish, then pushes with your gh login and opens a draft PR
 npx gitgoblin clean --finished           # frees the clones finished runs keep (reports and diffs stay)
 ```
 

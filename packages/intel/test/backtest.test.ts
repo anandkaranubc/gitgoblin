@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessIssue, fetchIssueSamples, issueAsOf } from "../src/backtest.ts";
+import { assessIssue, fetchIssueSamples, issueAsOf, issueScore } from "../src/backtest.ts";
 import type { GitHubApi } from "../src/github/client.ts";
 
 const node = (number: number, closer: unknown, stateReason = "COMPLETED") => ({
@@ -31,5 +31,27 @@ describe("outcome backtest helpers", () => {
     expect(before).toMatchObject({ closedAt: undefined, locked: false, linkedPrs: [] });
     expect(before.lastComments.map((c) => c.body)).toEqual(["Confirmed, PR welcome."]);
     expect(assessIssue(before, new Date("2026-02-01T00:00:00Z"), true, "https://github.com/o/r").skipReason).toBeUndefined();
+  });
+
+  it("drops later activity from the comment count and the last update, so ranking inputs are as of then", async () => {
+    const api = { graphql: async () => ({ repository: { issues: { pageInfo: { endCursor: null, hasNextPage: false }, nodes: [node(1, null)] } } }) } as unknown as GitHubApi;
+    const [issue] = (await fetchIssueSamples(api, "o", "r")).issues;
+    const before = issueAsOf(issue!, new Date("2026-02-01T00:00:00Z"));
+    // Two comments today; the fix announcement came later. The maintainer's reply is the last thing seen before then.
+    expect(before).toMatchObject({ commentCount: 1, updatedAt: "2026-01-02T00:00:00Z" });
+    // Untouched since the cutoff: kept as is.
+    expect(issueAsOf(issue!, new Date("2026-04-01T00:00:00Z"))).toMatchObject({ commentCount: 2, updatedAt: "2026-03-01T00:00:00Z" });
+  });
+
+  it("scores accepted issues the way a report ranks them: stale years-old issues fall below fresh ones", async () => {
+    const api = { graphql: async () => ({ repository: { issues: { pageInfo: { endCursor: null, hasNextPage: false }, nodes: [node(1, null)] } } }) } as unknown as GitHubApi;
+    const [issue] = (await fetchIssueSamples(api, "o", "r")).issues;
+    const fresh = issueAsOf(issue!, new Date("2026-02-01T00:00:00Z"));
+    const at = new Date("2026-02-01T00:00:00Z");
+    const stale = { ...fresh, createdAt: "2020-01-01T00:00:00Z", updatedAt: "2021-01-01T00:00:00Z" };
+    const score = issueScore(fresh, assessIssue(fresh, at, true, "https://github.com/o/r"), at);
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThanOrEqual(1);
+    expect(issueScore(stale, assessIssue(stale, at, true, "https://github.com/o/r"), at)).toBeLessThan(score);
   });
 });

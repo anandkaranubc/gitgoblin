@@ -20,6 +20,10 @@ export interface PythonManifest {
   /** Top-level package directories, e.g. ["src/foo"] or ["foo"]. */
   packageDirs: string[];
   hasPyTyped: boolean;
+  /** Names of `[project.optional-dependencies]` extras, e.g. ["doc", "test"]. */
+  extras: string[];
+  /** Names of PEP 735 `[dependency-groups]`, e.g. ["dev"]. */
+  dependencyGroups: string[];
 }
 
 export interface NodeManifest {
@@ -34,6 +38,8 @@ export interface NodeManifest {
   packageManager: "npm" | "pnpm" | "yarn" | "bun";
   tooling: string[];
   workspaces: boolean;
+  /** Workspace packages with their own test script, when the root has workspaces. */
+  workspaceTests: { dir: string; name: string | undefined; script: string }[];
 }
 
 export interface GoManifest {

@@ -37,6 +37,7 @@ Each run writes `.gitgoblin/runs/<runId>/`, which other tools may read:
 | `events.jsonl` | one JSON event per line: phases, decisions, isolation, toolchain, install |
 | `install-output.txt` | the install command's output, when it ran |
 | `baseline.json`, `verification-<n>.json` | the repository's checks before and after |
+| `check-baseline-<check>.txt`, `check-verify-<n>-<check>.txt` | each check's whole output (the JSON files keep its start and end) |
 | `investigation.json`, `plan.json`, `implementation-<n>.json`, `review-<n>.json` | each phase's structured output |
 | `diff-<n>.patch` | the change as reviewed in round `n` |
 | `pr.md`, `pr-title.txt`, `diff.patch`, `delivery.json` | the prepared pull request, when the run reached `awaiting_approval` |
@@ -47,15 +48,18 @@ and `gh auth login` for publishing. The agent's bash runs in the Agent SDK sandb
 pass `--no-sandbox` (together with `GITGOBLIN_UNSAFE_NO_SANDBOX=1`) only on platforms without one. The repository's own install and check commands
 run on your machine with a credential-free environment and, by default, inside an OS sandbox
 (`sandbox-exec` on macOS, `bwrap` on Linux when installed): writes limited to the checkout and tool
-caches, credential files hidden, network only during install. Python projects get a virtualenv
-under the run directory (so `pip install -e .` never touches your interpreter) and Ruby projects a
-per-run `BUNDLE_PATH`. `--check-isolation sandbox` makes the run fail when no OS sandbox is
-available; `strict` additionally hides your home directory from those commands except toolchain
-and cache directories (nvm, pyenv, cargo, npm and the like) and lets the install reach only
-package registries through a proxy the engine runs (`RunOptions.installHosts` adds a private
-registry), which is the setting for repositories you do not trust; `none` turns the sandbox off, for example when a tool needs to write outside
-those places. The install command still runs the repository's own scripts: for
-repositories you do not trust, run the engine itself inside a container.
+caches, credential files hidden, other programs' sockets (Docker's daemon, SSH and other agents)
+out of reach, checks offline, and the install able to reach package registries
+only, through a proxy the engine runs (`--install-network open` lets it reach any host;
+`RunOptions.installHosts` adds a private registry; the proxy goes through your `HTTPS_PROXY` when
+one is set). Python projects get a virtualenv under the run directory (so `pip install -e .` never
+touches your interpreter) and Ruby projects a per-run `BUNDLE_PATH`. `--check-isolation sandbox`
+makes the run fail when no OS sandbox is available; `strict` additionally hides your home
+directory from those commands except toolchain and cache directories (nvm, pyenv, cargo, npm and
+the like), which is the setting for repositories you do not trust; `none` turns the sandbox off,
+for example when a tool needs to write outside those places. The install command still runs the
+repository's own scripts: for repositories you do not trust, run the engine itself inside a
+container.
 
 ## Library
 

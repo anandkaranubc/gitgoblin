@@ -1,44 +1,91 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { describe, expect, it } from "vitest";
-import { IsolationTimeoutError, runInWorker } from "../src/isolate.ts";
+import { fileURLToPath } from "node:url";
+import { afterAll, describe, expect, it } from "vitest";
+import { IsolationTimeoutError, runInChild, Semaphore } from "../src/isolate.ts";
 
-const fixture = new URL("./fixtures/worker-fixture.ts", import.meta.url);
+const fixture = fileURLToPath(new URL("./fixtures/child-fixture.ts", import.meta.url));
+const scratch = mkdtempSync(join(tmpdir(), "gitgoblin-isolate-"));
+afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
-describe("runInWorker", () => {
-  it("returns the worker's result and forwards its progress", async () => {
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+describe("runInChild", () => {
+  it("returns the child's result and forwards its progress", async () => {
     const logs: string[] = [];
-    const value = await runInWorker<{ ok: boolean }>(fixture, { mode: "echo" }, { timeoutMs: 10_000, onLog: (m) => logs.push(m) });
+    const value = await runInChild<{ ok: boolean }>(fixture, { mode: "echo" }, { timeoutMs: 20_000, onLog: (m) => logs.push(m) });
     expect(value).toEqual({ ok: true });
     expect(logs).toEqual(["working"]);
   });
 
-  it("keeps the worker's stdout off the server's stdout", async () => {
+  it("keeps the child's output off the server's stdout", async () => {
     const sink = new PassThrough();
     let captured = "";
     sink.on("data", (chunk: Buffer) => {
       captured += chunk.toString();
     });
-    await runInWorker(fixture, { mode: "print" }, { timeoutMs: 10_000, stdoutSink: sink });
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(captured).toBe("printed by a library\n");
+    await runInChild(fixture, { mode: "print" }, { timeoutMs: 20_000, outputSink: sink });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(captured).toContain("printed by a library");
   });
 
-  it("reports the worker's error", async () => {
-    await expect(runInWorker(fixture, { mode: "throw" }, { timeoutMs: 10_000 })).rejects.toThrow("analysis failed: boom");
+  it("reports the child's error", async () => {
+    await expect(runInChild(fixture, { mode: "throw" }, { timeoutMs: 20_000 })).rejects.toThrow("analysis failed: boom");
   });
 
-  it("stops a worker stuck in synchronous code when the time runs out", async () => {
+  it("runs the child with exactly the environment it is given", async () => {
+    const value = await runInChild<{ home: string; token: string | null }>(fixture, { mode: "env" }, { timeoutMs: 20_000, env: { PATH: process.env.PATH, HOME: "/nowhere", GITHUB_TOKEN: "t0ken" } });
+    expect(value).toMatchObject({ home: "/nowhere", token: "t0ken" });
+  });
+
+  it("stops a child stuck in synchronous code when the time runs out", async () => {
     const started = Date.now();
-    const run = runInWorker(fixture, { mode: "hang" }, { timeoutMs: 300, label: "Analysis of acme/widget" });
+    const run = runInChild(fixture, { mode: "hang" }, { timeoutMs: 1_500, label: "Analysis of acme/widget" });
     await expect(run).rejects.toBeInstanceOf(IsolationTimeoutError);
-    await expect(run).rejects.toThrow(/Analysis of acme\/widget stopped after 300 ms/);
-    expect(Date.now() - started).toBeLessThan(5_000);
+    await expect(run).rejects.toThrow(/Analysis of acme\/widget stopped after 1500 ms/);
+    expect(Date.now() - started).toBeLessThan(10_000);
   });
 
-  it("stops a stuck worker when the client cancels", async () => {
+  it.skipIf(process.platform === "win32")("kills what the child started, not just the child", async () => {
+    const pidFile = join(scratch, "grandchild.pid");
+    const run = runInChild(fixture, { mode: "grandchild", pidFile }, { timeoutMs: 2_500 });
+    await expect(run).rejects.toBeInstanceOf(IsolationTimeoutError);
+    expect(existsSync(pidFile)).toBe(true);
+    const pid = Number(readFileSync(pidFile, "utf8"));
+    for (let i = 0; i < 40 && alive(pid); i++) await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(alive(pid)).toBe(false);
+  });
+
+  it("stops a stuck child when the client cancels", async () => {
     const controller = new AbortController();
-    const run = runInWorker(fixture, { mode: "hang" }, { timeoutMs: 60_000, signal: controller.signal });
-    setTimeout(() => controller.abort(), 200);
+    const run = runInChild(fixture, { mode: "hang" }, { timeoutMs: 60_000, signal: controller.signal });
+    setTimeout(() => controller.abort(), 1_000);
     await expect(run).rejects.toThrow(/cancelled by the client/);
+  });
+});
+
+describe("Semaphore", () => {
+  it("runs at most `limit` tasks at once", async () => {
+    const gate = new Semaphore(2);
+    let active = 0;
+    let peak = 0;
+    const task = () =>
+      gate.run(async () => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        active--;
+      });
+    await Promise.all([task(), task(), task(), task(), task()]);
+    expect(peak).toBe(2);
   });
 });

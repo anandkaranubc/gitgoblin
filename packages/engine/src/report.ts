@@ -23,6 +23,10 @@ export interface ReportInput {
   prTitle?: string;
   /** How the repository's own commands were isolated on this machine: sandbox-exec, bwrap or none. */
   checkIsolation?: string;
+  /** Tracked files the install rewrote and the engine put back as committed. */
+  installRestored?: string[];
+  /** Things about the environment the person should know, such as missing test browsers. */
+  setupNotes?: string[];
   /** The last implementation's notes; their environment notes appear here and never in the pull request. */
   notes?: ImplementationNotes;
 }
@@ -39,6 +43,8 @@ export function renderReport(input: ReportInput): string {
     result.branch ? `- Branch: ${result.branch}` : "",
     result.workspace ? `- Workspace: ${result.workspace}` : "",
     input.checkIsolation ? `- Repository commands ran ${input.checkIsolation === "none" ? "without an OS sandbox" : `under ${input.checkIsolation}`}` : "",
+    input.installRestored?.length ? `- The install rewrote ${input.installRestored.join(", ")}; restored, the change is measured against the committed files` : "",
+    ...(input.setupNotes ?? []).map((note) => `- Note: ${note}`),
     "",
   ];
   if (result.questions.length) {
@@ -59,7 +65,8 @@ export function renderReport(input: ReportInput): string {
   }
   if (input.verification) {
     lines.push("## Verification", describeChecks(input.verification.checks));
-    lines.push(input.verification.regressions.length ? `Regressions: ${input.verification.regressions.join(", ")}` : "No regressions versus baseline.", "");
+    lines.push(input.verification.regressions.length ? `Regressions: ${input.verification.regressions.join(", ")}` : "No regressions versus baseline.");
+    lines.push("Each check's whole output is in the run directory: check-baseline-<check>.txt and check-verify-<n>-<check>.txt.", "");
   }
   if (input.review) {
     lines.push(`## Review: ${input.review.verdict}`);

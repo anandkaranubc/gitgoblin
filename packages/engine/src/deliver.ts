@@ -1,6 +1,8 @@
 import { subjectFor, typeForKind } from "./naming.ts";
 import { execFile } from "./exec.ts";
+import { sanitizeText } from "./intake.ts";
 import type { ChangePlan, ImplementationNotes, Investigation, PreparedDelivery, Review, Task, Verification } from "./types.ts";
+import { describeCounts } from "./verify.ts";
 import { commitAll, git } from "./workspace.ts";
 
 export interface DeliveryInput {
@@ -69,11 +71,14 @@ function restates(text: string, seen: Set<string>[]): boolean {
   });
 }
 
+/** Published text: no control, zero-width or bidi characters, so what a person read is what GitHub shows. */
+const clean = (text: string) => sanitizeText(text);
+
 export function commitMessage(input: DeliveryInput): string {
   const own = input.task.issue?.number;
   const subject = neutralizeForGitHub(subjectFor(input.task, input.plan.goal, input.plan.commitSubject), own);
   const body = [neutralizeForGitHub(input.notes.summary.trim(), own), input.task.issue ? `Refs #${input.task.issue.number}` : ""].filter(Boolean).join("\n\n");
-  return `${subject}\n\n${body}\n`;
+  return clean(`${subject}\n\n${body}\n`);
 }
 
 function checklistFrom(template: string | undefined): string[] {
@@ -86,7 +91,7 @@ function checklistFrom(template: string | undefined): string[] {
 }
 
 export function pullRequestTitle(input: DeliveryInput): string {
-  return neutralizeForGitHub(subjectFor(input.task, input.plan.goal, input.plan.commitSubject), input.task.issue?.number);
+  return clean(neutralizeForGitHub(subjectFor(input.task, input.plan.goal, input.plan.commitSubject), input.task.issue?.number));
 }
 
 export function pullRequestBody(input: DeliveryInput): string {
@@ -102,7 +107,11 @@ export function pullRequestBody(input: DeliveryInput): string {
     task.issue ? `${closes} #${task.issue.number}` : "",
   ].filter(Boolean);
   const preexisting = new Set(verification.preexisting ?? []);
-  const checks = verification.checks.map((c) => `| \`${c.command}\` | ${c.status}${preexisting.has(c.name) ? " (also fails on the base commit)" : ""} |`);
+  const checks = verification.checks.map((c) => {
+    const counts = describeCounts(verification, c.name);
+    const note = preexisting.has(c.name) ? (counts ? ` (also fails on the base commit: ${counts})` : " (also fails on the base commit)") : "";
+    return `| \`${c.command}\` | ${c.status}${note} |`;
+  });
   // Deviations from the plan are the engine's bookkeeping, not something a maintainer needs; findings
   // about files outside the change (a stray directory in the workspace) are not about the change.
   const changed = new Set(verification.diff.changedFiles);
@@ -122,7 +131,7 @@ export function pullRequestBody(input: DeliveryInput): string {
   ].filter(Boolean);
   const checklist = checklistFrom(input.template);
 
-  return [
+  return clean([
     "## Summary",
     summaryLines.join("\n\n"),
     "",
@@ -140,7 +149,7 @@ export function pullRequestBody(input: DeliveryInput): string {
     "---",
     "Prepared with [gitgoblin](https://github.com/anandkaranubc/gitgoblin) ([how it works and what it promises](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md)); a human reviewed this change and approved opening the pull request.",
     "",
-  ].join("\n");
+  ].join("\n"));
 }
 
 /** Commits the workspace and writes the pull request text. Nothing leaves the machine. */

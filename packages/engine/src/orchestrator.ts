@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
 import { preparePullRequest, publishPullRequest, type PublishResult } from "./deliver.ts";
-import { forwardedCommand, REGISTRY_HOSTS, startEgressProxy, proxyEnv, type EgressProxy } from "./egress.ts";
+import { forwardedCommand, PLAYWRIGHT_HOSTS, REGISTRY_HOSTS, startEgressProxy, proxyEnv, upstreamProxyFrom, type EgressProxy } from "./egress.ts";
 import { execShell, tail } from "./exec.ts";
 import { commandEnv, isInside, isSafeCommand, scrubEnv } from "./guard.ts";
 import { hostSandboxFor, OFFLINE_ENV, specFor, type CheckIsolation, type HostIsolation } from "./hostbox.ts";
@@ -109,7 +109,20 @@ export interface RunOptions {
   /** Shallow clone depth for very large repositories; omitted means full history. */
   cloneDepth?: number;
   /**
-   * Hosts the install may reach under strict isolation, besides the public package registries
+   * What the repository's install may reach when an OS sandbox is in use: "registries" (default)
+   * sends it through the engine's allowlisting proxy, "open" lets it reach any host. Without an OS
+   * sandbox the install's network cannot be limited.
+   */
+  installNetwork?: "registries" | "open";
+  /**
+   * After the install, download the browsers a Playwright-based test suite needs
+   * (`npx --no-install playwright install`, using the project's own Playwright), allowing
+   * Playwright's download hosts for that step only. Browsers land in the shared cache, so this costs
+   * time once per Playwright version. Off by default; the run says when the tests need it.
+   */
+  installBrowsers?: boolean;
+  /**
+   * Hosts the install may reach, besides the public package registries
    * (REGISTRY_HOSTS), for example a private registry. Entries starting with "." match subdomains.
    */
   installHosts?: string[];
@@ -234,6 +247,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   const started = Date.now();
   const phases: PhaseSummary[] = [];
   let checkIsolation: string | undefined;
+  let installRestored: string[] = [];
+  const setupNotes: string[] = [];
   let lastNotes: ImplementationNotes | undefined;
   let costUsd = 0;
   let workspace: Workspace | undefined;
@@ -305,9 +320,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       reporter.warn("repository commands run on this machine without an OS sandbox (none available or disabled); use a container for repositories you do not trust");
     } else {
       reporter.info(
-        strict
-          ? `repository commands run under ${hostBox.kind} (strict): home directory hidden except toolchains and caches, credential paths hidden, install limited to package registries`
-          : `repository commands run under ${hostBox.kind}: writes limited to the workspace and tool caches, credential paths hidden, network only during install`,
+        `repository commands run under ${hostBox.kind}${strict ? " (strict)" : ""}: writes limited to the workspace and tool caches, ${strict ? "home directory hidden except toolchains and caches, " : ""}credential paths hidden, ${(options.installNetwork ?? "registries") === "registries" ? "install limited to package registries" : "install network open"}, checks offline`,
       );
     }
     // A per-run prefix for what the toolchain installs, so `pip install -e .` lands in a virtualenv
@@ -323,6 +336,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     // Checks run with the network cut when sandboxed; say so to the package managers so they fail fast.
     const checkEnv = hostBox.kind === "none" ? hostEnv : { ...hostEnv, ...OFFLINE_ENV };
     const checkOptions = { cwd: workspace.path, env: checkEnv, ...timeout, ...wrapFor(false) };
+    // Each check's whole output goes to a file in the run directory; the artifacts keep an excerpt.
+    const logChecks = (stage: string) => ({ ...checkOptions, onOutput: (check: Check, output: string) => journal.text(`check-${stage}-${check.name}.txt`, output) });
     let installFailure: PlanContext["install"];
     if (task.commands.install && !options.skipInstall) {
       reporter.phase("install", task.commands.install);
@@ -331,20 +346,23 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       // network namespace, which cannot reach a proxy on the host's loopback, so there the install's
       // network stays open and the run says so.
       let egress: EgressProxy | undefined;
-      const hosts = [...REGISTRY_HOSTS, ...(options.installHosts ?? [])];
+      const hosts = [...REGISTRY_HOSTS, ...(options.installHosts ?? []), ...(options.installBrowsers ? PLAYWRIGHT_HOSTS : [])];
       // sandbox-exec: the proxy on the host's 127.0.0.1, which the sandbox allows. bubblewrap: the
       // install has its own network namespace, so the proxy listens on a Unix socket in a folder bound
       // into the sandbox and a forwarder inside offers it on the namespace's 127.0.0.1.
       const egressDir = path.join(journal.dir, "egress");
+      const socketPath = path.join(egressDir, "proxy.sock");
       let installCommand = task.commands.install;
       let installEnv: Record<string, string> = hostEnv;
-      if (strict && hostBox.kind === "sandbox-exec") {
-        egress = await startEgressProxy(hosts);
+      const limitInstall = (options.installNetwork ?? "registries") === "registries";
+      const upstream = upstreamProxyFrom(hostEnv);
+      const egressOptions = upstream ? { upstream } : {};
+      if (limitInstall && hostBox.kind === "sandbox-exec") {
+        egress = await startEgressProxy(hosts, egressOptions);
         installEnv = { ...hostEnv, ...proxyEnv(egress.url) };
-      } else if (strict && hostBox.kind === "bwrap") {
+      } else if (limitInstall && hostBox.kind === "bwrap") {
         mkdirSync(egressDir, { recursive: true });
-        const socketPath = path.join(egressDir, "proxy.sock");
-        egress = await startEgressProxy(hosts, { socketPath });
+        egress = await startEgressProxy(hosts, { ...egressOptions, socketPath });
         const forwarded = forwardedCommand(task.commands.install, socketPath);
         installCommand = forwarded.command;
         installEnv = { ...hostEnv, ...forwarded.env };
@@ -355,18 +373,43 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
         ? { cwd: workspace.path, env: installEnv, ...timeout, ...wrapFor(false, hostBox.kind === "bwrap" ? [egressDir] : []) }
         : { cwd: workspace.path, env: installEnv, ...timeout, ...wrapFor(true) };
       let install: Awaited<ReturnType<typeof execShell>>;
+      let browsers: Awaited<ReturnType<typeof execShell>> | undefined;
       let denied: string[] = [];
       try {
         install = await execShell(installCommand, installOptions);
+        // Playwright's browsers, when asked for and the project installed Playwright: the project's own
+        // version (--no-install never fetches Playwright itself), through the same proxy.
+        if (options.installBrowsers && install.exitCode === 0 && existsSync(path.join(workspace.path, "node_modules", "playwright-core", "package.json"))) {
+          reporter.phase("install", "Playwright browsers");
+          const browserCommand = "npx --no-install playwright install";
+          if (egress && hostBox.kind === "bwrap") {
+            const forwarded = forwardedCommand(browserCommand, socketPath);
+            browsers = await execShell(forwarded.command, { ...installOptions, env: { ...hostEnv, ...forwarded.env } });
+          } else {
+            browsers = await execShell(browserCommand, installOptions);
+          }
+          journal.event("install", "browsers", { exitCode: browsers.exitCode, durationMs: browsers.durationMs, timedOut: browsers.timedOut });
+          if (browsers.exitCode !== 0) reporter.warn(`installing Playwright's browsers failed (exit ${browsers.exitCode}); see install-output.txt`);
+        }
       } finally {
         if (egress) {
           denied = egress.denied();
           await egress.close();
         }
       }
-      if (egress) checkIsolation = `${hostBox.kind} (strict; install limited to package registries${denied.length ? `, refused ${denied.length}: ${denied.slice(0, 5).join(", ")}` : ""})`;
-      journal.text("install-output.txt", denied.length ? `${install.output}\n[gitgoblin] the install tried to reach hosts that are not package registries, refused: ${denied.join(", ")}\n` : install.output);
-      journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs, timedOut: install.timedOut, network: installNetwork, refused: denied, outputTail: tail(install.output, 2000) });
+      if (egress) checkIsolation = `${hostBox.kind} (${strict ? "strict; " : ""}install limited to package registries${denied.length ? `, refused ${denied.length}: ${denied.slice(0, 5).join(", ")}` : ""})`;
+      else if (hostBox.kind !== "none") checkIsolation = `${hostBox.kind} (${strict ? "strict; " : ""}install network open)`;
+      const installLog = browsers ? `${install.output}\n[gitgoblin] npx --no-install playwright install\n${browsers.output}` : install.output;
+      journal.text("install-output.txt", denied.length ? `${installLog}\n[gitgoblin] the install tried to reach hosts that are not package registries, refused: ${denied.join(", ")}\n` : installLog);
+      // An install can rewrite tracked files (npm drops lockfile entries for workspaces missing from
+      // the tree, formatters run in postinstall). That is not the contribution: put them back as
+      // committed, so every diff from here on is measured against the repository's own files.
+      const restored = await restoreTrackedChanges(workspace.path, env);
+      if (restored.length) {
+        installRestored = restored;
+        reporter.warn(`install rewrote ${restored.join(", ")}; restored, the change is measured against the committed files`);
+      }
+      journal.event("install", "end", { exitCode: install.exitCode, durationMs: install.durationMs, timedOut: install.timedOut, network: installNetwork, refused: denied, restored, outputTail: tail(install.output, 2000) });
       if (denied.length) reporter.warn(`install tried to reach hosts that are not package registries (refused): ${denied.join(", ")}`);
       if (install.exitCode !== 0) {
         installFailure = { exitCode: install.exitCode ?? -1, logPath: journal.pathFor("install-output.txt"), timedOut: install.timedOut };
@@ -375,10 +418,18 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     }
     const guidance = readGuidance(workspace.path, task);
     reporter.phase("baseline", checkSpecs(task.commands).map((s) => s.name).join(", ") || "no commands known");
-    const baselineChecks = await runChecks(checkSpecs(task.commands), checkOptions);
+    const baselineChecks = await runChecks(checkSpecs(task.commands), logChecks("baseline"));
     const baseline = compareWithBaseline(baselineChecks, undefined, { files: 0, insertions: 0, deletions: 0, changedFiles: [] });
     journal.artifact("baseline", baseline);
     for (const c of baselineChecks.filter((c) => c.status !== "pass")) reporter.warn(`baseline ${c.name}: ${c.status}`);
+    // A browser test suite whose browsers are missing fails before testing anything; say what fixes it.
+    if (baselineChecks.some((c) => c.status !== "pass" && /ms-playwright/.test(c.outputTail) && /Executable doesn't exist|browserType\.launch|Please run the following command to download new browsers/.test(c.outputTail))) {
+      const hint = options.installBrowsers
+        ? "the tests need Playwright's browsers and installing them did not make them available; see install-output.txt"
+        : "the tests need Playwright's browsers, which are not installed: run again with --install-browsers (downloads them from Playwright's servers into your cache), or run `npx playwright install` once yourself";
+      setupNotes.push(hint);
+      reporter.warn(hint);
+    }
     // A failed install that leaves the checks broken means nothing the agent does could be verified;
     // stop here, before any model spend, with the log a person needs.
     if (installFailure && baselineChecks.length > 0 && baselineChecks.every((c) => c.status !== "pass")) {
@@ -406,7 +457,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       const late = checkSpecs(Object.fromEntries(adopted.filter((k) => k !== "test").map((k) => [k, task.commands[k]])));
       if (late.length > 0) {
         reporter.phase("baseline", `late: ${late.map((s) => s.name).join(", ")}`);
-        baseline.checks.push(...(await runChecks(late, checkOptions)));
+        baseline.checks.push(...(await runChecks(late, logChecks("baseline"))));
         journal.artifact("baseline", baseline);
       }
     }
@@ -458,7 +509,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       }
       decide("verify", checkBudget(costUsd, Date.now() - started, limits));
       reporter.phase("verify", `${diff.files} files changed, +${diff.insertions} -${diff.deletions}`);
-      const checks = await runChecks(checkSpecs(task.commands, reproduction), checkOptions);
+      const checks = await runChecks(checkSpecs(task.commands, reproduction), logChecks(`verify-${attempt}`));
       verification = compareWithBaseline(checks, baseline.checks, diff);
       journal.artifact(`verification-${attempt}`, verification);
       for (const c of checks) reporter.info(`${c.name}: ${c.status}`);
@@ -550,6 +601,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
         ...(review ? { review } : {}),
         ...(delivery ? { prTitle: delivery.prTitle } : {}),
         ...(checkIsolation ? { checkIsolation } : {}),
+        ...(installRestored.length ? { installRestored } : {}),
+        ...(setupNotes.length ? { setupNotes } : {}),
         ...(lastNotes ? { notes: lastNotes } : {}),
       }),
     );
@@ -663,4 +716,16 @@ export async function cleanRun(runId: string, options: CleanRunOptions = {}): Pr
   }
   journal.event("run", "cleaned", { removed });
   return { removed };
+}
+
+/** Tracked files that differ from HEAD in the working tree, put back as committed. Returns their paths. */
+async function restoreTrackedChanges(wsPath: string, env: Record<string, string>): Promise<string[]> {
+  const status = await git(["status", "--porcelain", "--untracked-files=no", "-z"], wsPath, env).catch(() => "");
+  const paths = status
+    .split("\0")
+    .filter((entry) => entry.length > 3)
+    .map((entry) => entry.slice(3));
+  if (paths.length === 0) return [];
+  await git(["checkout", "HEAD", "--", ...paths], wsPath, env);
+  return paths;
 }

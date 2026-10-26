@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, existsSync, lstatSync, realpathSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -168,6 +168,22 @@ function buildSpec(workspace: string, network: boolean, options: SpecOptions): H
   return { workspace, extraWrite, denyRead: [home, ...credentials], allowRead, network };
 }
 
+function isRealDirectory(p: string): boolean {
+  try {
+    return lstatSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function realPathOrUndefined(p: string): string | undefined {
+  try {
+    return realpathSync(p);
+  } catch {
+    return undefined;
+  }
+}
+
 function sbpl(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
@@ -178,20 +194,32 @@ function sbpl(value: string): string {
  */
 export function sandboxExecProfile(spec: HostSandboxSpec): string {
   const lines = ["(version 1)", "(allow default)"];
+  const writable = [spec.workspace, ...spec.extraWrite];
   if (!spec.network) {
     lines.push(
       "(deny network*)",
       '(allow network-bind (local ip "localhost:*"))',
       '(allow network-inbound (local ip "localhost:*"))',
       '(allow network-outbound (remote ip "localhost:*"))',
-      '(allow network-outbound (remote unix-socket))',
     );
+  } else {
+    // Name lookups go through mDNSResponder's socket.
+    lines.push("(deny network-outbound (remote unix-socket))", '(allow network-outbound (remote unix-socket (path-literal "/private/var/run/mDNSResponder")))');
+  }
+  // Unix sockets are files, and some hand over the machine: Docker's daemon starts any container with
+  // the host's disk mounted, an SSH agent signs with the person's keys. Commands may serve and use
+  // sockets in their own writable places (tsx, turbo's daemon), and no others.
+  for (const dir of writable) {
+    lines.push(`(allow network-bind network-inbound (local unix-socket (subpath ${sbpl(dir)})))`, `(allow network-outbound (remote unix-socket (subpath ${sbpl(dir)})))`);
   }
   lines.push("(deny file-write*)");
-  for (const dir of [spec.workspace, ...spec.extraWrite]) lines.push(`(allow file-write* (subpath ${sbpl(dir)}))`);
+  for (const dir of writable) lines.push(`(allow file-write* (subpath ${sbpl(dir)}))`);
   lines.push(
-    '(allow file-write* (literal "/dev/null") (literal "/dev/tty") (literal "/dev/stdout") (literal "/dev/stderr") (literal "/dev/zero") (literal "/dev/random") (literal "/dev/urandom") (literal "/dev/dtracehelper"))',
-    '(allow file-write* (regex #"^/dev/fd/") (regex #"^/dev/ttys") (regex #"^/dev/pty") (regex #"^/private/var/run/"))',
+    '(allow file-write* (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr") (literal "/dev/zero") (literal "/dev/random") (literal "/dev/urandom") (literal "/dev/dtracehelper"))',
+    '(allow file-write* (regex #"^/dev/fd/") (regex #"^/private/var/run/"))',
+    // Commands run detached with pipes, never on a terminal. A terminal device by path would let code
+    // type escape sequences into, or read keystrokes from, the person's other tabs.
+    '(deny file-read* file-write* file-ioctl (literal "/dev/tty") (regex #"^/dev/ttys") (regex #"^/dev/pty") (regex #"^/dev/tty[p-w]") (regex #"^/dev/cu\\.") (regex #"^/dev/tty\\."))',
     `(deny file-write* (subpath ${sbpl(path.join(spec.workspace, ".git"))}))`,
   );
   // Order matters (last match wins): deny the home directory, allow the toolchains back, then deny
@@ -208,11 +236,23 @@ export function sandboxExecProfile(spec: HostSandboxSpec): string {
   return lines.join("\n") + "\n";
 }
 
+/**
+ * Directories that hold other programs' Unix sockets, given an empty tmpfs inside bubblewrap. A
+ * socket is a file, so a network namespace does not hide it: /run and /var/run hold Docker's,
+ * Podman's, D-Bus's and the person's keyring and agent sockets, /tmp holds X11's and ssh-agent's.
+ */
+const SOCKET_DIRS = ["/tmp", "/run", "/var/run"];
+
 /** bubblewrap: the whole filesystem read-only, the allowed places bound writable, credentials masked, no network namespace. */
 export function bwrapArgs(spec: HostSandboxSpec, command: string): string[] {
   const args = ["--die-with-parent", "--new-session", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc"];
   if (!spec.network) args.push("--unshare-net");
-  for (const dir of [spec.workspace, ...spec.extraWrite]) if (existsSync(dir)) args.push("--bind", dir, dir);
+  // Empty first, then the writable places bound back on top (a workspace under /tmp included).
+  for (const dir of SOCKET_DIRS) if (isRealDirectory(dir)) args.push("--tmpfs", dir);
+  // Some systems keep the resolver's configuration under /run (systemd-resolved); lookups need it.
+  const resolv = realPathOrUndefined("/etc/resolv.conf");
+  if (resolv && SOCKET_DIRS.some((dir) => resolv.startsWith(dir + "/"))) args.push("--ro-bind", resolv, resolv);
+  for (const dir of [spec.workspace, ...spec.extraWrite]) if (existsSync(dir) && !SOCKET_DIRS.includes(dir)) args.push("--bind", dir, dir);
   const gitDir = path.join(spec.workspace, ".git");
   if (existsSync(gitDir)) args.push("--ro-bind", gitDir, gitDir);
   const hide = (p: string) => {

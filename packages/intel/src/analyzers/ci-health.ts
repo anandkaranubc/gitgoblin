@@ -39,6 +39,19 @@ export function workflowHealth(runs: WorkflowRun[]): WorkflowHealth[] {
   return out;
 }
 
+/** Repository secrets a workflow reads, other than the token every run gets; "inherited" when it passes all of them on. */
+export function workflowSecrets(yaml: string): string[] {
+  const code = yaml.replace(/(^|\s)#.*$/gm, "$1");
+  const names = [...code.matchAll(/\bsecrets\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]!).filter((n) => n !== "GITHUB_TOKEN");
+  if (/\bsecrets:\s*inherit\b/.test(code)) names.push("inherited");
+  return [...new Set(names)];
+}
+
+/** Whether pull requests trigger the workflow at all. */
+export function runsOnPullRequests(yaml: string): boolean {
+  return /\bpull_request(_target)?\b/.test(yaml.replace(/(^|\s)#.*$/gm, "$1"));
+}
+
 export const ciHealthAnalyzer: Analyzer = {
   name: "ci-health",
   async run(ctx: AnalysisContext, profile: RepositoryProfile): Promise<Finding[]> {
@@ -49,10 +62,18 @@ export const ciHealthAnalyzer: Analyzer = {
     for (const wf of workflowHealth(ctx.runs)) {
       if (wf.redStreak >= 1 && wf.runs.length >= 1) {
         const latest = wf.runs[0]!;
-        const stable = wf.redStreak >= 3 || wf.redStreak === wf.runs.length;
+        // One failed run is not a pattern, even when it is the only run on record.
+        const stable = wf.redStreak >= 3 || (wf.redStreak >= 2 && wf.redStreak === wf.runs.length);
         const firstRed = wf.runs[wf.redStreak - 1]!;
         const jobs = await (ctx.failedJobs ? ctx.failedJobs(latest.id) : ctx.github ? fetchFailedJobs(ctx.github, ctx.ref.owner, ctx.ref.name, latest.id) : Promise.resolve([])).catch(() => []);
         const peripheral = jobs.length > 0 && jobs.every((j) => /bench|nightly|canary|experimental|optional|allow.?fail|coverage|docs?\b|lint|publish|release|deploy/i.test(j.name));
+        // A job that needs the repository's secrets cannot run in a fork; one that never runs on pull requests cannot
+        // even be checked by the contributor's own PR. Only a maintainer can verify such a fix (often a token rotation).
+        const yaml = (await ctx.read(wf.path).catch(() => undefined)) ?? "";
+        const secrets = workflowSecrets(yaml);
+        const onPrs = runsOnPullRequests(yaml);
+        const secretBound = secrets.length > 0 && (!onPrs || peripheral);
+        const secretNote = `${onPrs ? "" : "runs only after merge and "}needs repository secrets (${secrets.slice(0, 3).join(", ")}) that forks do not get`;
         const ev = [evidence(ctx, "workflow_run", latest.url, { note: `${wf.name} (${wf.path}) ${latest.conclusion} on ${latest.event} to ${profile.defaultBranch}, ${latest.updatedAt.slice(0, 10)}; ${wf.redStreak} of the last ${wf.runs.length} runs failed` })];
         for (const job of jobs.slice(0, 4)) ev.push(evidence(ctx, "workflow_run", job.url, { excerpt: job.failedSteps.join(" / ") || undefined, note: `job "${job.name}" failed${job.failedSteps.length ? " at step" : ""}` }));
         findings.push({
@@ -73,12 +94,15 @@ export const ciHealthAnalyzer: Analyzer = {
           ],
           acceptanceCriteria: [`${wf.name} is green on ${profile.defaultBranch} after the change.`, "The fix addresses the cause, not just the symptom (no blanket skips)."],
           etiquette: ["Check recent issues and PRs for someone already working on CI before starting.", ...(fixInFlight ? [`PR #${fixInFlight.number} may already address it.`] : [])],
-          risks: ["The failure may be an external service outage or a secret-only job that forks cannot run.", ...(stable ? [] : ["A single failure may be flaky; re-run or check the next run before investing."])],
+          risks: [
+            secretBound ? `"${wf.name}" ${secretNote}; ask a maintainer for the failing step's log before investing, since the cause may be a token only they can renew.` : "The failure may be an external service outage or a secret-only job that forks cannot run.",
+            ...(stable ? [] : ["A single failure may be flaky; re-run or check the next run before investing."]),
+          ],
           signals: {
             value: (stable ? 0.8 : 0.55) * (peripheral ? 0.75 : 1),
             valueReason: `${stable ? "default branch has been red for multiple runs; every contributor is blocked from trusting CI" : "one failed run; could be transient"}${peripheral ? "; only auxiliary jobs (benchmark, nightly, docs) are failing" : ""}`,
-            feasibility: jobs.length ? 0.65 : 0.5,
-            feasibilityReason: jobs.length ? "failing job and step identified from the run" : "cause unknown until the log is read",
+            feasibility: secretBound ? 0.3 : jobs.length ? 0.65 : 0.5,
+            feasibilityReason: secretBound ? `the workflow ${secretNote}, so only maintainers can verify a fix` : jobs.length ? "failing job and step identified from the run" : "cause unknown until the log is read",
             confidence: stable ? 0.9 : 0.65,
             confidenceReason: "run conclusions come from the Actions API",
             novelty: fixInFlight ? 0.3 : 0.85,

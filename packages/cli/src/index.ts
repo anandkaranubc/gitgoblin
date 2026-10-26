@@ -5,17 +5,18 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { DiscoveryQuery, DiscoveryResult, Goal, RepoRef } from "@gitgoblin/core";
 import { GOAL_DESCRIPTIONS, GOALS, parseRepoRef, sameRepo } from "@gitgoblin/core";
-import type { CheckIsolation, Effort, Reporter } from "@gitgoblin/engine";
+import type { CheckIsolation, Effort, Reporter, RunOptions } from "@gitgoblin/engine";
 import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/intel";
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
 import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
-import { type PlanContextLike, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "./contribute.ts";
+import { type PlanContextLike, checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, missingToolchains, onPath, recommendedRank, selectOpportunity, toolchainWarning } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { explainMissingRepository, explainNetworkFailure } from "./errors.ts";
 import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
 import { directorySize, formatBytes, formatRuns, installSummary, isRunId, listRuns, readInstall, readRun } from "./runs.ts";
 import { type IntelModule, type ModuleLoader, importSibling, loadEngine, loadIntel } from "./siblings.ts";
+import { discardTypeAhead } from "./prompt.ts";
 import { plain } from "./text.ts";
 
 /** What the CLI needs from the engine; tests inject a fake. */
@@ -71,6 +72,9 @@ const defaultRuntime: Runtime = {
     return load ? importSibling(name, load) : undefined;
   },
   async ask(question) {
+    // A key pressed during minutes of agent work would otherwise answer this question unread.
+    const { interrupted } = await discardTypeAhead(process.stdin);
+    if (interrupted) process.kill(process.pid, "SIGINT");
     const rl = createInterface({ input: process.stdin, output: process.stderr });
     try {
       return await rl.question(question);
@@ -88,6 +92,8 @@ const defaultRuntime: Runtime = {
 
 const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
 const ISOLATIONS: readonly CheckIsolation[] = ["auto", "sandbox", "strict", "none"];
+type InstallNetwork = NonNullable<RunOptions["installNetwork"]>;
+const INSTALL_NETWORKS: readonly InstallNetwork[] = ["registries", "open"];
 
 /** What each isolation means for the repository's own commands, in the words of the question the person answers. */
 const ISOLATION_WORDS: Record<CheckIsolation, string | undefined> = {
@@ -100,6 +106,13 @@ const ISOLATION_WORDS: Record<CheckIsolation, string | undefined> = {
 async function confirm(runtime: Runtime, question: string): Promise<boolean> {
   const answer = (await runtime.ask(`${question} [y/N] `)).trim().toLowerCase();
   return answer === "y" || answer === "yes";
+}
+
+/** Publishing reaches other people, so it takes a word that a key pressed early cannot type. */
+async function confirmPublish(runtime: Runtime, question: string): Promise<boolean> {
+  const answer = (await runtime.ask(`${question} [type publish, or Enter to stop] `)).trim().toLowerCase();
+  if (answer === "y" || answer === "yes") runtime.stderr(`Publishing takes the word "publish", not ${answer}, so a key pressed early cannot publish for you.`);
+  return answer === "publish";
 }
 
 /** Discovery's view of a repository, passed to intel as hints it validates rather than trusts. */
@@ -139,6 +152,11 @@ function repoArgument(value: string): RepoRef {
   return ref;
 }
 
+function installNetworkArgument(value: string): InstallNetwork {
+  if ((INSTALL_NETWORKS as readonly string[]).includes(value)) return value as InstallNetwork;
+  throw new InvalidArgumentError(`Expected one of ${INSTALL_NETWORKS.join(", ")}, got "${value}"`);
+}
+
 function isolationArgument(value: string): CheckIsolation {
   if ((ISOLATIONS as readonly string[]).includes(value)) return value as CheckIsolation;
   throw new InvalidArgumentError(`Expected one of ${ISOLATIONS.join(", ")}, got "${value}"`);
@@ -171,10 +189,11 @@ function resolveWorkdir(runtime: Runtime, option: string | undefined): string {
 
 /** The engine reports progress through this; the same shape its own CLI prints. */
 function reporterFor(runtime: Runtime): Reporter {
+  // The engine reports model-chosen commands, file paths and denial reasons; none may drive the terminal.
   return {
-    phase: (name, detail) => runtime.stderr(`==> ${detail ? `${name}: ${detail}` : name}`),
-    info: (message) => runtime.stderr(`    ${message}`),
-    warn: (message) => runtime.stderr(` !! ${message}`),
+    phase: (name, detail) => runtime.stderr(`==> ${plain(detail ? `${name}: ${detail}` : name)}`),
+    info: (message) => runtime.stderr(`    ${plain(message)}`),
+    warn: (message) => runtime.stderr(` !! ${plain(message)}`),
   };
 }
 
@@ -223,7 +242,7 @@ function nextStepAfterAnalyze(report: AnalysisReport, ref: RepoRef, savedTo: str
 export function buildProgram(runtime: Runtime): Command {
   const program = new Command("gitgoblin")
     .description("Find open-source projects worth your time, work out what they need, and prepare a pull request you approve.")
-    .version("0.1.0")
+    .version("0.1.1")
     .configureOutput({ writeOut: (s) => runtime.stdout(s.trimEnd()), writeErr: (s) => runtime.stderr(s.trimEnd()) })
     .exitOverride();
 
@@ -251,16 +270,21 @@ export function buildProgram(runtime: Runtime): Command {
       const query = toQuery(goal ?? "explore", options);
       if (query.goal === "explore" && query.randomSeed === undefined) query.randomSeed = Math.floor(Math.random() * 1_000_000);
       const showProgress = Boolean(options.verbose) || (!options.json && runtime.isInteractive);
+      // Warnings (a refused or rate-limited search) mean the ranking may be incomplete; JSON carries them.
+      const warnings: string[] = [];
       const session = await runtime.createEngine({
         onProgress: (event) => {
-          if (showProgress) runtime.stderr(`${event.stage}: ${event.message}`);
+          if (event.stage === "warning") warnings.push(plain(event.message));
+          if (showProgress) runtime.stderr(`${event.stage}: ${plain(event.message)}`);
         },
       });
       try {
         const results = await session.engine.discover(query);
-        if (options.json) runtime.stdout(JSON.stringify({ query, results }, null, 2));
+        if (options.json) runtime.stdout(JSON.stringify({ query, results, warnings }, null, 2));
         else {
           runtime.stdout(formatResults(results, { color: runtime.color }));
+          // Without progress on screen, a refused search or missing details would leave a partial ranking unexplained.
+          if (!showProgress) for (const warning of warnings) runtime.stderr(`warning: ${warning}`);
           if (query.goal === "explore") runtime.stderr(`seed ${query.randomSeed}: pass --seed ${query.randomSeed} to see these again`);
           const first = results[0];
           if (first && runtime.isInteractive) runtime.stderr(`Next: gitgoblin analyze ${first.repo.owner}/${first.repo.name}   (profile it and find concrete work to do)`);
@@ -281,7 +305,7 @@ export function buildProgram(runtime: Runtime): Command {
     .action(async (ref: RepoRef, options: { goal: Goal; json?: boolean; verbose?: boolean }) => {
       const session = await runtime.createEngine({
         onProgress: (event) => {
-          if (options.verbose) runtime.stderr(`${event.stage}: ${event.message}`);
+          if (options.verbose) runtime.stderr(`${event.stage}: ${plain(event.message)}`);
         },
       });
       try {
@@ -372,14 +396,14 @@ export function buildProgram(runtime: Runtime): Command {
         maxOpportunities,
         checkLinks: options.links,
         dependencyChecks: options.deps,
-        log: options.verbose ? (message: string) => runtime.stderr(message) : undefined,
+        log: options.verbose ? (message: string) => runtime.stderr(plain(message)) : undefined,
       });
       const text = options.json ? JSON.stringify(report, null, 2) : intel.renderMarkdown(report);
       if (options.out) {
         await writeFile(options.out, `${text}\n`);
         runtime.stderr(`wrote ${options.out}`);
       } else {
-        runtime.stdout(text);
+        runtime.stdout(options.json ? text : plain(text));
       }
       const gap = issueGap(report);
       if (gap) runtime.stderr(gap);
@@ -403,8 +427,14 @@ export function buildProgram(runtime: Runtime): Command {
       `how the repository's own install and test commands run here, one of ${ISOLATIONS.join(", ")} (default auto: an OS sandbox when available; strict also hides your home directory, for repositories you do not trust)`,
       isolationArgument,
     )
+    .option(
+      "--install-network <mode>",
+      `what the repository's install may reach under an OS sandbox, one of ${INSTALL_NETWORKS.join(", ")} (default registries: package registries only; open allows any host, for projects that install from elsewhere)`,
+      installNetworkArgument,
+    )
+    .option("--install-browsers", "after the install, download the browsers a Playwright test suite needs, with the project's own Playwright, from Playwright's servers (off by default; the run says when the tests need them)")
     .option("-g, --goal <goal>", "discovery goal used for hints", goalArgument, "contribute")
-    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: string; workdir?: string; model?: string; effort?: Effort; checkIsolation?: CheckIsolation; goal: Goal }) => {
+    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: string; workdir?: string; model?: string; effort?: Effort; checkIsolation?: CheckIsolation; installNetwork?: InstallNetwork; installBrowsers?: boolean; goal: Goal }) => {
       if (!runtime.canPrompt) {
         throw new Error("contribute needs an interactive terminal: it asks before running an agent and again before publishing anything.");
       }
@@ -423,7 +453,7 @@ export function buildProgram(runtime: Runtime): Command {
       } else {
         runtime.stderr(`Analyzing ${slug(ref)}...`);
         const hints = await discoveryHints(runtime, ref, options.goal);
-        report = await intel.analyzeRepository(ref, { hints, log: runtime.isInteractive ? (message: string) => runtime.stderr(message) : undefined });
+        report = await intel.analyzeRepository(ref, { hints, log: runtime.isInteractive ? (message: string) => runtime.stderr(plain(message)) : undefined });
       }
       if (report.opportunities.length === 0) {
         const gap = issueGap(report);
@@ -440,22 +470,35 @@ export function buildProgram(runtime: Runtime): Command {
             opportunity = selectOpportunity(report, { opportunity: answer || String(recommended) });
           } catch (error) {
             if (attempt >= 3) throw error;
-            runtime.stdout(error instanceof Error ? error.message : String(error));
+            runtime.stdout(plain(error instanceof Error ? error.message : String(error)));
           }
         }
       }
       runtime.stdout(`Opportunity: ${plain(opportunity.title)}`);
+      runtime.stdout(checksLine(report.profile));
+      // A missing launcher (bun, cargo, pnpm) fails the run at its install, after the clone; say so before anything is spent.
+      const path = runtime.env.PATH;
+      if (path && process.platform !== "win32") {
+        const missing = missingToolchains(report.profile, (name) => onPath(name, path));
+        if (missing.length > 0) runtime.stdout(toolchainWarning(missing));
+      }
       const refusal = engineWillRefuse(opportunity);
       if (refusal) runtime.stdout(`The engine will refuse this one at intake: ${refusal}.`);
 
       // The engine clones the repository, unless the report came from `analyze --local`, in which case it
       // attaches a git worktree to that checkout. The person approves what will actually happen.
       const localPath = report.profile.repo.localPath;
-      const where = localPath ? `a git worktree of ${localPath}` : "a local clone";
-      const isolationWords = options.checkIsolation ? ISOLATION_WORDS[options.checkIsolation] : undefined;
+      const where = localPath ? `a git worktree of ${plain(localPath)}` : "a local clone";
+      const isolationWords = [
+        options.checkIsolation ? ISOLATION_WORDS[options.checkIsolation] : undefined,
+        options.installNetwork === "open" ? "the repository's install allowed to reach any host" : undefined,
+        options.installBrowsers ? "Playwright's browsers downloaded from Playwright's servers" : undefined,
+      ]
+        .filter(Boolean)
+        .join(", and ");
       const proceed = await confirm(
         runtime,
-        `${refusal ? "Run it anyway" : "Run an AI agent"} against ${slug(ref)} in ${where}${isolationWords ? `, with ${isolationWords}` : ""}, spending up to $${maxCostUsd.toFixed(2)}? Nothing is published without another explicit yes.`,
+        `${refusal ? "Run it anyway" : "Run an AI agent"} against ${slug(ref)} in ${where}${isolationWords ? `, with ${isolationWords}` : ""}, spending up to $${maxCostUsd.toFixed(2)}? Nothing is published unless you type publish at the end.`,
       );
       if (!proceed) {
         runtime.stdout("Stopped before running the engine.");
@@ -470,6 +513,8 @@ export function buildProgram(runtime: Runtime): Command {
           ...(options.model ? { model: options.model } : {}),
           ...(options.effort ? { effort: options.effort } : {}),
           ...(options.checkIsolation ? { checkIsolation: options.checkIsolation } : {}),
+          ...(options.installNetwork ? { installNetwork: options.installNetwork } : {}),
+          ...(options.installBrowsers ? { installBrowsers: true } : {}),
           // Newer engines pass what they know about the install and the baseline as a second argument.
           approvePlan: async (plan, context?: PlanContextLike) => {
             const warning = describeEnvironment(context);
@@ -500,13 +545,13 @@ export function buildProgram(runtime: Runtime): Command {
       runtime.stdout(`\nDiff: ${join(result.runDir, "diff.patch")}`);
       runtime.stdout(`Read the diff and the report before publishing. To decide later: gitgoblin publish ${result.runId}${options.workdir ? ` --workdir ${workdir}` : ""}`);
 
-      const publish = await confirm(runtime, "Open a draft pull request on GitHub under your account?");
+      const publish = await confirmPublish(runtime, "Open a draft pull request on GitHub under your account?");
       if (!publish) {
         runtime.stdout(`Not published. The change stays in ${result.runDir}.`);
         return;
       }
-      const published = await engine.publishRun(result.runId, { workdir, approved: true, draft: true, log: (line) => runtime.stderr(line) });
-      runtime.stdout(`Draft pull request: ${published.url}`);
+      const published = await engine.publishRun(result.runId, { workdir, approved: true, draft: true, log: (line) => runtime.stderr(plain(line)) });
+      runtime.stdout(`Draft pull request: ${plain(published.url)}`);
     });
 
   program
@@ -566,7 +611,7 @@ export function buildProgram(runtime: Runtime): Command {
         const bytes = Math.max(0, before - directorySize(run.dir));
         freed += bytes;
         cleaned += 1;
-        runtime.stdout(`Cleaned ${runId} (${run.result.status}): freed ${formatBytes(bytes)}`);
+        runtime.stdout(`Cleaned ${runId} (${plain(String(run.result.status))}): freed ${formatBytes(bytes)}`);
       }
       if (cleaned > 1) runtime.stdout(`Freed ${formatBytes(freed)} from ${cleaned} runs.`);
       if (failed > 0) throw new Error(`${failed} of ${targets.length} run${targets.length === 1 ? "" : "s"} could not be cleaned`);
@@ -602,7 +647,7 @@ export function buildProgram(runtime: Runtime): Command {
       const workdir = resolveWorkdir(runtime, options.workdir);
       const run = readRun(workdir, runId);
       if (!run) throw new Error(`no run "${runId}" under ${workdir}; \`gitgoblin runs\` lists them.`);
-      if (run.result.status !== "awaiting_approval") throw new Error(`run ${runId} is ${run.result.status} (${run.result.reason}), so there is nothing to publish.`);
+      if (run.result.status !== "awaiting_approval") throw new Error(`run ${runId} is ${run.result.status} (${plain(run.result.reason)}), so there is nothing to publish.`);
       const engine = await loadEngine(runtime.loadModule);
       if (!engine) throw new Error("publish needs @gitgoblin/engine, not available in this install.");
 
@@ -610,13 +655,13 @@ export function buildProgram(runtime: Runtime): Command {
       if (run.prBody) runtime.stdout(plain(run.prBody));
       runtime.stdout(`\nDiff: ${run.diffPath}\nReport: ${join(run.dir, "report.md")}`);
       const draft = !options.ready;
-      const ok = await confirm(runtime, `Push this change and open a ${draft ? "draft" : "ready-for-review"} pull request on GitHub under your account?`);
+      const ok = await confirmPublish(runtime, `Push this change and open a ${draft ? "draft" : "ready-for-review"} pull request on GitHub under your account?`);
       if (!ok) {
         runtime.stdout("Not published.");
         return;
       }
-      const published = await engine.publishRun(runId, { workdir, approved: true, draft, log: (line) => runtime.stderr(line) });
-      runtime.stdout(`${draft ? "Draft pull request" : "Pull request"}: ${published.url}`);
+      const published = await engine.publishRun(runId, { workdir, approved: true, draft, log: (line) => runtime.stderr(plain(line)) });
+      runtime.stdout(`${draft ? "Draft pull request" : "Pull request"}: ${plain(published.url)}`);
     });
 
   return program;
@@ -634,7 +679,8 @@ export async function run(argv: string[], runtime: Runtime = defaultRuntime): Pr
       const code = (error as { exitCode: number; code: string }).code;
       return code === "commander.helpDisplayed" || code === "commander.version" || code === "commander.help" ? 0 : 2;
     }
-    runtime.stderr(`error: ${explainFailure(error, runtime)}`);
+    // Errors quote run files, issue titles and engine messages; print them as plain text.
+    runtime.stderr(`error: ${plain(explainFailure(error, runtime))}`);
     return 1;
   }
 }

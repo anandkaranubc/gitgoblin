@@ -7,6 +7,8 @@ interface GtRepo {
   description: string; stars_count: number; forks_count: number; archived: boolean; has_issues: boolean; open_issues_count: number;
   open_pr_counter: number; default_branch: string; created_at: string; updated_at: string; fork: boolean; template: boolean; mirror: boolean;
   topics?: string[]; owner: GtUser; html_url: string; website?: string;
+  /** Repository size in KiB. */
+  size?: number;
 }
 interface GtIssue {
   number: number; title: string; body: string | null; state: string; created_at: string; updated_at: string; closed_at: string | null;
@@ -27,6 +29,8 @@ const REVIEW_STATE: Record<string, string> = { APPROVED: "APPROVED", REQUEST_CHA
 export async function fetchGitea(host: string, owner: string, name: string, options: ForgeFetchOptions): Promise<ForgeResult> {
   const base = `https://${host}/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
   const repo = await forgeJson<GtRepo>(base, options);
+  // An SSO page or proxy can answer 200 with something else; fail clearly instead of mapping undefined fields.
+  if (!repo || typeof repo !== "object" || typeof repo.created_at !== "string") throw new Error(`unexpected repository response from ${host}`);
   // The comments endpoint lists oldest first and ignores `limit` without `page` (Forgejo returned 13,529 comments,
   // 25 MB, in one call). A recent window read in a few pages keeps it small and current.
   const since = new Date(Date.now() - 90 * 24 * 3_600_000).toISOString();
@@ -107,7 +111,7 @@ export async function fetchGitea(host: string, owner: string, name: string, opti
     owner, name, defaultBranch: repo.default_branch || "main", description: repo.description || undefined, homepage: repo.website || undefined,
     topics: repo.topics ?? [], stars: repo.stars_count, forks: repo.forks_count, watchers: 0, openIssuesAndPrs: repo.open_issues_count + repo.open_pr_counter,
     license: undefined, archived: repo.archived, disabled: false, isFork: repo.fork, isTemplate: repo.template, hasIssues: repo.has_issues,
-    sizeKb: 0, createdAt: repo.created_at, pushedAt: repo.updated_at,
+    sizeKb: typeof repo.size === "number" && repo.size > 0 ? repo.size : 0, createdAt: repo.created_at, pushedAt: repo.updated_at,
   };
   const samples: GitHubSamples = {
     isMirror: repo.mirror,

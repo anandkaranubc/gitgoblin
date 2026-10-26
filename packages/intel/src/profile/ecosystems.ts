@@ -10,10 +10,7 @@ export function describeEcosystems(manifests: Manifests, inventory: FileInventor
   if (python) {
     const commands: Commands = {};
     const pm = python.packageManager;
-    commands.install =
-      pm === "uv" ? "uv sync" : pm === "poetry" ? "poetry install" : pm === "pdm" ? "pdm install" : pm === "pipenv" ? "pipenv install --dev"
-      : inventory.byPath.has("requirements-dev.txt") ? "pip install -r requirements-dev.txt"
-      : python.paths.includes("pyproject.toml") || python.paths.includes("setup.py") ? 'pip install -e ".[dev]"' : "pip install -r requirements.txt";
+    commands.install = pythonInstall(python, inventory);
     const ciTest = pickCi(ciRunLines, /\b(pytest|tox|nox|python -m unittest|make test)\b/);
     commands.test = ciTest ?? (python.tooling.includes("tox") ? "tox" : python.tooling.includes("nox") ? "nox" : python.tooling.includes("pytest") ? "pytest" : python.tooling.includes("unittest") ? "python -m unittest discover" : undefined);
     if (python.tooling.includes("ruff")) commands.lint = "ruff check .";
@@ -36,15 +33,18 @@ export function describeEcosystems(manifests: Manifests, inventory: FileInventor
 
   if (node) {
     const pm = node.packageManager;
-    const run = (script: string) => (pm === "npm" ? `npm run ${script}` : `${pm} ${script}`);
-    const commands: Commands = { install: pm === "yarn" ? "yarn" : `${pm} install` };
-    if (node.scripts.test && !/no test specified/.test(node.scripts.test)) commands.test = pm === "npm" ? "npm test" : `${pm} test`;
+    // Always "<pm> run <script>": a bare "bun build" or "bun test" runs Bun's bundler or test runner, not the script.
+    const run = (script: string) => `${pm} run ${script}`;
+    const commands: Commands = { install: nodeInstall(pm, inventory) };
+    if (node.scripts.test && !/no test specified/.test(node.scripts.test)) commands.test = pm === "npm" ? "npm test" : run("test");
+    else if (node.workspaceTests.length) commands.test = workspaceTestCommand(pm, node.workspaceTests, inventory);
     if (node.scripts.build) commands.build = run("build");
     if (node.scripts.lint) commands.lint = run("lint");
     if (node.scripts.format) commands.format = run("format");
     if (node.scripts.typecheck) commands.typecheck = run("typecheck");
     else if (node.scripts["type-check"]) commands.typecheck = run("type-check");
-    else if (node.tooling.includes("typescript") && !node.scripts.build?.includes("tsc")) commands.typecheck = "npx tsc --noEmit";
+    // Without a root tsconfig.json, tsc prints its help and fails: a check the project never had. Leave it out.
+    else if (inventory.byPath.has("tsconfig.json") && node.tooling.includes("typescript") && !node.scripts.build?.includes("tsc")) commands.typecheck = `${pm === "bun" ? "bunx" : "npx"} tsc --noEmit`;
     result.push({
       name: "node",
       manifests: node.paths,
@@ -118,4 +118,60 @@ function pickCi(lines: string[], pattern: RegExp): string | undefined {
 
 function prune(commands: Commands): Commands {
   return Object.fromEntries(Object.entries(commands).filter(([, v]) => v !== undefined)) as Commands;
+}
+
+/** The development group or extra a contributor installs: "dev" first, then test-ish names. */
+function devName(names: string[]): string | undefined {
+  return ["dev", "develop", "development", "test", "tests", "testing"].find((n) => names.includes(n));
+}
+
+/**
+ * How a contributor installs a Python project for development, from what it declares. Lockfile tools install
+ * their dev groups by default; plain pip needs the right extra or PEP 735 group, and `.[dev]` on a project without
+ * a `dev` extra installs nothing extra while looking like it worked.
+ */
+export function pythonInstall(python: NonNullable<Manifests["python"]>, inventory: FileInventory): string {
+  const pm = python.packageManager;
+  if (pm === "uv") return "uv sync"; // syncs the dev group by default, from uv.lock
+  if (pm === "poetry") return "poetry install";
+  if (pm === "pdm") return "pdm install";
+  if (pm === "pipenv") return "pipenv install --dev";
+  const project = python.paths.includes("pyproject.toml") || python.paths.includes("setup.py");
+  const group = devName(python.dependencyGroups);
+  // --group needs pip 25.1 or later.
+  if (project && group) return `python -m pip install --upgrade pip && pip install -e . --group ${group}`;
+  const extra = devName(python.extras);
+  if (project && extra) return `pip install -e ".[${extra}]"`;
+  for (const req of ["requirements-dev.txt", "requirements/dev.txt", "dev-requirements.txt", "requirements-test.txt", "requirements/test.txt", "test-requirements.txt"]) {
+    if (inventory.byPath.has(req)) return project ? `pip install -e . -r ${req}` : `pip install -r ${req}`;
+  }
+  return project ? "pip install -e ." : "pip install -r requirements.txt";
+}
+
+/** Install from the committed lockfile without rewriting it; only a project without one gets a plain install. */
+export function nodeInstall(pm: NonNullable<Manifests["node"]>["packageManager"], inventory: FileInventory): string {
+  const has = (p: string) => inventory.byPath.has(p);
+  if (pm === "pnpm") return has("pnpm-lock.yaml") ? "pnpm install --frozen-lockfile" : "pnpm install";
+  if (pm === "bun") return has("bun.lock") || has("bun.lockb") ? "bun install --frozen-lockfile" : "bun install";
+  if (pm === "yarn") {
+    if (!has("yarn.lock")) return "yarn install";
+    // Yarn 2+ (berry) keeps its settings in .yarnrc.yml; classic yarn uses --frozen-lockfile.
+    return has(".yarnrc.yml") ? "yarn install --immutable" : "yarn install --frozen-lockfile";
+  }
+  return has("package-lock.json") || has("npm-shrinkwrap.json") ? "npm ci" : "npm install";
+}
+
+/** A monorepo's tests run inside its workspace packages: one package by name or directory, several through the package manager. */
+export function workspaceTestCommand(pm: NonNullable<Manifests["node"]>["packageManager"], packages: NonNullable<Manifests["node"]>["workspaceTests"], inventory: FileInventory): string {
+  if (packages.length === 1) {
+    const { dir, name } = packages[0]!;
+    if (pm === "pnpm") return `pnpm --filter ${name ?? `./${dir}`} test`;
+    if (pm === "yarn") return name ? `yarn workspace ${name} test` : `yarn --cwd ${dir} test`;
+    if (pm === "bun") return `bun run --cwd ${dir} test`;
+    return `npm test -w ${dir}`;
+  }
+  if (pm === "pnpm") return "pnpm -r --if-present test";
+  if (pm === "yarn") return inventory.byPath.has(".yarnrc.yml") ? "yarn workspaces foreach -A run test" : "yarn workspaces run test";
+  if (pm === "bun") return "bun run --filter '*' test";
+  return "npm test --workspaces --if-present";
 }

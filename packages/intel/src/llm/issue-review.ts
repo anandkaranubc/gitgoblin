@@ -30,8 +30,9 @@ export type IssueReview = z.infer<typeof IssueReview>;
 
 const Batch = z.object({ reviews: z.array(IssueReview) });
 
-export const PROMPT_VERSION = "3";
-export const BATCH_SIZE = 15;
+export const PROMPT_VERSION = "5";
+/** Issues reviewed at once. Each call carries one issue, so one issue's text cannot steer the verdict on another. */
+export const CONCURRENCY = 4;
 const CACHE_TTL_MS = 14 * 24 * 3_600_000;
 
 export const SYSTEM_PROMPT = `You are an experienced open-source maintainer triaging GitHub issues for an outside contributor who is deciding what to work on. You see only the text provided; judge from it alone.
@@ -41,7 +42,7 @@ For each issue, decide:
 - actionable: true only when the problem is specific enough to reproduce or locate from the text, and fixing it would not require a maintainer decision about design, scope or policy.
 - maintainerStance: from comments marked [maintainer] only. "endorsed" when a maintainer confirms the problem or invites a fix; "pushback" when they say it is intended, out of scope, a duplicate or not reproducible; "neutral" when they comment without taking a position; "unknown" when no maintainer commented.
 - problem: one plain sentence restating what is wrong or wanted.
-- quote: a verbatim phrase of at most 15 words copied from the issue or a comment that best supports your verdict. Never paraphrase inside the quote.
+- quote: a verbatim phrase of 4 to 15 words copied from the issue or a comment that best supports your verdict. Never paraphrase inside the quote.
 - rationale: at most 25 words on why you chose the verdict and actionability.
 - confidence: 0 to 1.
 
@@ -53,51 +54,81 @@ export interface ReviewInput {
   issues: IssueSample[];
   now: Date;
   cache?: DiskCache | undefined;
-  /** Called once per failed batch. Reviewing continues with the next batch unless credentials are missing or the API rate-limits. */
-  onError?: ((error: unknown) => void) | undefined;
+  /**
+   * Called once, after reviewing, when any call failed: with the first error, whether reviewing stopped early
+   * (missing credentials, rate limit, server error or timeout fail every call), and how many issues went unreviewed.
+   */
+  onError?: ((error: unknown, info: { stopped: boolean; failed: number; total: number }) => void) | undefined;
 }
 
-/** Review issues in batches, using the cache for issues already judged at this updatedAt. */
+/** Errors that will fail every remaining call, so reviewing stops instead of paying for retries. */
+export function isFatalLlmError(error: unknown): boolean {
+  const status = (error as { status?: unknown }).status;
+  if (typeof status === "number" && (status === 401 || status === 403 || status === 429 || status >= 500)) return true;
+  const name = (error as { name?: unknown }).name;
+  return name === "APIConnectionTimeoutError" || name === "APIConnectionError" || /ANTHROPIC_API_KEY|credentials|apiKey|timed? ?out/i.test(String((error as Error).message));
+}
+
+/**
+ * Review each issue in its own call, a few at a time, using the cache for issues already judged at this updatedAt.
+ * Every review, cached or fresh, passes the same checks before it is used: its quote must occur in the issue, and a
+ * maintainer stance needs a real maintainer comment among those the model was shown.
+ */
 export async function reviewIssues(input: ReviewInput): Promise<Map<number, IssueReview>> {
   const { llm, profile, issues, now, cache } = input;
   const results = new Map<number, IssueReview>();
   const pending: IssueSample[] = [];
   for (const issue of issues) {
     const cached = cache ? await cache.get<IssueReview>(cacheKey(llm.model, profile, issue), CACHE_TTL_MS) : undefined;
-    if (cached) results.set(issue.number, cached);
-    else pending.push(issue);
+    if (!cached) { pending.push(issue); continue; }
+    const review = checked(cached, issue);
+    if (review) results.set(issue.number, review);
   }
-  for (let i = 0; i < pending.length; i += BATCH_SIZE) {
-    const batch = pending.slice(i, i + BATCH_SIZE);
-    try {
-      const parsed = await llm.parse(SYSTEM_PROMPT, renderBatch(profile, batch, now), Batch);
-      if (!parsed) continue;
-      for (const review of parsed.reviews) {
-        const issue = batch.find((b) => b.number === review.number);
-        if (!issue) continue; // the model may not invent issue numbers
-        // Model text is data: no control or format characters reach the report. (Done here, not in the
-        // schema: the SDK's structured output cannot represent zod transforms.)
-        review.problem = truncate(stripControl(review.problem), 600);
-        review.quote = truncate(stripControl(review.quote), 300);
-        review.rationale = truncate(stripControl(review.rationale), 400);
-        // A stance needs a real maintainer comment among those the model was shown; text claiming to be one does not count.
-        if (!promptComments(issue).some((c) => c.role === "maintainer")) review.maintainerStance = "unknown";
-        if (!quoteOccurs(review.quote, issue)) review.quote = "";
-        results.set(review.number, review);
+  let firstError: unknown;
+  let failed = 0;
+  let stopped = false;
+  let next = 0;
+  const worker = async () => {
+    while (!stopped && next < pending.length) {
+      const issue = pending[next++]!;
+      try {
+        const parsed = await llm.parse(SYSTEM_PROMPT, renderBatch(profile, [issue], now), Batch);
+        // The model may not answer for another issue number, or for more than the one it was shown.
+        const raw = parsed?.reviews.find((r) => r.number === issue.number);
+        if (!raw) continue;
+        const review = sanitized(raw);
         await cache?.set(cacheKey(llm.model, profile, issue), review);
+        const usable = checked(review, issue);
+        if (usable) results.set(issue.number, usable);
+      } catch (error) {
+        failed++;
+        firstError ??= error;
+        if (isFatalLlmError(error)) stopped = true;
       }
-    } catch (error) {
-      input.onError?.(error);
-      // Missing credentials or a rate limit will fail every batch; anything else (one malformed answer) is local.
-      const status = (error as { status?: unknown }).status;
-      if (status === 401 || status === 403 || status === 429 || /ANTHROPIC_API_KEY|credentials|apiKey/i.test(String((error as Error).message))) break;
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pending.length) }, worker));
+  if (failed) input.onError?.(firstError, { stopped, failed: failed + (pending.length - next), total: pending.length });
   return results;
 }
 
+/** Model text is data: no control or format characters reach the report, and lengths are capped. (Done here, not in
+ * the schema: the SDK's structured output cannot represent zod transforms, and a length limit there loses the call.) */
+function sanitized(review: IssueReview): IssueReview {
+  return { ...review, problem: truncate(stripControl(review.problem), 600), quote: truncate(stripControl(review.quote), 300), rationale: truncate(stripControl(review.rationale), 400) };
+}
+
+/** A review is used only when grounded in the issue: its quote must occur there. Undefined when it is not. */
+function checked(review: IssueReview, issue: IssueSample): IssueReview | undefined {
+  const r = sanitized(review);
+  if (!quoteOccurs(r.quote, issue)) return undefined;
+  // A stance needs a real maintainer comment among those the model was shown; text claiming to be one does not count.
+  if (!promptComments(issue).some((c) => c.role === "maintainer")) r.maintainerStance = "unknown";
+  return r;
+}
+
 function cacheKey(model: string, profile: ReviewInput["profile"], issue: IssueSample): string {
-  return `llm-issue-review:v${PROMPT_VERSION}:${model}:${profile.repo.owner}/${profile.repo.name}#${issue.number}@${issue.updatedAt}`;
+  return `llm-issue-review:v${PROMPT_VERSION}:${model}:${profile.repo.host}/${profile.repo.owner}/${profile.repo.name}#${issue.number}@${issue.updatedAt}`;
 }
 
 export function renderBatch(profile: ReviewInput["profile"], issues: IssueSample[], now: Date): string {
@@ -127,9 +158,12 @@ export function promptComments(issue: IssueSample): { role: "author" | "maintain
     .map((c) => ({ role: c.author?.login === issue.author?.login ? "author" as const : isMaintainer(c.association) ? "maintainer" as const : "user" as const, createdAt: c.createdAt, body: c.body! }));
 }
 
+/** Labels shown per issue; a tracker with dozens of labels on one issue would otherwise crowd out its text. */
+const MAX_LABELS = 8;
+
 export function renderIssue(issue: IssueSample, now: Date): string {
   const lines = [
-    `### Issue #${issue.number} (opened ${Math.round(daysAgo(issue.createdAt, now))} days ago, ${issue.commentCount} comments, ${issue.reactions} reactions, labels: ${issue.labels.map((l) => userText(l, 40)).join(", ") || "none"})`,
+    `### Issue #${issue.number} (opened ${Math.round(daysAgo(issue.createdAt, now))} days ago, ${issue.commentCount} comments, ${issue.reactions} reactions, labels: ${issue.labels.slice(0, MAX_LABELS).map((l) => userText(l, 40)).join(", ") || "none"}${issue.labels.length > MAX_LABELS ? ` and ${issue.labels.length - MAX_LABELS} more` : ""})`,
     `Title: ${userText(issue.title, 200)}`,
     // The template-free body (linear-time, comments and checklists gone) is what a reader would look at.
     `Body: ${userText(issueBody(issue.body), 1500) || "(empty)"}`,
@@ -138,10 +172,18 @@ export function renderIssue(issue: IssueSample, now: Date): string {
   return lines.join("\n");
 }
 
-/** The model's quote must be a real phrase of the issue or its comments. Whitespace and case may differ. */
+/** Han, kana and Hangul: text written without spaces between words, where a short run of characters is a phrase. */
+const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+/**
+ * The model's quote must be a real phrase of the issue or its comments. Whitespace and case may differ. A word or two
+ * ("bug", "the error") occurs in nearly every issue and grounds nothing, so the quote needs four words or 20
+ * characters (six characters in scripts written without spaces).
+ */
 export function quoteOccurs(quote: string, issue: IssueSample): boolean {
   const norm = (t: string) => stripControl(t).toLowerCase().replace(/[\s`*_>"'“”‘’]+/g, " ").trim();
   const q = norm(quote);
-  if (q.length < 3) return false;
+  const phrase = q.split(" ").length >= 4 || q.length >= 20 || (UNSPACED_SCRIPT.test(q) && q.length >= 6);
+  if (!phrase) return false;
   return norm([issue.title, issue.body, ...issue.lastComments.map((c) => c.body ?? "")].join("\n")).includes(q);
 }

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -87,22 +87,22 @@ describe("the install step", () => {
     const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-runs-"));
     writeRun(workdir, "20261023-163018-bnlx", { status: "escalated", install: { exitCode: 1, output: PNPM } });
     const run = readRun(workdir, "20261023-163018-bnlx");
-    expect(run?.install).toEqual({ exitCode: 1, timedOut: false, logPath: join(workdir, "runs", "20261023-163018-bnlx", "install-output.txt"), output: PNPM });
+    expect(run?.install).toEqual({ exitCode: 1, timedOut: false, logPath: join(workdir, "runs", "20261023-163018-bnlx", "install-output.txt"), output: PNPM, refused: [] });
     writeRun(workdir, "20261023-163019-none");
     expect(readRun(workdir, "20261023-163019-none")?.install).toBeUndefined();
   });
 
   it("is summarised only when it failed, with the end of the log and where the rest is", () => {
     const logPath = "/w/runs/r/install-output.txt";
-    expect(installSummary({ exitCode: 0, timedOut: false, logPath, output: "ok" })).toBeUndefined();
-    const lines = installSummary({ exitCode: 1, timedOut: false, logPath, output: PNPM })!;
+    expect(installSummary({ exitCode: 0, timedOut: false, logPath, output: "ok", refused: [] })).toBeUndefined();
+    const lines = installSummary({ exitCode: 1, timedOut: false, logPath, output: PNPM, refused: [] })!;
     expect(lines[0]).toBe("The repository's install failed (exit 1). End of /w/runs/r/install-output.txt:");
     expect(lines.some((line) => line.includes("Operation not permitted (os error 1)"))).toBe(true);
     expect(lines.every((line) => line.trim() !== "")).toBe(true);
-    const long = installSummary({ exitCode: 2, timedOut: false, logPath, output: Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n") }, 5)!;
+    const long = installSummary({ exitCode: 2, timedOut: false, logPath, output: Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n"), refused: [] }, 5)!;
     expect(long.slice(1)).toEqual(["  line 35", "  line 36", "  line 37", "  line 38", "  line 39"]);
-    expect(installSummary({ exitCode: null, timedOut: true, logPath, output: "" })![0]).toBe("The repository's install timed out. End of /w/runs/r/install-output.txt:");
-    expect(installSummary({ exitCode: 1, timedOut: false, logPath, output: "\u001b[31mred\u001b[0m" })).toContain("  red");
+    expect(installSummary({ exitCode: null, timedOut: true, logPath, output: "", refused: [] })![0]).toBe("The repository's install timed out. End of /w/runs/r/install-output.txt:");
+    expect(installSummary({ exitCode: 1, timedOut: false, logPath, output: "\u001b[31mred\u001b[0m", refused: [] })).toContain("  red");
   });
 });
 
@@ -131,5 +131,28 @@ describe("disk use", () => {
     const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-runs-"));
     writeRun(workdir, "20261023-171222-u5ul", { status: "awaiting_approval", workspaceBytes: 1000 });
     expect(formatRuns(listRuns(workdir), { color: false })).not.toContain("clean");
+  });
+});
+
+describe("an install limited to package registries", () => {
+  it("names the hosts it refused and how to allow them, only when the install failed", () => {
+    const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-runs-"));
+    writeRun(workdir, "20261023-210000-aaaa", { status: "escalated", install: { exitCode: 1, output: "npm ERR! fetch failed", network: "registries", refused: ["gitlab.com", "example.org"] } });
+    const install = readRun(workdir, "20261023-210000-aaaa")!.install!;
+    expect(install.refused).toEqual(["gitlab.com", "example.org"]);
+    const lines = installSummary(install)!;
+    expect(lines.at(-1)).toBe("The install tried gitlab.com and example.org, which are not package registries. If you trust them, run again with --install-network open.");
+
+    writeRun(workdir, "20261023-210000-bbbb", { status: "stopped", install: { exitCode: 0, output: "ok", network: "registries", refused: ["example.org"] } });
+    expect(installSummary(readRun(workdir, "20261023-210000-bbbb")!.install!)).toBeUndefined();
+  });
+});
+
+describe("the title shown for approval", () => {
+  it("is the one publishing sends: delivery.json's, not pr-title.txt's", () => {
+    const workdir = mkdtempSync(join(tmpdir(), "gitgoblin-runs-"));
+    const dir = writeRun(workdir, "20261024-000001-prep");
+    writeFileSync(join(dir, "delivery.json"), JSON.stringify({ prTitle: "fix: the title that is published", branch: "gitgoblin/x", commitSha: "0", commitMessage: "m", prBody: "b" }));
+    expect(readRun(workdir, "20261024-000001-prep")?.prTitle).toBe("fix: the title that is published");
   });
 });

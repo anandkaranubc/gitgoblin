@@ -1,9 +1,10 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { execShell } from "../src/exec.ts";
-import { detectHostSandbox, hostSandboxFor, OFFLINE_ENV, sandboxExecProfile, specFor, type HostSandboxSpec } from "../src/hostbox.ts";
+import { bwrapArgs, detectHostSandbox, hostSandboxFor, OFFLINE_ENV, sandboxExecProfile, specFor, type HostSandboxSpec } from "../src/hostbox.ts";
 
 const env = { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "", TMPDIR: process.env["TMPDIR"] ?? os.tmpdir() };
 const available = detectHostSandbox();
@@ -31,8 +32,38 @@ describe("sandboxExecProfile", () => {
     expect(profile.indexOf('(allow file-write* (subpath "/ws"))')).toBeLessThan(profile.indexOf('(deny file-write* (subpath "/ws/.git"))'));
     expect(sandboxExecProfile({ workspace: "/ws", extraWrite: [], denyRead: [], network: true })).not.toContain("(deny network*)");
   });
+  it("lets commands use Unix sockets only in their writable places", () => {
+    const offline = sandboxExecProfile({ workspace: "/ws", extraWrite: ["/tmpdir"], denyRead: [], network: false });
+    expect(offline).not.toMatch(/\(allow network-outbound \(remote unix-socket\)\)/);
+    for (const dir of ["/ws", "/tmpdir"]) {
+      expect(offline).toContain(`(allow network-bind network-inbound (local unix-socket (subpath "${dir}")))`);
+      expect(offline).toContain(`(allow network-outbound (remote unix-socket (subpath "${dir}")))`);
+    }
+    const online = sandboxExecProfile({ workspace: "/ws", extraWrite: [], denyRead: [], network: true });
+    expect(online).toContain("(deny network-outbound (remote unix-socket))");
+    expect(online).toContain('(allow network-outbound (remote unix-socket (path-literal "/private/var/run/mDNSResponder")))');
+    expect(online.indexOf("(deny network-outbound (remote unix-socket))")).toBeLessThan(online.indexOf('(allow network-outbound (remote unix-socket (subpath "/ws")))'));
+  });
   it("escapes quotes and backslashes in paths", () => {
     expect(sandboxExecProfile({ workspace: '/w"s\\x', extraWrite: [], denyRead: [], network: false })).toContain('(subpath "/w\\"s\\\\x")');
+  });
+});
+
+describe("bwrapArgs", () => {
+  it("empties the directories that hold other programs' sockets before binding the workspace back", () => {
+    const args = bwrapArgs({ workspace: "/tmp/run/ws", extraWrite: ["/tmp", "/home/u/.cache"], denyRead: [], network: false }, "true");
+    const tmpfs = args.flatMap((a, i) => (a === "--tmpfs" ? [args[i + 1]] : []));
+    for (const dir of ["/tmp", "/run", "/var/run"]) {
+      let real = false;
+      try {
+        real = lstatSync(dir).isDirectory();
+      } catch {}
+      expect(tmpfs.includes(dir)).toBe(real);
+    }
+    // /tmp itself is the fresh tmpfs, never the host's /tmp bound back.
+    expect(args.join(" ")).not.toContain("--bind /tmp /tmp");
+    const firstBind = args.indexOf("--bind");
+    for (let i = 0; i < args.length; i++) if (args[i] === "--tmpfs" && ["/tmp", "/run", "/var/run"].includes(args[i + 1]!)) expect(firstBind === -1 || i < firstBind).toBe(true);
   });
 });
 
@@ -82,8 +113,9 @@ describe.skipIf(!available)("host sandbox (OS)", () => {
     const git = await execShell("echo x > .git/pwned", { cwd: ws, env, wrap: wrap(spec) });
     expect(git.exitCode).not.toBe(0);
     expect(existsSync(path.join(ws, ".git", "pwned"))).toBe(false);
-    const parent = await execShell("echo x > ../pwned", { cwd: ws, env, wrap: wrap(spec) });
-    expect(parent.exitCode).not.toBe(0);
+    // bubblewrap gives the sandbox its own empty /tmp, where the write may land; the host's stays untouched.
+    await execShell("echo x > ../pwned", { cwd: ws, env, wrap: wrap(spec) });
+    expect(existsSync(path.join(ws, "..", "pwned"))).toBe(false);
     const home = await execShell(`echo x > "$HOME/gg-hostbox-pwned"`, { cwd: ws, env, wrap: wrap(spec) });
     expect(home.exitCode).not.toBe(0);
     expect(existsSync(path.join(env.HOME, "gg-hostbox-pwned"))).toBe(false);
@@ -101,6 +133,29 @@ describe.skipIf(!available)("host sandbox (OS)", () => {
       { cwd: ws, env, wrap: wrap(spec), timeoutMs: 20_000 },
     );
     expect(local.output).toContain("local pong");
+  });
+
+  it("keeps other programs' Unix sockets out of reach and lets commands use their own", async () => {
+    const { root, ws, spec } = layout();
+    // A socket outside the sandbox's writable places stands in for Docker's daemon or an SSH agent.
+    const outside = path.join(root, "daemon.sock");
+    const server = net.createServer((c) => c.end("SECRET-DAEMON"));
+    await new Promise<void>((resolve) => server.listen(outside, resolve));
+    try {
+      const probe = (target: string) => `node -e "const c=require('net').connect('${target}');c.on('data',d=>console.log('got',String(d)));c.on('error',e=>console.log('refused',e.code))"`;
+      for (const net_ of [false, true]) {
+        const reach = await execShell(probe(outside), { cwd: ws, env, wrap: wrap({ ...spec, network: net_ }), timeoutMs: 20_000 });
+        expect(reach.output).not.toContain("SECRET-DAEMON");
+        expect(reach.output).toContain("refused");
+      }
+      const own = await execShell(
+        `node -e "const net=require('net'),p=require('path').join(process.cwd(),'own.sock');const s=net.createServer(c=>c.end('mine')).listen(p,()=>net.connect(p).on('data',d=>{console.log('own',String(d));s.close()}).on('error',e=>console.log('own failed',e.code)))"`,
+        { cwd: ws, env, wrap: wrap(spec), timeoutMs: 20_000 },
+      );
+      expect(own.output).toContain("own mine");
+    } finally {
+      server.close();
+    }
   });
 
   it("runs the tool chain and lets the install phase reach the network", async () => {
@@ -190,4 +245,32 @@ describe.skipIf(!available)("offline checks (OS)", () => {
     expect(r.exitCode).not.toBe(0);
     expect(Date.now() - started).toBeLessThan(30_000);
   }, 60_000);
+});
+
+/** A terminal device this user can open outside any sandbox, if there is one. */
+function openableTerminal(): string | undefined {
+  for (const name of readdirSync("/dev").filter((d) => /^ttys\d+$/.test(d))) {
+    try {
+      closeSync(openSync(`/dev/${name}`, "r+"));
+      return `/dev/${name}`;
+    } catch {
+      // not ours
+    }
+  }
+  return undefined;
+}
+
+describe.skipIf(available?.kind !== "sandbox-exec" || !openableTerminal())("host sandbox and terminals (macOS)", () => {
+  it("keeps repository commands away from the person's terminals", async () => {
+    // A terminal device lets code type into or read from another tab: escape sequences that rewrite
+    // the screen or set the clipboard, or keystrokes. Sandboxed commands run detached with no terminal.
+    const tty = openableTerminal()!;
+    const ws = mkdtempSync(path.join(os.tmpdir(), "gg-tty-"));
+    const run = (command: string) => execShell(command, { cwd: ws, env, wrap: (c) => available!.wrap(c, specFor(ws, false)) });
+    const write = await run(`printf '' > ${tty} && echo WROTE || echo refused`);
+    expect(write.output).not.toContain("WROTE");
+    const read = await run(`node -e "try { require('fs').openSync('${tty}', 'r'); console.log('OPENED') } catch (e) { console.log('refused', e.code) }"`);
+    expect(read.output).not.toContain("OPENED");
+    expect((await run("echo still works > out.txt && cat out.txt")).output).toContain("still works");
+  });
 });

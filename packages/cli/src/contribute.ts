@@ -1,6 +1,8 @@
+import { accessSync, constants, statSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { styleText } from "node:util";
 import type { ChangePlan, RunResult } from "@gitgoblin/engine";
-import type { AnalysisReport, ContributionOpportunity } from "@gitgoblin/intel";
+import type { AnalysisReport, ContributionOpportunity, RepositoryProfile } from "@gitgoblin/intel";
 import type { Style } from "./format.ts";
 import { plain } from "./text.ts";
 
@@ -90,7 +92,7 @@ export function selectOpportunity(report: AnalysisReport, choice: Choice): Contr
       return found;
     }
     const found = all.find((o) => o.id.toLowerCase() === wanted.toLowerCase());
-    if (!found) throw new Error(`No opportunity "${wanted}". Available: ${all.map((o) => `${o.id} (${o.title})`).join("; ")}`);
+    if (!found) throw new Error(`No opportunity "${plain(wanted)}". Available: ${all.map((o) => `${o.id} (${plain(o.title)})`).join("; ")}`);
     return found;
   }
   return all.length === 1 ? all[0] : undefined;
@@ -192,4 +194,75 @@ export function issueGap(report: AnalysisReport): string | undefined {
   const why = reason ? ` (${plain(reason)})` : "";
   const advice = failed ? " Try again in a minute, or check your token with `gh auth status`." : "";
   return `Issues and pull requests were not analyzed${why}, so opportunities from them are missing.${advice}`;
+}
+
+/** The checks the engine runs, in its order (packages/engine/src/verify.ts). */
+const CHECK_ORDER = ["typecheck", "lint", "build", "test"] as const;
+
+/**
+ * Which of the project's own commands the engine will run to check a change, from the same choice the
+ * engine makes (packages/engine/src/intake.ts: the first command set that can run tests, else the
+ * first). Said before anything runs, because verification is only as strong as these commands.
+ */
+/** The command set the engine runs: the first ecosystem with a test command, else the first one. */
+function chosenCommands(profile: RepositoryProfile): Record<string, string | undefined> {
+  const sets = profile.ecosystems.map((e) => e.commands as Record<string, string | undefined>);
+  return sets.find((c) => c.test) ?? sets[0] ?? {};
+}
+
+export function checksLine(profile: RepositoryProfile): string {
+  const chosen = chosenCommands(profile);
+  const commands = CHECK_ORDER.map((name) => chosen[name]).filter((c): c is string => typeof c === "string" && c.length > 0).map(plain);
+  if (commands.length === 0) return "No check commands were found, so the engine cannot verify the change against the project's own checks.";
+  const noTests = chosen.test ? "" : " No test command was found; unless the agent finds one while investigating, the project's tests will not run.";
+  return `The engine will check the change with the project's own commands: ${commands.join(", ")}.${noTests}`;
+}
+
+/**
+ * Launchers the engine expects to find on this machine. It installs a project's dependencies, and
+ * puts a Python project's virtualenv on PATH, but never installs these; a project whose commands
+ * start with one that is missing fails at its install, minutes into a run.
+ */
+const TOOLCHAINS = new Set(["node", "npm", "pnpm", "yarn", "bun", "deno", "cargo", "go", "uv", "poetry", "pdm", "hatch", "make", "cmake", "mvn", "gradle", "bundle", "ruby", "rake", "composer", "php", "dotnet", "swift", "mix"]);
+
+/** Launchers that come with another tool: the tool is what a person installs and what the warning names. */
+const LAUNCHED_BY: Record<string, string> = { bunx: "bun", npx: "npm", pnpx: "pnpm" };
+
+/** The program a command starts, after any leading VAR=value assignments. */
+function programOf(command: string): string | undefined {
+  return command
+    .trim()
+    .split(/\s+/)
+    .find((word) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word));
+}
+
+/** Toolchain launchers the engine's install and checks start, which `isAvailable` says this machine lacks. */
+export function missingToolchains(profile: RepositoryProfile, isAvailable: (name: string) => boolean): string[] {
+  const commands = Object.values(chosenCommands(profile)).filter((c): c is string => typeof c === "string");
+  const programs = new Set(
+    commands
+      .map(programOf)
+      .map((p) => (p === undefined ? undefined : (LAUNCHED_BY[p] ?? p)))
+      .filter((p): p is string => p !== undefined && TOOLCHAINS.has(p)),
+  );
+  return [...programs].filter((p) => !isAvailable(p)).sort();
+}
+
+export function toolchainWarning(missing: string[]): string {
+  const names = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(", ")} and ${missing.at(-1)}`;
+  return `Warning: ${names} ${missing.length === 1 ? "is" : "are"} not installed on this machine (not on PATH). The project's install and checks need ${missing.length === 1 ? "it" : "them"}, so install ${missing.length === 1 ? "it" : "them"} first, or the run will stop after the install fails.`;
+}
+
+/** Whether an executable file `name` is in one of PATH's directories. */
+export function onPath(name: string, path: string): boolean {
+  return path.split(delimiter).some((dir) => {
+    if (!dir) return false;
+    try {
+      const file = join(dir, name);
+      accessSync(file, constants.X_OK);
+      return statSync(file).isFile();
+    } catch {
+      return false;
+    }
+  });
 }
