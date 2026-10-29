@@ -58,6 +58,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## @gitgoblin/mcp 0.1.8 - Unreleased
 
+- The discover tool gets each repository's GitHub details again (starter issues, contributing guide,
+  recent merges). GitHub timed out on its requests for 20 repositories at a time with HTTP 502, and
+  one failed request dropped the details of every candidate; it now asks for 10 at a time, splits a
+  request GitHub cannot finish, and keeps what it fetched.
 - The analyze tool's build and test commands for Bun projects run the project's scripts, and it no
   longer invents a TypeScript check when the repository root has no `tsconfig.json`.
 - A failing CI workflow that needs repository secrets forks do not get is no longer ranked as an
