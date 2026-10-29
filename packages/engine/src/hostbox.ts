@@ -136,6 +136,12 @@ export interface SpecOptions {
   strict?: boolean;
   home?: string;
   tmpdir?: string;
+  /**
+   * The run's own temp directory. When set it replaces the shared ones (the per-user temp directory
+   * and /tmp), where other programs keep their control sockets and FIFOs: a tmux or screen server
+   * runs unsandboxed and does whatever a client that reaches it asks.
+   */
+  tmp?: string;
 }
 
 /** The spec for commands in `workspace`: temp dir, tool caches and the given extras writable, credential paths hidden. */
@@ -157,7 +163,8 @@ function buildSpec(workspace: string, network: boolean, options: SpecOptions): H
   const tmpdir = options.tmpdir ?? os.tmpdir();
   const existing = (rels: string[]) => rels.map((rel) => path.join(home, rel)).filter((p) => existsSync(p));
   const systemTmp = existsSync("/tmp") ? ["/tmp"] : [];
-  const extraWrite = [tmpdir, ...systemTmp, ...(options.extraWrite ?? []), ...existing(CACHE_DIRS)];
+  const temp = options.tmp ? [options.tmp, ...pnpmLocks()] : [tmpdir, ...systemTmp];
+  const extraWrite = [...temp, ...(options.extraWrite ?? []), ...existing(CACHE_DIRS)];
   const credentials = CREDENTIAL_PATHS.map((rel) => path.join(home, rel));
   if (!options.strict) return { workspace, extraWrite, denyRead: credentials, network };
   // The running node binary may itself live under the home directory (nvm, volta, fnm).
@@ -166,6 +173,15 @@ function buildSpec(workspace: string, network: boolean, options: SpecOptions): H
   const underHome = (p: string) => p === home || p.startsWith(home + path.sep);
   const allowRead = [...new Set([...existing(TOOLCHAIN_DIRS), ...existing(CACHE_DIRS), ...extraWrite, workspace, nodeHome].filter(underHome).filter((p) => p !== home))];
   return { workspace, extraWrite, denyRead: [home, ...credentials], allowRead, network };
+}
+
+/**
+ * pnpm 12 locks its store in /tmp whatever TMPDIR says, so on macOS, where the sandbox cannot give
+ * commands a /tmp of their own, that one directory stays writable. bubblewrap's private /tmp has it.
+ */
+function pnpmLocks(): string[] {
+  const uid = process.getuid?.();
+  return process.platform === "darwin" && uid !== undefined ? [path.join(real("/tmp"), `pnpm-store-operation-locks-${uid}`)] : [];
 }
 
 function isRealDirectory(p: string): boolean {

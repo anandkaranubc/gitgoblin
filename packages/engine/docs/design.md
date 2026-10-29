@@ -82,14 +82,19 @@ Escalations and stops still write a full report so a human can pick up where the
 - Agent SDK sandbox: writes limited to the workspace (never its `.git`) and temp dirs, nothing at
   all for the reviewer, no network, no unsandboxed escape (`allowUnsandboxedCommands: false`),
   credential files under the home directory unreadable, model keys hidden from shell commands.
-  The engine refuses to run unsandboxed unless asked.
+  The engine refuses to run unsandboxed unless asked. Known gap: those temp dirs are still the
+  shared ones on macOS, where a screen server's FIFO would run what the agent's shell writes to it;
+  moving the agent to the run's own temp directory needs a live run to confirm the SDK's own needs.
 - The engine's own git calls disable repository hooks and the filesystem monitor, and publishing
   resets any repository-local credential helper, so nothing the agent writes into the checkout can
   run code on the host.
 - Install and verification commands run on the host with an environment stripped of every
   credential, including model keys, and by default inside an OS sandbox of their own (`hostbox.ts`:
   `sandbox-exec` on macOS, bubblewrap on Linux when installed). Inside it, writes are limited to the
-  workspace (never its `.git`), the temp directory and tool caches under the home directory;
+  workspace (never its `.git`), a temp directory of the run's own (`TMPDIR`) and tool caches under
+  the home directory. The shared temp directories are not writable: tmux and screen keep their
+  servers' control sockets and FIFOs there, and those servers run, outside any sandbox, whatever a
+  client sends (on macOS only pnpm's store locks in `/tmp` stay writable);
   credential paths are unreadable; Unix sockets work only in those writable places, so other
   programs' sockets (Docker's daemon, SSH, GPG and keyring agents, D-Bus, X11) stay out of reach
   (bubblewrap gets empty `/tmp` and `/run`); the network is cut except on localhost, and during the install
@@ -99,7 +104,7 @@ Escalations and stops still write a full report so a human can pick up where the
   directory (`toolchain.ts`), on PATH for the repository commands and the agent alike, so installs
   land there instead of in the operator's interpreter. `checkIsolation: "sandbox"` fails the run
   when no OS sandbox exists; `"strict"` also hides the home directory from repository commands
-  except toolchain and cache directories, the temp directory and the run's prefix (credential
+  except toolchain and cache directories, the run's temp directory and prefix (credential
   paths stay denied even inside those; folder metadata stays visible because tools resolve their
   own paths). With `sandbox-exec` the install's proxy listens on the host's
   127.0.0.1, which the sandbox allows; bubblewrap gives the install its own network namespace, so
