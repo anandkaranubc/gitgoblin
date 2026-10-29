@@ -32,6 +32,11 @@ describe("sandboxExecProfile", () => {
     expect(profile.indexOf('(allow file-write* (subpath "/ws"))')).toBeLessThan(profile.indexOf('(deny file-write* (subpath "/ws/.git"))'));
     expect(sandboxExecProfile({ workspace: "/ws", extraWrite: [], denyRead: [], network: true })).not.toContain("(deny network*)");
   });
+  it("denies opening apps and sending them Apple events", () => {
+    const profile = sandboxExecProfile({ workspace: "/ws", extraWrite: [], denyRead: [], network: false });
+    expect(profile).toContain("(deny lsopen)");
+    expect(profile).toContain("(deny appleevent-send)");
+  });
   it("lets commands use Unix sockets only in their writable places", () => {
     const offline = sandboxExecProfile({ workspace: "/ws", extraWrite: ["/tmpdir"], denyRead: [], network: false });
     expect(offline).not.toMatch(/\(allow network-outbound \(remote unix-socket\)\)/);
@@ -156,6 +161,14 @@ describe.skipIf(!available)("host sandbox (OS)", () => {
     } finally {
       server.close();
     }
+  });
+
+  it.skipIf(sandbox.kind !== "sandbox-exec")("cannot open apps, and local scripts still run", async () => {
+    const { ws, spec } = layout();
+    const open = await execShell("open -g /System/Library/CoreServices/Finder.app/Contents/Resources", { cwd: ws, env, wrap: wrap(spec), timeoutMs: 20_000 });
+    expect(open.output).toMatch(/error -54|failed/);
+    const local = await execShell(`osascript -e "return 2 + 2"`, { cwd: ws, env, wrap: wrap(spec), timeoutMs: 20_000 });
+    expect(local.output.trim()).toBe("4");
   });
 
   it("runs the tool chain and lets the install phase reach the network", async () => {

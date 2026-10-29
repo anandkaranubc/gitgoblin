@@ -231,7 +231,9 @@ function sbpl(value: string): string {
  * then allows the few places a build may write, ending with the `.git` directory denied again.
  */
 export function sandboxExecProfile(spec: HostSandboxSpec): string {
-  const lines = ["(version 1)", "(allow default)"];
+  // Apps started through LaunchServices (`open x.command`) and apps a script drives with Apple events
+  // (Terminal's "do script") run outside the sandbox and do what they are told; builds need neither.
+  const lines = ["(version 1)", "(allow default)", "(deny lsopen)", "(deny appleevent-send)"];
   const writable = [spec.workspace, ...spec.extraWrite];
   if (!spec.network) {
     lines.push(
