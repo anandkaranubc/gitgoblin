@@ -68,11 +68,23 @@ describe("cleanRun", () => {
     expect(existsSync(ws)).toBe(false);
   });
 
-  it("cleans a published run whose workspace holds nothing new", async () => {
+  it("cleans a published run whose workspace holds nothing new, install output aside", async () => {
     const { workdir, result } = await runOn(happy);
     const file = path.join(result.runDir, "result.json");
     writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), status: "published" }));
+    // A repository that does not ignore node_modules still has nothing of the person's in it.
+    mkdirSync(path.join(result.workspace!, "node_modules", "x"), { recursive: true });
+    writeFileSync(path.join(result.workspace!, "node_modules", "x", "index.js"), "");
     expect((await cleanRun(result.runId, { workdir, env })).removed).toContain(result.workspace);
+  });
+
+  it("keeps a published run's workspace that git cannot read", async () => {
+    const { workdir, result } = await runOn(happy);
+    const file = path.join(result.runDir, "result.json");
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), status: "published" }));
+    writeFileSync(path.join(result.workspace!, ".git"), "gitdir: /nowhere\n");
+    await expect(cleanRun(result.runId, { workdir, env })).rejects.toThrow(/a state git could not read/);
+    expect(existsSync(result.workspace!)).toBe(true);
   });
 
   it("refuses a workspace record that points outside the run, or a branch it did not create", async () => {

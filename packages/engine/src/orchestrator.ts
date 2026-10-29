@@ -49,7 +49,7 @@ import {
   type Verification,
 } from "./types.ts";
 import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
-import { DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, type Workspace } from "./workspace.ts";
+import { DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, unpublishedWork, type Workspace } from "./workspace.ts";
 
 export interface RunInput {
   /** A Task written by hand or exported from an earlier run. */
@@ -706,8 +706,8 @@ export async function cleanRun(runId: string, options: CleanRunOptions = {}): Pr
     const existed = existsSync(wsPath);
     // After publishing, the workspace is where a person answers review comments.
     if (existed && result?.status === "published" && !options.force) {
-      const left = await workSincePublishing(wsPath, journal.readArtifact<{ commitSha?: unknown }>("delivery")?.commitSha, env);
-      if (left) throw new Error(`run ${runId} was published, and its workspace has ${left}; push or copy them first, or clean with force to discard them`);
+      const left = await unpublishedWork(wsPath, journal.readArtifact<{ commitSha?: unknown }>("delivery")?.commitSha, workspace.branch, env);
+      if (left) throw new Error(`run ${runId} was published, and its workspace has ${left}. Push or copy what you want to keep; once it is safe (pushed already, say), clean with force`);
     }
     await removeWorkspace({ ...workspace, path: wsPath }, env);
     if (existed) removed.push(wsPath);
@@ -721,14 +721,6 @@ export async function cleanRun(runId: string, options: CleanRunOptions = {}): Pr
   }
   journal.event("run", "cleaned", { removed });
   return { removed };
-}
-
-/** What a published run's workspace holds beyond the published commit, in words, or undefined when nothing. */
-async function workSincePublishing(wsPath: string, commitSha: unknown, env: Record<string, string>): Promise<string | undefined> {
-  const status = await git(["status", "--porcelain"], wsPath, env).catch(() => "");
-  const ahead = typeof commitSha === "string" ? Number(await git(["rev-list", "--count", `${commitSha}..HEAD`], wsPath, env).catch(() => "0")) : 0;
-  const parts = [ahead > 0 ? `${ahead} commit${ahead === 1 ? "" : "s"} after the published one` : "", status ? "changes that are not committed" : ""].filter(Boolean);
-  return parts.length > 0 ? parts.join(" and ") : undefined;
 }
 
 /** Tracked files that differ from HEAD in the working tree, put back as committed. Returns their paths. */
