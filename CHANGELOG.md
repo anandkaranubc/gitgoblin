@@ -15,7 +15,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - When a project's tests already fail before the change, `contribute` no longer takes "also fails on
   the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
   web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
-  tests, or fewer passing ones, as a regression. The pull request shows both counts.
+  tests, or fewer passing ones, as a regression. The pull request shows both counts. A suite that
+  reported results before the change and none after it (a module that no longer loads, a compile
+  error) is a regression too, and so is an output too long to keep whole whose kept end already
+  shows more failures.
 - Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
   `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
   now holds the start of the output as well as the end, so the first error survives a long log.
