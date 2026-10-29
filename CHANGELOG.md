@@ -5,10 +5,11 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
-## gitgoblin 0.1.2 - 2026-10-29
+## gitgoblin 0.1.3 - 2026-10-29
 
 Upgrade from 0.1.0 and 0.1.1: both let a repository's commands get around the sandbox in the
-ways listed under Safety.
+ways listed under Safety. 0.1.2 was tagged but never published: its release build stopped on a
+test that could not load without an OS sandbox. This is the same release.
 
 **Safety**
 
