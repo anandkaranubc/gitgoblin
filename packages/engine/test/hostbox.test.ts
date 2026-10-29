@@ -1,10 +1,10 @@
-import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { execShell } from "../src/exec.ts";
-import { bwrapArgs, detectHostSandbox, hostSandboxFor, OFFLINE_ENV, sandboxExecProfile, specFor, type HostSandboxSpec } from "../src/hostbox.ts";
+import { bwrapArgs, detectHostSandbox, hostSandboxFor, OFFLINE_ENV, sandboxExecProfile, specFor, trustedPath, type HostSandboxSpec } from "../src/hostbox.ts";
 
 const env = { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "", TMPDIR: process.env["TMPDIR"] ?? os.tmpdir() };
 const available = detectHostSandbox();
@@ -31,6 +31,11 @@ describe("sandboxExecProfile", () => {
     expect(profile.indexOf("(deny file-write*)")).toBeLessThan(profile.indexOf('(allow file-write* (subpath "/ws"))'));
     expect(profile.indexOf('(allow file-write* (subpath "/ws"))')).toBeLessThan(profile.indexOf('(deny file-write* (subpath "/ws/.git"))'));
     expect(sandboxExecProfile({ workspace: "/ws", extraWrite: [], denyRead: [], network: true })).not.toContain("(deny network*)");
+  });
+  it("denies opening apps and sending them Apple events", () => {
+    const profile = sandboxExecProfile({ workspace: "/ws", extraWrite: [], denyRead: [], network: false });
+    expect(profile).toContain("(deny lsopen)");
+    expect(profile).toContain("(deny appleevent-send)");
   });
   it("lets commands use Unix sockets only in their writable places", () => {
     const offline = sandboxExecProfile({ workspace: "/ws", extraWrite: ["/tmpdir"], denyRead: [], network: false });
@@ -101,6 +106,19 @@ describe("specFor strict mode", () => {
   });
 });
 
+describe("credential paths", () => {
+  it("hides Claude's configuration, wherever it lives, and the files cloud credentials point at", () => {
+    // A real folder as the home directory: /home is an automounter path on macOS, slow to look up.
+    const home = realpathSync(mkdtempSync(path.join(os.tmpdir(), "gg-home-")));
+    const env = { CLAUDE_CONFIG_DIR: "/opt/claude", GOOGLE_APPLICATION_CREDENTIALS: "/keys/sa.json", AWS_SHARED_CREDENTIALS_FILE: "/keys/aws" };
+    for (const strict of [false, true]) {
+      const denied = specFor("/ws", false, { home, strict, credentialEnv: env }).denyRead;
+      for (const p of ["/opt/claude", "/keys/sa.json", "/keys/aws"]) expect(denied).toContain(p);
+    }
+    expect(specFor("/ws", false, { home, credentialEnv: {} }).denyRead).toContain(path.join(home, ".claude"));
+  });
+});
+
 describe.skipIf(!available)("host sandbox (OS)", () => {
   const sandbox = available!;
   const wrap = (spec: HostSandboxSpec) => (command: string) => sandbox.wrap(command, spec);
@@ -119,6 +137,16 @@ describe.skipIf(!available)("host sandbox (OS)", () => {
     const home = await execShell(`echo x > "$HOME/gg-hostbox-pwned"`, { cwd: ws, env, wrap: wrap(spec) });
     expect(home.exitCode).not.toBe(0);
     expect(existsSync(path.join(env.HOME, "gg-hostbox-pwned"))).toBe(false);
+  });
+
+  it("hides a Claude login kept outside the home directory", async () => {
+    const { root, ws } = layout();
+    const config = path.join(root, "claude-config");
+    mkdirSync(config);
+    writeFileSync(path.join(config, ".credentials.json"), "CLAUDE-LOGIN");
+    const spec = specFor(ws, false, { credentialEnv: { CLAUDE_CONFIG_DIR: config } });
+    const read = await execShell(`cat "${path.join(config, ".credentials.json")}"`, { cwd: ws, env, wrap: wrap(spec) });
+    expect(read.output).not.toContain("CLAUDE-LOGIN");
   });
 
   it("hides credential paths and cuts the network while keeping localhost", async () => {
@@ -156,6 +184,14 @@ describe.skipIf(!available)("host sandbox (OS)", () => {
     } finally {
       server.close();
     }
+  });
+
+  it.skipIf(sandbox.kind !== "sandbox-exec")("cannot open apps, and local scripts still run", async () => {
+    const { ws, spec } = layout();
+    const open = await execShell("open -g /System/Library/CoreServices/Finder.app/Contents/Resources", { cwd: ws, env, wrap: wrap(spec), timeoutMs: 20_000 });
+    expect(open.output).toMatch(/error -54|failed/);
+    const local = await execShell(`osascript -e "return 2 + 2"`, { cwd: ws, env, wrap: wrap(spec), timeoutMs: 20_000 });
+    expect(local.output.trim()).toBe("4");
   });
 
   it("runs the tool chain and lets the install phase reach the network", async () => {
@@ -209,6 +245,40 @@ describe("specFor paths", () => {
   it("lets tools use the shared /tmp as well as the per-user temp directory", () => {
     const spec = specFor(mkdtempSync(path.join(os.tmpdir(), "gg-real-")), false);
     if (existsSync("/tmp")) expect(spec.extraWrite).toContain(realpathSync("/tmp"));
+  });
+});
+
+describe("trustedPath", () => {
+  it("follows the system's own links and stops at one a user or a command made", () => {
+    const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "gg-links-")));
+    mkdirSync(path.join(root, "target"));
+    symlinkSync(path.join(root, "target"), path.join(root, "cache"));
+    expect(trustedPath(path.join(root, "cache"))).toBe(path.join(root, "cache"));
+    expect(trustedPath(path.join(root, "cache", "deeper"))).toBe(path.join(root, "cache", "deeper"));
+    expect(trustedPath(path.join(root, "target"))).toBe(path.join(root, "target"));
+    // os.tmpdir() is reached through root-owned links on macOS (/var -> /private/var).
+    expect(trustedPath(os.tmpdir())).toBe(realpathSync(os.tmpdir()));
+    expect(specFor("/ws", false, { home: "/home/x", extraWrite: [path.join(root, "cache")] }).extraWrite).toContain(path.join(root, "cache"));
+  });
+});
+
+describe.skipIf(!available)("writable folders swapped for links (OS)", () => {
+  it("does not open a link's target to the next command", async () => {
+    const { root, ws } = layout();
+    const cache = path.join(realpathSync(root), "cache");
+    const outside = path.join(realpathSync(root), "outside");
+    const ownTmp = path.join(realpathSync(root), "own-tmp");
+    for (const dir of [cache, outside, ownTmp]) mkdirSync(dir);
+    // A spec rebuilt for every command, as the engine does, with the shared temp directory out of the way.
+    const run = (command: string) => execShell(command, { cwd: ws, env, wrap: (c) => available!.wrap(c, specFor(ws, false, { extraWrite: [cache], tmpdir: ownTmp })), timeoutMs: 20_000 });
+    expect((await run(`touch "${outside}/direct"`)).exitCode).not.toBe(0);
+    // A command replaces the writable cache with a link to a folder it may not write; under bubblewrap
+    // the bound folder cannot be removed at all.
+    await run(`rm -rf "${cache}" && ln -s "${outside}" "${cache}"`);
+    await run(`touch "${cache}/through-link"`);
+    expect(existsSync(path.join(outside, "direct"))).toBe(false);
+    expect(existsSync(path.join(outside, "through-link"))).toBe(false);
+    rmSync(root, { recursive: true, force: true });
   });
 });
 

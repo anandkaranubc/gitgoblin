@@ -166,6 +166,24 @@ export async function stageAll(wsPath: string, env: Record<string, string>, base
   if (baseSha) await git(["reset", "-q", baseSha, "--", ...STRAY_CACHES], wsPath, env).catch(() => undefined);
 }
 
+/**
+ * What a published run's workspace holds beyond the published commit, in words, or undefined when
+ * nothing: changes not committed (install output in STRAY_CACHES aside), and commits after it on HEAD
+ * or the run's branch. A workspace git cannot read counts as holding work, so nothing is deleted blind.
+ */
+export async function unpublishedWork(wsPath: string, commitSha: unknown, branch: string, env: Record<string, string>): Promise<string | undefined> {
+  let status: string;
+  let ahead = 0;
+  try {
+    status = await git(["status", "--porcelain", "--", ".", ...STRAY_CACHES.map((p) => p.replace(":(glob)", ":(exclude,glob)"))], wsPath, env);
+    if (typeof commitSha === "string") ahead = Number(await git(["rev-list", "--count", "HEAD", branch, `^${commitSha}`], wsPath, env));
+  } catch (error) {
+    return `a state git could not read (${error instanceof Error ? error.message.split("\n")[0] : String(error)})`;
+  }
+  const parts = [ahead > 0 ? `${ahead} commit${ahead === 1 ? "" : "s"} after the published one` : "", status ? "changes that are not committed" : ""].filter(Boolean);
+  return parts.length > 0 ? parts.join(" and ") : undefined;
+}
+
 /** Changes since the run's base commit, whether the agent committed them or not. */
 export async function diffStats(wsPath: string, baseSha: string, env: Record<string, string>): Promise<DiffStats> {
   await stageAll(wsPath, env, baseSha);
