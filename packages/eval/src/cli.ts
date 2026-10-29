@@ -4,9 +4,11 @@ import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { type BacktestDataset, evaluate, examplesFrom, fetchDataset, LEARN_FEATURES, rescore } from "./discovery-backtest.ts";
 import { compareRescore } from "./compare.ts";
+import { fetchIssueOutcomes, type IssueOutcomeDataset, summarize as summarizeIssues } from "./issue-outcomes.ts";
+import { seededRandom } from "./metrics.ts";
 import { fitLogistic, leaveOneGroupOut } from "./learn.ts";
 import { gradeIssues, type IntelBacktestDataset, type IssueGradingDataset, regradeDataset, runIntelBacktest } from "./intel-backtest.ts";
-import { renderEvaluation, renderIntel, renderIssueGrading, renderKinds, renderLearning, renderSlices, renderTracker } from "./report.ts";
+import { renderEvaluation, renderIntel, renderIssueGrading, renderIssueOutcomes, renderKinds, renderLearning, renderSlices, renderTracker } from "./report.ts";
 import { fetchKinds, type KindsDataset } from "./tracker-kinds.ts";
 
 const USAGE = `usage:
@@ -17,6 +19,8 @@ const USAGE = `usage:
   gitgoblin-eval discovery slices data/file.json
   gitgoblin-eval discovery compare data/file.json   (stored scores against the discovery code checked out now, paired)
   gitgoblin-eval tracker data/file.json
+  gitgoblin-eval issues fetch --from data/discovery-backtest.json [--repos 100] [--seed 1] [--resume data/file.json] --out data/file.json   (live; issues open at the dataset's date, assessed then, graded after)
+  gitgoblin-eval issues report data/file.json
   gitgoblin-eval tracker kinds data/file.json --out data/kinds.json   (live; samples merged outsider PRs and reads their files)
   gitgoblin-eval tracker kinds-report data/kinds.json
   gitgoblin-eval intel fetch --as-of YYYY-MM-DD --repos owner/name,owner/name --out data/file.json [--max 40]
@@ -43,6 +47,7 @@ const { values, positionals } = parseArgs({
     repos: { type: "string" },
     max: { type: "string", default: "40" },
     "min-grade": { type: "string", default: "1" },
+    from: { type: "string" },
     resume: { type: "string" },
     recompute: { type: "boolean", default: false },
     "include-uncovered": { type: "boolean", default: false },
@@ -144,6 +149,23 @@ if (command === "discovery" && sub === "fetch") {
 } else if (command === "intel" && sub === "report") {
   if (!file) fail("a dataset file is required");
   console.log(renderIntel(JSON.parse(await readFile(file, "utf8")) as IntelBacktestDataset));
+} else if (command === "issues" && sub === "fetch") {
+  if (!values.from) fail("--from is required");
+  if (!values.out) fail("--out is required");
+  const source = await readDataset(values.from);
+  // Eligible, fully measured repositories that had issues, sampled with a fixed seed.
+  const pool = source.rows.filter((r) => !r.excluded && r.issueCount > 0 && (r.historyStart === undefined || r.historyStart <= source.asOf || !r.prsTruncated)).map((r) => r.id.replace(/^github\.com\//, "")).sort();
+  const random = seededRandom(Number(values.seed));
+  const repos = pool.map((id) => ({ id, r: random() })).sort((a, b) => a.r - b.r).slice(0, Number(values.repos ?? 100)).map((x) => x.id);
+  const resume = values.resume ? (JSON.parse(await readFile(values.resume, "utf8")) as IssueOutcomeDataset) : undefined;
+  const data = await fetchIssueOutcomes(repos, source.asOf, source.windowDays, { resume, cachePath: values.cache ?? new URL("../.cache/http-cache.sqlite", import.meta.url).pathname, log: (m) => console.error(m) });
+  await mkdir(dirname(values.out), { recursive: true });
+  await writeFile(values.out, JSON.stringify(data));
+  console.log(renderIssueOutcomes(data, summarizeIssues(data, { iterations: Number(values.iterations) })));
+} else if (command === "issues" && sub === "report") {
+  if (!file) fail("a dataset file is required");
+  const data = JSON.parse(await readFile(file, "utf8")) as IssueOutcomeDataset;
+  console.log(renderIssueOutcomes(data, summarizeIssues(data, { iterations: Number(values.iterations) })));
 } else if (command === "tracker" && sub === "kinds") {
   if (!values.out) fail("--out is required");
   const data = await fetchKinds(await readDataset(file), { cachePath: values.cache ?? new URL("../.cache/http-cache.sqlite", import.meta.url).pathname, log: (m) => console.error(m) });

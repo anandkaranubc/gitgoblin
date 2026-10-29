@@ -22,6 +22,20 @@ describe("runChecks", () => {
     expect(checks.map((c) => c.status)).toEqual(["pass", "fail", "timeout"]);
     expect(checks[1]?.outputTail).toContain("nope");
   });
+  it("hands over the whole output and keeps its start in the excerpt", async () => {
+    const outputs: Record<string, string> = {};
+    const [long] = await runChecks([{ name: "test", command: "echo 'browserType.launch failed'; yes filler | head -c 20000; echo done; exit 1" }], {
+      cwd: process.cwd(),
+      env,
+      onOutput: (c, output) => {
+        outputs[c.name] = output;
+      },
+    });
+    expect(outputs["test"]?.length).toBeGreaterThan(20000);
+    expect(long?.outputTail.length).toBeLessThan(6200);
+    expect(long?.outputTail.startsWith("browserType.launch failed")).toBe(true);
+    expect(long?.outputTail.trimEnd().endsWith("done")).toBe(true);
+  });
   it("records the runner's test counts when it prints a summary", async () => {
     const [counted, plain] = await runChecks(
       [{ name: "test", command: "printf '      Tests  1 failed | 2 passed (3)\\n'; exit 1" }, { name: "lint", command: "echo 'no summary here'; exit 1" }],

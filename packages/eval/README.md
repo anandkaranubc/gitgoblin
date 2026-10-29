@@ -26,6 +26,10 @@ node packages/eval/src/cli.ts intel report packages/eval/data/intel-backtest-202
 node packages/eval/src/cli.ts intel issues packages/eval/data/intel-backtest-2026-04-25.json --out packages/eval/data/intel-issues-2026-04-25.json
 node packages/eval/src/cli.ts intel issues-report packages/eval/data/intel-issues-2026-04-25.json
 
+# Issues: of the issues open on a past date, which did outsiders fix, and does intel's classifier pick them better than labels do?
+node packages/eval/src/cli.ts issues fetch --from packages/eval/data/discovery-backtest-2026-06-20.json --repos 100 --out packages/eval/data/issue-outcomes-2026-06-20.json
+node packages/eval/src/cli.ts issues report packages/eval/data/issue-outcomes-2026-06-20.json
+
 # Beyond the tracker: of the pull requests outsiders got merged, how many had an issue, and what were they?
 node packages/eval/src/cli.ts tracker packages/eval/data/discovery-backtest-2026-06-20.json
 node packages/eval/src/cli.ts tracker kinds packages/eval/data/discovery-backtest-2026-06-20.json --out packages/eval/data/tracker-kinds-2026-06-20.json

@@ -162,6 +162,39 @@ and by project size. These are facts about the ecosystem that the product
 thesis rests on, and the second is an upper bound on how much of the
 tracker is contributable work.
 
+### E5. Which open issues do outsiders resolve?
+
+Close reasons say whether a maintainer considered an issue done, not whether
+an outsider could do it. This experiment takes the issues open at a past date
+T in 100 repositories sampled (seed 1) from E1's eligible pool, assesses each
+with intel's own classifier as the issue looked at T (`issueAsOf` and
+`assessIssue` from `@gitgoblin/intel/backtest`: comments after T and pull
+requests merged or touched after T removed, clock at T), and records what
+happened in the 120 days after: closed as completed by a merged pull request
+from an outsider (not an owner, member, collaborator or bot), by a
+maintainer's pull request, completed some other way, closed as not planned,
+or still open.
+
+The same issues are grouped by what would have pointed someone at them:
+intel accepts it (as an issue or feature request), intel calls it triage, it
+carries a starter label, a maintainer commented before T, it was opened in
+the 90 days before T, or nothing at all (every issue open at T). Each group's
+share resolved by an outsider gets a 95% interval from resampling
+repositories, since issues in one repository are not independent. Open
+issues are read newest-updated first and capped at 200 per repository, so
+the stalest issues of the busiest repositories are missing; the report says
+where. "Accepted" is the classifier's verdict, before intel's ranking and its
+cap of fifteen opportunities per report.
+
+Confirmatory test, 2026-10-24 04:27 UTC, written after reading the 2026-06-20 run and
+before any data for its date is fetched. On 2026-06-20 an exploratory split
+suggested that intel's verdict and an issue's age work together: accepted
+issues opened in the 90 days before T were resolved by outsiders at 12.6%,
+older accepted issues at 3.4%. The test repeats E5 on 2026-02-15 (100
+repositories from that date's pool, seed 1, the same code) and passes if the
+difference between those two groups' outsider-fix rates has a 95% interval,
+resampling repositories, above zero. Whatever the result, it is reported.
+
 ### E4. Issue classifier (owned by intel)
 
 `packages/intel/scripts/backtest-issues.ts` grades the lexical classifier

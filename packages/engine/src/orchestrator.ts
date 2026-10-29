@@ -336,6 +336,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     // Checks run with the network cut when sandboxed; say so to the package managers so they fail fast.
     const checkEnv = hostBox.kind === "none" ? hostEnv : { ...hostEnv, ...OFFLINE_ENV };
     const checkOptions = { cwd: workspace.path, env: checkEnv, ...timeout, ...wrapFor(false) };
+    // Each check's whole output goes to a file in the run directory; the artifacts keep an excerpt.
+    const logChecks = (stage: string) => ({ ...checkOptions, onOutput: (check: Check, output: string) => journal.text(`check-${stage}-${check.name}.txt`, output) });
     let installFailure: PlanContext["install"];
     if (task.commands.install && !options.skipInstall) {
       reporter.phase("install", task.commands.install);
@@ -416,7 +418,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     }
     const guidance = readGuidance(workspace.path, task);
     reporter.phase("baseline", checkSpecs(task.commands).map((s) => s.name).join(", ") || "no commands known");
-    const baselineChecks = await runChecks(checkSpecs(task.commands), checkOptions);
+    const baselineChecks = await runChecks(checkSpecs(task.commands), logChecks("baseline"));
     const baseline = compareWithBaseline(baselineChecks, undefined, { files: 0, insertions: 0, deletions: 0, changedFiles: [] });
     journal.artifact("baseline", baseline);
     for (const c of baselineChecks.filter((c) => c.status !== "pass")) reporter.warn(`baseline ${c.name}: ${c.status}`);
@@ -455,7 +457,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       const late = checkSpecs(Object.fromEntries(adopted.filter((k) => k !== "test").map((k) => [k, task.commands[k]])));
       if (late.length > 0) {
         reporter.phase("baseline", `late: ${late.map((s) => s.name).join(", ")}`);
-        baseline.checks.push(...(await runChecks(late, checkOptions)));
+        baseline.checks.push(...(await runChecks(late, logChecks("baseline"))));
         journal.artifact("baseline", baseline);
       }
     }
@@ -507,7 +509,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       }
       decide("verify", checkBudget(costUsd, Date.now() - started, limits));
       reporter.phase("verify", `${diff.files} files changed, +${diff.insertions} -${diff.deletions}`);
-      const checks = await runChecks(checkSpecs(task.commands, reproduction), checkOptions);
+      const checks = await runChecks(checkSpecs(task.commands, reproduction), logChecks(`verify-${attempt}`));
       verification = compareWithBaseline(checks, baseline.checks, diff);
       journal.artifact(`verification-${attempt}`, verification);
       for (const c of checks) reporter.info(`${c.name}: ${c.status}`);

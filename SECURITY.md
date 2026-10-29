@@ -47,7 +47,8 @@ issue to trigger.
 - **The repository's own commands stay in theirs.** The install, test, lint
   and build commands the engine runs on your machine run inside an OS sandbox
   when one exists (`sandbox-exec` on macOS, `bwrap` on Linux): writes only to
-  the checkout and tool caches, credential files unreadable, no network except
+  the checkout and tool caches, credential files unreadable, other programs'
+  sockets (Docker's daemon, SSH agents) unreachable, no network except
   during install, and then only to package registries. A change that edits
   what those commands execute (package scripts, Makefiles, test-runner
   configuration) must stop for a person before the engine runs it. A way

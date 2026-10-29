@@ -65,7 +65,8 @@ export function renderReport(input: ReportInput): string {
   }
   if (input.verification) {
     lines.push("## Verification", describeChecks(input.verification.checks));
-    lines.push(input.verification.regressions.length ? `Regressions: ${input.verification.regressions.join(", ")}` : "No regressions versus baseline.", "");
+    lines.push(input.verification.regressions.length ? `Regressions: ${input.verification.regressions.join(", ")}` : "No regressions versus baseline.");
+    lines.push("Each check's whole output is in the run directory: check-baseline-<check>.txt and check-verify-<n>-<check>.txt.", "");
   }
   if (input.review) {
     lines.push(`## Review: ${input.review.verdict}`);
