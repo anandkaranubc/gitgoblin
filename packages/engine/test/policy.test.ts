@@ -226,11 +226,22 @@ describe("controlsChecks", () => {
     "gradle/deps.gradle",
     "buildSrc/conventions.gradle.kts",
     "tools/defs.bzl",
+    "ci.bazelrc",
+    "deps.MODULE.bazel",
+    "tools/bazel",
+    "Makefile.common",
+    "rules.make",
+    "Makefile.am",
+    "Makefile.in",
+    "configure",
+    "configure.ac",
+    "buildSrc/src/main/kotlin/conventions.kt",
+    "build-logic/convention/src/main/java/Plugin.java",
   ])("knows %s decides what the check commands run", (file) => expect(controlsChecks(file)).toBe(true));
 
   // Test setup files are test code, run by the checks like the tests the change adds; the gate is for
   // what decides which commands run.
-  it.each(["src/paginate.js", "test/paginate.test.js", "vitest.setup.ts", "README.md", "tsconfig.json", "package-lock.json", "docs/config.md", "src/Makefile.md", "docs/build.mk.md", "config/settings.json"])(
+  it.each(["src/paginate.js", "test/paginate.test.js", "vitest.setup.ts", "README.md", "tsconfig.json", "package-lock.json", "docs/config.md", "src/Makefile.md", "docs/build.mk.md", "Makefile.txt", "src/tools/bazel.ts", "config/settings.json"])(
     "leaves %s alone",
     (file) => expect(controlsChecks(file)).toBe(false),
   );
