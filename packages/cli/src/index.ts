@@ -242,7 +242,7 @@ function nextStepAfterAnalyze(report: AnalysisReport, ref: RepoRef, savedTo: str
 export function buildProgram(runtime: Runtime): Command {
   const program = new Command("gitgoblin")
     .description("Find open-source projects worth your time, work out what they need, and prepare a pull request you approve.")
-    .version("0.1.1")
+    .version("0.1.2")
     .configureOutput({ writeOut: (s) => runtime.stdout(s.trimEnd()), writeErr: (s) => runtime.stderr(s.trimEnd()) })
     .exitOverride();
 

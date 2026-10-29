@@ -5,29 +5,48 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
-## gitgoblin 0.1.2 - Unreleased
+## gitgoblin 0.1.2 - 2026-10-29
 
-- Safety: on macOS, the repository's commands could leave the sandbox, in strict isolation too, by
+Upgrade from 0.1.0 and 0.1.1: both let a repository's commands get around the sandbox in the
+ways listed under Safety.
+
+**Safety**
+
+- On macOS, the repository's commands could leave the sandbox, in strict isolation too, by
   sending a command to a tmux or screen server through its socket or FIFO in `/tmp` or the per-user
   temp directory; those servers run it as you, outside any sandbox. The commands now get a temp
   directory of their own in the run directory (`TMPDIR`), and the shared ones are read-only to
   them, except the store locks pnpm keeps in `/tmp`. Linux already gave them an empty `/tmp`.
-- Safety: the repository's install and test commands no longer receive a Claude login token set in
+- The repository's install and test commands no longer receive a Claude login token set in
   `CLAUDE_CODE_OAUTH_TOKEN`, and cannot read Claude's configuration directory (`~/.claude`, or the
   one `CLAUDE_CONFIG_DIR` names), whose settings can hold keys, or the credential files that
   `GOOGLE_APPLICATION_CREDENTIALS` and the AWS and Azure variables point at. The agent's own shell
   hides the same logins, the macOS keychains among them, and no longer sees Bedrock, Vertex or
   Foundry keys.
-- Safety: the repository's commands can no longer reach other programs' Unix sockets. Before, code
+- The repository's commands can no longer reach other programs' Unix sockets. Before, code
   in a repository could talk to Docker's daemon (and through it start a container with your disk
   mounted) or to your SSH agent, despite the OS sandbox. Sockets the commands create in their own
   writable places still work, so builds that use tsx or turbo's daemon no longer fail on macOS with
   `listen EPERM`.
-- Safety: a repository command could swap a folder it may write (a package cache such as `~/.npm`)
+- A repository command could swap a folder it may write (a package cache such as `~/.npm`)
   for a link to any other folder, and the next command's sandbox let it write there too, the home
   directory included. Writable folders are now resolved only through links the system owns, so a
   link a command made never widens what the next one may touch. A cache folder you made a link
   yourself is no longer writable to the repository's commands.
+- The diff `contribute` shows before you publish, the one its reviewer reads and the one
+  scanned for secrets show every changed file's content. Before, a file the repository marks `-diff`
+  in `.gitattributes` (often `dist/` and lockfiles), or any file with a NUL byte in it, appeared as
+  "Binary files differ" while its full content was committed and pushed. An external diff tool set
+  in your git config no longer replaces it either. A change that adds or edits a real binary file
+  (an image, an archive) now stops for you before the checks run, instead of going to the reviewer.
+- On macOS, the repository's commands can no longer open apps (`open x.command` starts
+  Terminal outside the sandbox) or drive them with Apple events.
+- Still open: on macOS, the agent's own shell (inside the Claude Agent SDK's sandbox) can still
+  write to the shared temp directory, where a `screen` session keeps its FIFO. Until that is fixed,
+  close `screen` sessions while `contribute` runs.
+
+**Other changes**
+
 - When a project's tests already fail before the change, `contribute` no longer takes "also fails on
   the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
   web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
@@ -35,12 +54,6 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   reported results before the change and none after it (a module that no longer loads, a compile
   error) is a regression too, and so is an output too long to keep whole whose kept end already
   shows more failures.
-- Safety: the diff `contribute` shows before you publish, the one its reviewer reads and the one
-  scanned for secrets show every changed file's content. Before, a file the repository marks `-diff`
-  in `.gitattributes` (often `dist/` and lockfiles), or any file with a NUL byte in it, appeared as
-  "Binary files differ" while its full content was committed and pushed. An external diff tool set
-  in your git config no longer replaces it either. A change that adds or edits a real binary file
-  (an image, an archive) now stops for you before the checks run, instead of going to the reviewer.
 - Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
   `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
   now holds the start of the output as well as the end, so the first error survives a long log.
@@ -54,8 +67,6 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
   requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
   of putting it at the top. One failed run is reported as a single failure, not as "failing since".
-- Safety: on macOS, the repository's commands can no longer open apps (`open x.command` starts
-  Terminal outside the sandbox) or drive them with Apple events.
 - `analyze --llm` asks about one issue per call, so text in one issue cannot sway the verdict on
   another, and uses a review only when its supporting quote is really in the issue. It stops at the
   first timeout or server error instead of retrying each issue, and the report says how many issues
