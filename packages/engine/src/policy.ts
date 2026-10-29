@@ -64,9 +64,15 @@ const CONTROL_PATTERNS = [
   /^(vitest|vite|vitest\.workspace|jest|babel|eslint|prettier|tsup|rollup|webpack|esbuild|playwright|cypress|karma|postcss|tailwind|svelte|next|nuxt|astro|remix|commitlint|lint-staged|release|nx|turbo|lerna|ava|wallaby|puppeteer|protractor|wdio|nightwatch)\.config\.[cm]?[jt]sx?$/,
   /^\.(eslintrc|babelrc|mocharc|prettierrc|lintstagedrc|swcrc|nycrc|c8rc|avarc)(\.[\w.-]+)?$/,
   /^karma\.conf\.[cm]?js$/,
+  // Pieces of build logic that a Makefile, CMakeLists.txt, build.gradle or BUILD file pulls in.
+  /\.(mk|mak|make|cmake|gradle|gradle\.kts|bzl|bazelrc)$/,
+  /\.MODULE\.bazel$/,
+  // Makefiles by other names (Makefile.common), and autotools, which generate the Makefile.
+  /^(GNU)?[Mm]akefile\.(?!md$|txt$|rst$)[\w.-]+$/,
+  /^(configure|configure\.ac|configure\.in)$/,
 ];
 /** Directories whose contents run as part of builds, checks or git operations. */
-const CONTROL_DIRS = new Set([".husky", ".cargo", ".mvn", ".yarn", "gradle"]);
+const CONTROL_DIRS = new Set([".husky", ".cargo", ".mvn", ".yarn", "gradle", "buildSrc", "build-logic"]);
 
 /** True when `filePath` is one of the files that decide what the repository's check commands run. */
 export function controlsChecks(filePath: string): boolean {
@@ -75,6 +81,8 @@ export function controlsChecks(filePath: string): boolean {
   const base = segments.at(-1) ?? "";
   if (CONTROL_BASENAMES.has(base)) return true;
   if (CONTROL_PATTERNS.some((re) => re.test(base))) return true;
+  // Bazel's launcher runs tools/bazel in place of bazel when the repository has one.
+  if (p === "tools/bazel") return true;
   return segments.slice(0, -1).some((dir) => CONTROL_DIRS.has(dir));
 }
 

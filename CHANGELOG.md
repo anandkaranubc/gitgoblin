@@ -7,15 +7,29 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.1.2 - Unreleased
 
+- Safety: the repository's install and test commands no longer receive a Claude login token set in
+  `CLAUDE_CODE_OAUTH_TOKEN`, and cannot read Claude's configuration directory (`~/.claude`, or the
+  one `CLAUDE_CONFIG_DIR` names), whose settings can hold keys, or the credential files that
+  `GOOGLE_APPLICATION_CREDENTIALS` and the AWS and Azure variables point at. The agent's own shell
+  hides the same logins, the macOS keychains among them, and no longer sees Bedrock, Vertex or
+  Foundry keys.
 - Safety: the repository's commands can no longer reach other programs' Unix sockets. Before, code
   in a repository could talk to Docker's daemon (and through it start a container with your disk
   mounted) or to your SSH agent, despite the OS sandbox. Sockets the commands create in their own
   writable places still work, so builds that use tsx or turbo's daemon no longer fail on macOS with
   `listen EPERM`.
+- Safety: a repository command could swap a folder it may write (a package cache such as `~/.npm`)
+  for a link to any other folder, and the next command's sandbox let it write there too, the home
+  directory included. Writable folders are now resolved only through links the system owns, so a
+  link a command made never widens what the next one may touch. A cache folder you made a link
+  yourself is no longer writable to the repository's commands.
 - When a project's tests already fail before the change, `contribute` no longer takes "also fails on
   the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
   web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
-  tests, or fewer passing ones, as a regression. The pull request shows both counts.
+  tests, or fewer passing ones, as a regression. The pull request shows both counts. A suite that
+  reported results before the change and none after it (a module that no longer loads, a compile
+  error) is a regression too, and so is an output too long to keep whole whose kept end already
+  shows more failures.
 - Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
   `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
   now holds the start of the output as well as the end, so the first error survives a long log.
@@ -29,6 +43,8 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
   requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
   of putting it at the top. One failed run is reported as a single failure, not as "failing since".
+- Safety: on macOS, the repository's commands can no longer open apps (`open x.command` starts
+  Terminal outside the sandbox) or drive them with Apple events.
 - `analyze --llm` asks about one issue per call, so text in one issue cannot sway the verdict on
   another, and uses a review only when its supporting quote is really in the issue. It stops at the
   first timeout or server error instead of retrying each issue, and the report says how many issues
@@ -40,6 +56,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   for over two years rank lower, documentation issues higher, and comment count no longer adds
   value. In a backtest on 27 repositories the new order put more outsider-fixed issues in each
   repository's top five.
+- `contribute` also stops for you before running checks when the change edits build logic beyond
+  the main build files: pieces they pull in (`*.mk`, `*.cmake`, `*.gradle`, Bazel `*.bzl` and
+  `*.bazelrc`), Gradle's `buildSrc` and `build-logic`, Bazel's `tools/bazel`, Makefiles by other
+  names and autotools' `configure` and `Makefile.am`.
 
 ## gitgoblin 0.1.1 - 2026-10-24
 
@@ -58,6 +78,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## @gitgoblin/mcp 0.1.8 - Unreleased
 
+- The discover tool gets each repository's GitHub details again (starter issues, contributing guide,
+  recent merges). GitHub timed out on its requests for 20 repositories at a time with HTTP 502, and
+  one failed request dropped the details of every candidate; it now asks for 10 at a time, splits a
+  request GitHub cannot finish, and keeps what it fetched.
 - The analyze tool's build and test commands for Bun projects run the project's scripts, and it no
   longer invents a TypeScript check when the repository root has no `tsconfig.json`.
 - A failing CI workflow that needs repository secrets forks do not get is no longer ranked as an
@@ -66,6 +90,9 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   and large Gitea and Forgejo repositories are cloned shallowly like large GitHub ones.
 - The analyze tool ranks issues closer to what outsiders fix: long discussions and issues open
   for over two years rank lower, documentation issues higher.
+- The discover tool's `like` repository goes through the same public-only check as every other
+  repository. Before, discovery read it with the person's token, so a private repository's
+  description could reach the search queries and its name ecosyste.ms.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
