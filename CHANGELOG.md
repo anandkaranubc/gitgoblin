@@ -19,6 +19,9 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
   `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
   now holds the start of the output as well as the end, so the first error survives a long log.
+- `clean` keeps a published run's workspace while it holds changes or commits that were not
+  published, such as answers to review comments, and says so; `--force` discards them. Before,
+  `clean --finished`, which `runs` suggests, deleted them without asking.
 - `discover contribute` gets each repository's GitHub details again (starter issues, contributing
   guide, recent merges). It asked for 20 repositories per request, which GitHub timed out on with
   HTTP 502, and one failed request dropped the details of every candidate. It now asks for 10 at a
