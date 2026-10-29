@@ -49,6 +49,12 @@ describe("runChecks", () => {
     expect(long?.truncated).toBe(true);
     expect(long?.tests).toEqual({ failed: 302 });
   });
+  it("keeps a long output's verdict that no test ran", async () => {
+    const [none] = await runChecks([{ name: "test", command: "yes ' FAIL  src/a.test.ts [ SyntaxError ]' | head -c 700000; printf '\\n      Tests  no tests\\n'; exit 1" }], { cwd: process.cwd(), env });
+    expect(none?.truncated).toBe(true);
+    expect(none?.tests).toEqual({ failed: 0, passed: 0 });
+    expect(compareWithBaseline([none!], [check("test", "fail", { failed: 1, passed: 8 })], diff).ok).toBe(false);
+  });
 });
 
 describe("testCounts", () => {
@@ -56,6 +62,7 @@ describe("testCounts", () => {
     ["vitest", " Test Files  1 failed | 9 passed (10)\n      Tests  2 failed | 98 passed | 1 skipped (101)\n   Duration  1.2s", { failed: 2, passed: 98 }],
     ["vitest in colour", "\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[31m2 failed\u001b[39m\u001b[22m\u001b[2m | \u001b[22m\u001b[1m\u001b[32m98 passed\u001b[39m\u001b[22m\u001b[90m (100)\u001b[39m", { failed: 2, passed: 98 }],
     ["vitest in two workspaces", "      Tests  3 passed (3)\n      Tests  1 failed | 4 passed (5)", { failed: 1, passed: 7 }],
+    ["vitest when no test file loads", " Test Files  3 failed (3)\n      Tests  no tests\n   Duration  1.2s", { failed: 0, passed: 0 }],
     ["jest", "Test Suites: 1 failed, 4 passed, 5 total\nTests:       2 failed, 1 skipped, 97 passed, 100 total\nSnapshots:   0 total", { failed: 2, passed: 97 }],
     ["pytest", "FAILED tests/test_a.py::test_x\n=========== 2 failed, 97 passed, 1 error in 3.21s ===========", { failed: 3, passed: 97 }],
     ["pytest, all passing", "============ 100 passed in 1.02s (0:00:01) ============", { failed: 0, passed: 100 }],

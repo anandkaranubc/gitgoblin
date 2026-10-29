@@ -49,7 +49,8 @@ export async function runChecks(specs: CheckSpec[], opts: RunChecksOptions): Pro
       // its failures are a lower bound and its passing tests unknown. A runner's totals usually come last.
       check.truncated = true;
       const tests = testCounts(result.output.slice(result.output.indexOf("\n") + 1));
-      if (tests) check.tests = { failed: tests.failed };
+      // A summary that ran no test at all ("no tests", "no tests ran") is conclusive however long the output.
+      if (tests) check.tests = tests.failed === 0 && tests.passed === 0 ? tests : { failed: tests.failed };
     } else {
       const tests = testCounts(result.output);
       if (tests) check.tests = tests;
@@ -77,8 +78,8 @@ function count(text: string, word: string): number {
  * runs several suites (workspaces, browsers, crates) prints several lines; they are added up.
  */
 const RUNNERS: { name: string; read: (out: string) => Summary[] }[] = [
-  // vitest: "      Tests  2 failed | 98 passed (100)". "Test Files" lines are not matched.
-  { name: "vitest", read: (out) => [...out.matchAll(/^\s*Tests {2,}(.*\d+ (?:passed|failed).*)$/gm)].map(([, l = ""]) => ({ failed: count(l, "failed"), passed: count(l, "passed") })) },
+  // vitest: "      Tests  2 failed | 98 passed (100)", or "Tests  no tests" when no file loaded. "Test Files" lines are not matched.
+  { name: "vitest", read: (out) => [...out.matchAll(/^\s*Tests {2,}(.*\d+ (?:passed|failed).*|no tests)\s*$/gm)].map(([, l = ""]) => ({ failed: count(l, "failed"), passed: count(l, "passed") })) },
   // jest: "Tests:       1 failed, 2 skipped, 97 passed, 100 total"
   { name: "jest", read: (out) => [...out.matchAll(/^Tests:\s+(.*\btotal)\s*$/gm)].map(([, l = ""]) => ({ failed: count(l, "failed"), passed: count(l, "passed") })) },
   // pytest: "===== 1 failed, 98 passed, 1 error in 2.31s =====". Errors are failures to the person reading.
