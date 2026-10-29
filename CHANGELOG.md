@@ -15,7 +15,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - When a project's tests already fail before the change, `contribute` no longer takes "also fails on
   the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
   web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
-  tests, or fewer passing ones, as a regression. The pull request shows both counts.
+  tests, or fewer passing ones, as a regression. The pull request shows both counts. A suite that
+  reported results before the change and none after it (a module that no longer loads, a compile
+  error) is a regression too, and so is an output too long to keep whole whose kept end already
+  shows more failures.
 - Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
   `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
   now holds the start of the output as well as the end, so the first error survives a long log.
@@ -55,6 +58,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## @gitgoblin/mcp 0.1.8 - Unreleased
 
+- The discover tool gets each repository's GitHub details again (starter issues, contributing guide,
+  recent merges). GitHub timed out on its requests for 20 repositories at a time with HTTP 502, and
+  one failed request dropped the details of every candidate; it now asks for 10 at a time, splits a
+  request GitHub cannot finish, and keeps what it fetched.
 - The analyze tool's build and test commands for Bun projects run the project's scripts, and it no
   longer invents a TypeScript check when the repository root has no `tsconfig.json`.
 - A failing CI workflow that needs repository secrets forks do not get is no longer ranked as an

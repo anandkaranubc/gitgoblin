@@ -70,7 +70,7 @@ claude mcp add gitgoblin -- npx -y @gitgoblin/mcp
 | Rank repositories for a goal and explain each ranking | `discover`, `explain`, `goals` | Works |
 | Profile a repository and find evidence-backed work | `analyze` | Works; scores are still being calibrated |
 | Prepare a contribution with an AI agent, then publish it after you approve | `contribute`, `runs`, `show`, `publish` | Experimental; needs an Anthropic API key or Claude Code login, and each run costs money |
-| MCP server and agent skill | | Released on GitHub and listed in the MCP Registry |
+| MCP server and agent skill | | Works; on npm as `@gitgoblin/mcp` and listed in the MCP Registry |
 
 `analyze` reads GitHub, GitLab and Gitea or Forgejo repositories (Codeberg among them); discovery and publishing are GitHub-only for now. Developed on macOS and tested in CI on Linux and Windows; on Windows, `discover`, `analyze` and the MCP server work, and `contribute` does not, because its sandbox for repository commands exists only on macOS and Linux. [docs/architecture.md](docs/architecture.md) explains how the packages fit together, and [CHANGELOG.md](CHANGELOG.md) lists what changed in each release.
 

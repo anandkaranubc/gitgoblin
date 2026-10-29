@@ -169,8 +169,13 @@ export interface Check {
   exitCode: number | null;
   durationMs: number;
   outputTail: string;
-  /** Test counts from the runner's summary line, when the engine recognises the runner and saw the whole output. */
+  /**
+   * Test counts from the runner's summary lines, when the engine recognises the runner. From a
+   * `truncated` output they cover only the kept end: `failed` is a lower bound and `passed` is left out.
+   */
   tests?: TestCounts;
+  /** Set when the output was too long to keep whole. */
+  truncated?: true;
 }
 
 export interface TestCounts {
@@ -190,7 +195,7 @@ export interface Verification {
   checks: Check[];
   /**
    * Names of checks that passed at baseline and fail now, or that failed at baseline too but now
-   * report more failing tests or fewer passing ones.
+   * report more failing tests or fewer passing ones, or no results at all.
    */
   regressions: string[];
   /** True when nothing regressed and the reproduction (if any) passes. */
@@ -198,8 +203,8 @@ export interface Verification {
   diff: DiffStats;
   /** Names of checks that already failed at baseline, so a reader does not blame the change for them. */
   preexisting?: string[];
-  /** For checks that fail both at baseline and now and report test counts both times: the counts. */
-  testCounts?: { name: string; baseline: TestCounts; now: TestCounts }[];
+  /** For checks that fail both at baseline and now and reported test counts at baseline: the counts. `now` is absent when the runner reported none. */
+  testCounts?: { name: string; baseline: TestCounts; now?: TestCounts }[];
 }
 
 /** What `prepare` wrote and `publish` reads back; validated on the way back in because the file sat on disk. */
