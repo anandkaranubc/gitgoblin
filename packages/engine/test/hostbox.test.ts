@@ -1,10 +1,10 @@
-import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { execShell } from "../src/exec.ts";
-import { bwrapArgs, detectHostSandbox, hostSandboxFor, OFFLINE_ENV, sandboxExecProfile, specFor, type HostSandboxSpec } from "../src/hostbox.ts";
+import { bwrapArgs, detectHostSandbox, hostSandboxFor, OFFLINE_ENV, sandboxExecProfile, specFor, trustedPath, type HostSandboxSpec } from "../src/hostbox.ts";
 
 const env = { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "", TMPDIR: process.env["TMPDIR"] ?? os.tmpdir() };
 const available = detectHostSandbox();
@@ -209,6 +209,40 @@ describe("specFor paths", () => {
   it("lets tools use the shared /tmp as well as the per-user temp directory", () => {
     const spec = specFor(mkdtempSync(path.join(os.tmpdir(), "gg-real-")), false);
     if (existsSync("/tmp")) expect(spec.extraWrite).toContain(realpathSync("/tmp"));
+  });
+});
+
+describe("trustedPath", () => {
+  it("follows the system's own links and stops at one a user or a command made", () => {
+    const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "gg-links-")));
+    mkdirSync(path.join(root, "target"));
+    symlinkSync(path.join(root, "target"), path.join(root, "cache"));
+    expect(trustedPath(path.join(root, "cache"))).toBe(path.join(root, "cache"));
+    expect(trustedPath(path.join(root, "cache", "deeper"))).toBe(path.join(root, "cache", "deeper"));
+    expect(trustedPath(path.join(root, "target"))).toBe(path.join(root, "target"));
+    // os.tmpdir() is reached through root-owned links on macOS (/var -> /private/var).
+    expect(trustedPath(os.tmpdir())).toBe(realpathSync(os.tmpdir()));
+    expect(specFor("/ws", false, { home: "/home/x", extraWrite: [path.join(root, "cache")] }).extraWrite).toContain(path.join(root, "cache"));
+  });
+});
+
+describe.skipIf(!available)("writable folders swapped for links (OS)", () => {
+  it("does not open a link's target to the next command", async () => {
+    const { root, ws } = layout();
+    const cache = path.join(realpathSync(root), "cache");
+    const outside = path.join(realpathSync(root), "outside");
+    const ownTmp = path.join(realpathSync(root), "own-tmp");
+    for (const dir of [cache, outside, ownTmp]) mkdirSync(dir);
+    // A spec rebuilt for every command, as the engine does, with the shared temp directory out of the way.
+    const run = (command: string) => execShell(command, { cwd: ws, env, wrap: (c) => available!.wrap(c, specFor(ws, false, { extraWrite: [cache], tmpdir: ownTmp })), timeoutMs: 20_000 });
+    expect((await run(`touch "${outside}/direct"`)).exitCode).not.toBe(0);
+    // A command replaces the writable cache with a link to a folder it may not write; under bubblewrap
+    // the bound folder cannot be removed at all.
+    await run(`rm -rf "${cache}" && ln -s "${outside}" "${cache}"`);
+    await run(`touch "${cache}/through-link"`);
+    expect(existsSync(path.join(outside, "direct"))).toBe(false);
+    expect(existsSync(path.join(outside, "through-link"))).toBe(false);
+    rmSync(root, { recursive: true, force: true });
   });
 });
 

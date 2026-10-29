@@ -12,6 +12,11 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   mounted) or to your SSH agent, despite the OS sandbox. Sockets the commands create in their own
   writable places still work, so builds that use tsx or turbo's daemon no longer fail on macOS with
   `listen EPERM`.
+- Safety: a repository command could swap a folder it may write (a package cache such as `~/.npm`)
+  for a link to any other folder, and the next command's sandbox let it write there too, the home
+  directory included. Writable folders are now resolved only through links the system owns, so a
+  link a command made never widens what the next one may touch. A cache folder you made a link
+  yourself is no longer writable to the repository's commands.
 - When a project's tests already fail before the change, `contribute` no longer takes "also fails on
   the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
   web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
