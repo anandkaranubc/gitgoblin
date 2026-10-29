@@ -49,7 +49,7 @@ import {
   type Verification,
 } from "./types.ts";
 import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
-import { DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, unpublishedWork, type Workspace } from "./workspace.ts";
+import { AS_TEXT, binaryChanges, DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, unpublishedWork, type Workspace } from "./workspace.ts";
 
 export interface RunInput {
   /** A Task written by hand or exported from an earlier run. */
@@ -511,6 +511,12 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
           ["Read the diff of those files. If the change is intended, run the repository's checks yourself before trusting it."],
         );
       }
+      const binary = await binaryChanges(workspace.path, workspace.baseSha, env);
+      if (binary.length > 0) {
+        throw new RunAborted("escalated", `the change adds or edits binary files (${binary.slice(0, 5).join(", ")}), which cannot be reviewed as a diff`, [
+          "Look at those files yourself. If they belong in the change, add them by hand after reviewing the rest.",
+        ]);
+      }
       decide("verify", checkBudget(costUsd, Date.now() - started, limits));
       reporter.phase("verify", `${diff.files} files changed, +${diff.insertions} -${diff.deletions}`);
       const checks = await runChecks(checkSpecs(task.commands, reproduction), logChecks(`verify-${attempt}`));
@@ -572,7 +578,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     journal.artifact("delivery", delivery);
     journal.text("pr.md", delivery.prBody);
     journal.text("pr-title.txt", `${delivery.prTitle}\n`);
-    journal.text("diff.patch", await git(["show", "--format=%H%n%s%n", "HEAD"], workspace.path, env, 5 * 60_000, maxPatchBytes));
+    journal.text("diff.patch", await git(["show", ...AS_TEXT, "--format=%H%n%s%n", "HEAD"], workspace.path, env, 5 * 60_000, maxPatchBytes));
     return finish("awaiting_approval", "ready for human review", []);
   } catch (err) {
     if (err instanceof RunAborted) return finish(err.status, err.reason, err.questions);

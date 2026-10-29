@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "./exec.ts";
@@ -39,6 +39,14 @@ export const DEFAULT_MAX_PATCH_BYTES = 32 * 1024 * 1024;
  * run code on the host: hooks and the filesystem monitor are disabled on every engine git call.
  */
 const HARDENING = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
+
+/**
+ * Every patch a person, the reviewer or the secret scan reads shows each file's real content. Without
+ * these, a `-diff` line in the repository's .gitattributes (or one NUL byte) turns a change into
+ * "Binary files differ" that is still committed and pushed, and a textconv driver from the operator's
+ * git config could print a summary in place of the content.
+ */
+export const AS_TEXT = ["--text", "--no-textconv", "--no-ext-diff"];
 
 export async function git(args: string[], cwd: string, env: Record<string, string>, timeoutMs = 5 * 60_000, maxOutputBytes?: number): Promise<string> {
   const result = await execFile("git", [...HARDENING, ...args], { cwd, env, timeoutMs, ...(maxOutputBytes ? { maxOutputBytes } : {}) });
@@ -194,9 +202,32 @@ export async function diffStats(wsPath: string, baseSha: string, env: Record<str
   return stats;
 }
 
+/**
+ * Changed files whose new content holds a NUL byte: images, archives, compiled output. Nobody can
+ * review those as a diff, and a large one would fill the reviewer's whole context.
+ */
+export async function binaryChanges(wsPath: string, baseSha: string, env: Record<string, string>): Promise<string[]> {
+  await stageAll(wsPath, env, baseSha);
+  // Without --text, numstat marks files it treats as binary with "-"; a -diff attribute does that to text too.
+  const numstat = await git(["diff", "--cached", "--numstat", "--no-renames", baseSha], wsPath, env, 5 * 60_000, DEFAULT_MAX_PATCH_BYTES);
+  const flagged = numstat.split("\n").filter((line) => line.startsWith("-\t-\t")).map((line) => line.slice(4));
+  return flagged.filter((file) => hasNul(path.join(wsPath, file)));
+}
+
+function hasNul(file: string): boolean {
+  if (!existsSync(file)) return false; // deleted
+  const fd = openSync(file, "r");
+  try {
+    const buf = Buffer.alloc(8000);
+    return buf.subarray(0, readSync(fd, buf, 0, buf.length, 0)).includes(0);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 export async function diffPatch(wsPath: string, baseSha: string, env: Record<string, string>, maxBytes = DEFAULT_MAX_PATCH_BYTES): Promise<string> {
   await stageAll(wsPath, env, baseSha);
-  return git(["diff", "--cached", baseSha], wsPath, env, 5 * 60_000, maxBytes);
+  return git(["diff", "--cached", ...AS_TEXT, baseSha], wsPath, env, 5 * 60_000, maxBytes);
 }
 
 /** Content of `file` at `sha`, or undefined when it did not exist there. */
