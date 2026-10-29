@@ -16,6 +16,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
   web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
   tests, or fewer passing ones, as a regression. The pull request shows both counts.
+- Safety: the diff `contribute` shows before you publish, the one its reviewer reads and the one
+  scanned for secrets show every changed file's content. Before, a file the repository marks `-diff`
+  in `.gitattributes` (often `dist/` and lockfiles), or any file with a NUL byte in it, appeared as
+  "Binary files differ" while its full content was committed and pushed.
 - Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
   `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
   now holds the start of the output as well as the end, so the first error survives a long log.

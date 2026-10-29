@@ -49,7 +49,7 @@ import {
   type Verification,
 } from "./types.ts";
 import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
-import { DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, type Workspace } from "./workspace.ts";
+import { AS_TEXT, DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, type Workspace } from "./workspace.ts";
 
 export interface RunInput {
   /** A Task written by hand or exported from an earlier run. */
@@ -568,7 +568,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     journal.artifact("delivery", delivery);
     journal.text("pr.md", delivery.prBody);
     journal.text("pr-title.txt", `${delivery.prTitle}\n`);
-    journal.text("diff.patch", await git(["show", "--format=%H%n%s%n", "HEAD"], workspace.path, env, 5 * 60_000, maxPatchBytes));
+    journal.text("diff.patch", await git(["show", ...AS_TEXT, "--format=%H%n%s%n", "HEAD"], workspace.path, env, 5 * 60_000, maxPatchBytes));
     return finish("awaiting_approval", "ready for human review", []);
   } catch (err) {
     if (err instanceof RunAborted) return finish(err.status, err.reason, err.questions);

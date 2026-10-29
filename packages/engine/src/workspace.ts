@@ -40,6 +40,14 @@ export const DEFAULT_MAX_PATCH_BYTES = 32 * 1024 * 1024;
  */
 const HARDENING = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
 
+/**
+ * Every patch a person, the reviewer or the secret scan reads shows each file's real content. Without
+ * these, a `-diff` line in the repository's .gitattributes (or one NUL byte) turns a change into
+ * "Binary files differ" that is still committed and pushed, and a textconv driver from the operator's
+ * git config could print a summary in place of the content.
+ */
+export const AS_TEXT = ["--text", "--no-textconv"];
+
 export async function git(args: string[], cwd: string, env: Record<string, string>, timeoutMs = 5 * 60_000, maxOutputBytes?: number): Promise<string> {
   const result = await execFile("git", [...HARDENING, ...args], { cwd, env, timeoutMs, ...(maxOutputBytes ? { maxOutputBytes } : {}) });
   if (result.exitCode !== 0) throw new GitError(args, result.output);
@@ -178,7 +186,7 @@ export async function diffStats(wsPath: string, baseSha: string, env: Record<str
 
 export async function diffPatch(wsPath: string, baseSha: string, env: Record<string, string>, maxBytes = DEFAULT_MAX_PATCH_BYTES): Promise<string> {
   await stageAll(wsPath, env, baseSha);
-  return git(["diff", "--cached", baseSha], wsPath, env, 5 * 60_000, maxBytes);
+  return git(["diff", "--cached", ...AS_TEXT, baseSha], wsPath, env, 5 * 60_000, maxBytes);
 }
 
 /** Content of `file` at `sha`, or undefined when it did not exist there. */
