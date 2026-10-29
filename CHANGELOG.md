@@ -26,6 +26,8 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - `analyze` ranks a failing CI workflow that needs the repository's secrets and never runs on pull
   requests (a publish or sync job) as one only maintainers can verify, and says so first, instead
   of putting it at the top. One failed run is reported as a single failure, not as "failing since".
+- Safety: on macOS, the repository's commands can no longer open apps (`open x.command` starts
+  Terminal outside the sandbox) or drive them with Apple events.
 - `analyze --llm` asks about one issue per call, so text in one issue cannot sway the verdict on
   another, and uses a review only when its supporting quote is really in the issue. It stops at the
   first timeout or server error instead of retrying each issue, and the report says how many issues
