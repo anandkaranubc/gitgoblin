@@ -30,6 +30,12 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   reported results before the change and none after it (a module that no longer loads, a compile
   error) is a regression too, and so is an output too long to keep whole whose kept end already
   shows more failures.
+- Safety: the diff `contribute` shows before you publish, the one its reviewer reads and the one
+  scanned for secrets show every changed file's content. Before, a file the repository marks `-diff`
+  in `.gitattributes` (often `dist/` and lockfiles), or any file with a NUL byte in it, appeared as
+  "Binary files differ" while its full content was committed and pushed. An external diff tool set
+  in your git config no longer replaces it either. A change that adds or edits a real binary file
+  (an image, an archive) now stops for you before the checks run, instead of going to the reviewer.
 - Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
   `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
   now holds the start of the output as well as the end, so the first error survives a long log.

