@@ -280,3 +280,62 @@ broken link rarely races them. Two evidence problems the grading exposed are
 fixed: undocumented-API excerpts and TODO excerpts are now verbatim source
 lines, and files generated from a sibling grammar or carrying a generated-file
 banner are skipped.
+
+## Outcome check: do outsiders fix what intel picks and ranks first?
+
+`scripts/backtest-outcomes.ts` takes every issue open on a past date T, rebuilds
+it as it looked then (`issueAsOf`: no later comments, links, activity or comment
+count), runs the classifier and the issue score with the clock at T, and records
+whether, within 120 days, a merged pull request from an outsider closed it as
+completed. "Outsider" is strict: not an owner, member, collaborator or bot, not
+the issue's own reporter, and not an author of four or more closing pull
+requests in that repository's window. Staff with private organization
+membership show up as CONTRIBUTOR. In scrapy, one such author closed 135
+issues. The same 27 repositories were measured at two dates, with no overlap
+between the outcome windows.
+
+| T | Issues open | All open: fixed by outsiders | Intel accepted | Share of fixes | Starter label |
+|---|---|---|---|---|---|
+| 2026-05-27 | 4,813 | 1.9% | 3.7% (1.95x) | 65 of 91 | 6.7% |
+| 2026-01-27 | 5,516 | 2.2% | 4.0% (1.82x) | 85 of 121 | 14.6% |
+
+Starter labels are the more precise pointer, but they cover few issues, and
+intel accepts nearly all of the starter-labelled issues outsiders fixed. Labels
+are today's, so a label added after T counts, which flatters starter labels.
+
+**Ranking.** Within a repository, the issue score ordered issues outsiders
+fixed only a little above those they did not. The pairwise AUC was 0.578 at
+the first date and 0.582 at the second.
+
+A joint model of the accepted issues at the first date, with a baseline per
+repository, found these effects:
+
+| Signal | Odds ratio | 95% interval |
+|---|---|---|
+| Older than two years | 0.38 | 0.19–0.75 |
+| Comments, per step of log(1 + count) | 0.55 | 0.36–0.83 |
+| Help or starter label | 2.9 | 1.2–7.2 |
+| Documentation issue | 2.9 | 1.1–7.3 |
+
+Endorsement and reactions had no effect once age and comments were in. The
+score was rewarding three or more comments, and discounted age only for idle
+issues. Four changes were designed on the first date and fixed in writing
+before the second date was analyzed:
+
+- **Comments.** The value bonus for three or more comments is dropped.
+- **Long threads.** Feasibility falls by 0.05 at five comments and by 0.1 at ten.
+- **Age.** Every issue older than two years gets value ×0.8, whatever its idle time.
+- **Docs.** Documentation issues get +0.1 feasibility.
+
+The pass criteria were a higher AUC and no fewer top-5 hits on the second date.
+
+| T | AUC before → after | Top 3 hits | Top 5 hits | Top 10 hits |
+|---|---|---|---|---|
+| 2026-05-27, design | 0.578 → 0.626 | 4 → 7 | 9 → 11 | 17 → 16 |
+| 2026-01-27, holdout | 0.582 → 0.619 | 12 → 11 | 15 → 18 | 23 → 27 |
+
+On the holdout, the AUC gain is +0.036, with a 95% interval of +0.026 to
++0.062 from resampling repositories. Random picks among accepted issues would
+give 3.8, 6.3 and 12.6 hits at top 3, 5 and 10. Both dates use the same
+repositories, so a second sample of repositories (eval's E5) is the stronger
+test still to come.
