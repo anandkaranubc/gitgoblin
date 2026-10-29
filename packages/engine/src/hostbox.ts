@@ -114,6 +114,14 @@ export const CREDENTIAL_PATHS = [
   "Library/Keychains", ".password-store", ".local/share/keyrings",
 ];
 
+/**
+ * Every credential location under `home`, plus a Claude configuration directory moved elsewhere with
+ * CLAUDE_CONFIG_DIR, which holds the same login as `~/.claude`.
+ */
+export function credentialPaths(home: string, claudeConfigDir = process.env["CLAUDE_CONFIG_DIR"]): string[] {
+  return [...CREDENTIAL_PATHS.map((rel) => path.join(home, rel)), ...(claudeConfigDir ? [path.resolve(claudeConfigDir)] : [])];
+}
+
 /** Tool caches under the home directory that package managers and compilers write to. */
 const CACHE_DIRS = [
   ".npm", ".cache", ".pnpm-store", ".pnpm-state", ".local/share/pnpm", ".local/state/pnpm", "Library/pnpm", "Library/Preferences/pnpm", "Library/Caches/Yarn", ".yarn/berry/cache", ".yarn/cache", ".yarn", ".bun/install/cache", ".deno",
@@ -136,6 +144,8 @@ export interface SpecOptions {
   strict?: boolean;
   home?: string;
   tmpdir?: string;
+  /** Where Claude keeps its login when not in `~/.claude`; defaults to CLAUDE_CONFIG_DIR. */
+  claudeConfigDir?: string;
 }
 
 /** The spec for commands in `workspace`: temp dir, tool caches and the given extras writable, credential paths hidden. */
@@ -158,7 +168,7 @@ function buildSpec(workspace: string, network: boolean, options: SpecOptions): H
   const existing = (rels: string[]) => rels.map((rel) => path.join(home, rel)).filter((p) => existsSync(p));
   const systemTmp = existsSync("/tmp") ? ["/tmp"] : [];
   const extraWrite = [tmpdir, ...systemTmp, ...(options.extraWrite ?? []), ...existing(CACHE_DIRS)];
-  const credentials = CREDENTIAL_PATHS.map((rel) => path.join(home, rel));
+  const credentials = credentialPaths(home, options.claudeConfigDir);
   if (!options.strict) return { workspace, extraWrite, denyRead: credentials, network };
   // The running node binary may itself live under the home directory (nvm, volta, fnm).
   const nodeHome = path.dirname(path.dirname(process.execPath));

@@ -248,6 +248,17 @@ describe("commandEnv", () => {
   it("strips model and cloud credentials from the host command environment", () => {
     expect(commandEnv({ PATH: "/bin", ANTHROPIC_API_KEY: "k", AWS_REGION: "x", HOME: "/h" })).toEqual({ PATH: "/bin", HOME: "/h" });
   });
+  it("keeps a Claude login token and config directory away from repository commands", () => {
+    expect(commandEnv(scrubEnv({ PATH: "/bin", CLAUDE_CODE_OAUTH_TOKEN: "t", CLAUDE_CONFIG_DIR: "/c", CLAUDE_CODE_USE_BEDROCK: "1" }))).not.toHaveProperty("CLAUDE_CODE_OAUTH_TOKEN");
+    expect(commandEnv({ PATH: "/bin", CLAUDE_CONFIG_DIR: "/c" })).toEqual({ PATH: "/bin" });
+  });
+});
+
+describe("sandboxSettings credentials", () => {
+  it("hides from the agent's shell what repository commands cannot read, keychains included", () => {
+    const denied = sandboxSettings("/ws", "build").filesystem?.denyRead ?? [];
+    for (const rel of ["Library/Keychains", ".claude.json", ".claude/.credentials.json", ".config/gh", ".password-store"]) expect(denied).toContain(path.join(os.homedir(), rel));
+  });
 });
 
 describe("oversized input", () => {

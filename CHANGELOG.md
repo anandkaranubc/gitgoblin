@@ -7,6 +7,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.1.2 - Unreleased
 
+- Safety: the repository's install and test commands no longer receive a Claude login token set in
+  `CLAUDE_CODE_OAUTH_TOKEN`, and cannot read a Claude configuration directory moved with
+  `CLAUDE_CONFIG_DIR`. The agent's own shell now hides the same credential locations as the
+  repository's commands, the macOS keychains among them.
 - Safety: the repository's commands can no longer reach other programs' Unix sockets. Before, code
   in a repository could talk to Docker's daemon (and through it start a container with your disk
   mounted) or to your SSH agent, despite the OS sandbox. Sockets the commands create in their own

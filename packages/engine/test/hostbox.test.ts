@@ -101,6 +101,13 @@ describe("specFor strict mode", () => {
   });
 });
 
+describe("credential paths", () => {
+  it("hides a Claude configuration directory moved with CLAUDE_CONFIG_DIR", () => {
+    expect(specFor("/ws", false, { home: "/home/x", claudeConfigDir: "/opt/claude" }).denyRead).toContain("/opt/claude");
+    expect(specFor("/ws", false, { home: "/home/x", strict: true, claudeConfigDir: "/opt/claude" }).denyRead).toContain("/opt/claude");
+  });
+});
+
 describe.skipIf(!available)("host sandbox (OS)", () => {
   const sandbox = available!;
   const wrap = (spec: HostSandboxSpec) => (command: string) => sandbox.wrap(command, spec);
@@ -119,6 +126,16 @@ describe.skipIf(!available)("host sandbox (OS)", () => {
     const home = await execShell(`echo x > "$HOME/gg-hostbox-pwned"`, { cwd: ws, env, wrap: wrap(spec) });
     expect(home.exitCode).not.toBe(0);
     expect(existsSync(path.join(env.HOME, "gg-hostbox-pwned"))).toBe(false);
+  });
+
+  it("hides a Claude login kept outside the home directory", async () => {
+    const { root, ws } = layout();
+    const config = path.join(root, "claude-config");
+    mkdirSync(config);
+    writeFileSync(path.join(config, ".credentials.json"), "CLAUDE-LOGIN");
+    const spec = specFor(ws, false, { claudeConfigDir: config });
+    const read = await execShell(`cat "${path.join(config, ".credentials.json")}"`, { cwd: ws, env, wrap: wrap(spec) });
+    expect(read.output).not.toContain("CLAUDE-LOGIN");
   });
 
   it("hides credential paths and cuts the network while keeping localhost", async () => {
