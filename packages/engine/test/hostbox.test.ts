@@ -187,7 +187,8 @@ describe.skipIf(!available)("host sandbox (OS)", () => {
     }
   });
 
-  it.skipIf(sandbox.kind !== "sandbox-exec")("cannot open apps, and local scripts still run", async () => {
+  // `available`, not `sandbox`: skip conditions run while tests are collected, also where there is no sandbox.
+  it.skipIf(available?.kind !== "sandbox-exec")("cannot open apps, and local scripts still run", async () => {
     const { ws, spec } = layout();
     const open = await execShell("open -g /System/Library/CoreServices/Finder.app/Contents/Resources", { cwd: ws, env, wrap: wrap(spec), timeoutMs: 20_000 });
     expect(open.output).toMatch(/error -54|failed/);
