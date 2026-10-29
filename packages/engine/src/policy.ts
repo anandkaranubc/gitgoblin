@@ -64,6 +64,8 @@ const CONTROL_PATTERNS = [
   /^(vitest|vite|vitest\.workspace|jest|babel|eslint|prettier|tsup|rollup|webpack|esbuild|playwright|cypress|karma|postcss|tailwind|svelte|next|nuxt|astro|remix|commitlint|lint-staged|release|nx|turbo|lerna|ava|wallaby|puppeteer|protractor|wdio|nightwatch)\.config\.[cm]?[jt]sx?$/,
   /^\.(eslintrc|babelrc|mocharc|prettierrc|lintstagedrc|swcrc|nycrc|c8rc|avarc)(\.[\w.-]+)?$/,
   /^karma\.conf\.[cm]?js$/,
+  // Pieces of build logic that a Makefile, CMakeLists.txt, build.gradle or BUILD file pulls in.
+  /\.(mk|mak|cmake|gradle|gradle\.kts|bzl)$/,
 ];
 /** Directories whose contents run as part of builds, checks or git operations. */
 const CONTROL_DIRS = new Set([".husky", ".cargo", ".mvn", ".yarn", "gradle"]);

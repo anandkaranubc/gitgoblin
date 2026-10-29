@@ -220,9 +220,17 @@ describe("controlsChecks", () => {
     "Package.swift",
     "build.zig",
     "build.sbt",
+    "config.mk",
+    "build/rules.mak",
+    "cmake/options.cmake",
+    "gradle/deps.gradle",
+    "buildSrc/conventions.gradle.kts",
+    "tools/defs.bzl",
   ])("knows %s decides what the check commands run", (file) => expect(controlsChecks(file)).toBe(true));
 
-  it.each(["src/paginate.js", "test/paginate.test.js", "README.md", "tsconfig.json", "package-lock.json", "docs/config.md", "src/Makefile.md", "config/settings.json"])(
+  // Test setup files are test code, run by the checks like the tests the change adds; the gate is for
+  // what decides which commands run.
+  it.each(["src/paginate.js", "test/paginate.test.js", "vitest.setup.ts", "README.md", "tsconfig.json", "package-lock.json", "docs/config.md", "src/Makefile.md", "docs/build.mk.md", "config/settings.json"])(
     "leaves %s alone",
     (file) => expect(controlsChecks(file)).toBe(false),
   );

@@ -37,6 +37,9 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   for over two years rank lower, documentation issues higher, and comment count no longer adds
   value. In a backtest on 27 repositories the new order put more outsider-fixed issues in each
   repository's top five.
+- `contribute` also stops for you before running checks when the change edits a piece of build
+  logic another build file pulls in (`*.mk`, `*.cmake`, `*.gradle`, Bazel `*.bzl`), as it already
+  did for `Makefile`, `CMakeLists.txt`, `build.gradle` and `BUILD`.
 
 ## gitgoblin 0.1.1 - 2026-10-24
 
