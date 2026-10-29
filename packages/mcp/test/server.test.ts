@@ -388,6 +388,15 @@ describe("public repositories only", () => {
     expect(recorded.explained).toHaveLength(0);
   });
 
+  it("refuses a like seed it cannot confirm is public before discovering anything", async () => {
+    const { deps, recorded } = fakeDeps({ isPublic: privateRepo });
+    const { client } = await connect(deps);
+    const result = await client.callTool({ name: "discover_repositories", arguments: { like: "acme/internal-billing" } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/^like: github\.com\/acme\/internal-billing is not a repository gitgoblin can confirm is public/m);
+    expect(recorded.queries).toHaveLength(0);
+  });
+
   it("leaves out discovery results it cannot confirm are public, and says so", async () => {
     const secret = sampleResult();
     secret.repo = { ...secret.repo, name: "internal-billing", url: "https://github.com/acme/internal-billing" };

@@ -63,6 +63,9 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   and large Gitea and Forgejo repositories are cloned shallowly like large GitHub ones.
 - The analyze tool ranks issues closer to what outsiders fix: long discussions and issues open
   for over two years rank lower, documentation issues higher.
+- The discover tool's `like` repository goes through the same public-only check as every other
+  repository. Before, discovery read it with the person's token, so a private repository's
+  description could reach the search queries and its name ecosyste.ms.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
