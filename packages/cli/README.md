@@ -179,8 +179,9 @@ The lifecycle of prepared changes, in the same workdir `contribute` uses
   the project's installed dependencies, often several hundred megabytes) and, for a
   worktree, its `gitgoblin/...` branch. The report, diff, pull request text and every
   artifact stay, so `show` still works. `clean --finished` does this for every run that
-  is not awaiting approval; `--force` also discards a prepared change. `runs` says when
-  finished runs still keep their workspaces.
+  is not awaiting approval. A published run whose workspace holds changes or commits the
+  published commit does not (answers to review, say) is kept and named; `--force` discards
+  those, and a prepared change too. `runs` says when finished runs still keep their workspaces.
 
 Read [docs/etiquette.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/etiquette.md) before publishing to someone else's project.
 

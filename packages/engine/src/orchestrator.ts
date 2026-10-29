@@ -49,7 +49,7 @@ import {
   type Verification,
 } from "./types.ts";
 import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
-import { DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, type Workspace } from "./workspace.ts";
+import { DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, unpublishedWork, type Workspace } from "./workspace.ts";
 
 export interface RunInput {
   /** A Task written by hand or exported from an earlier run. */
@@ -673,7 +673,7 @@ export async function publishRun(runId: string, options: PublishRunOptions): Pro
 
 export interface CleanRunOptions {
   workdir?: string;
-  /** Also discard a prepared change that is still awaiting approval. */
+  /** Also discard a prepared change that is still awaiting approval, or work done in a published run's workspace since. */
   force?: boolean;
   env?: Record<string, string>;
 }
@@ -708,6 +708,11 @@ export async function cleanRun(runId: string, options: CleanRunOptions = {}): Pr
       throw new Error(`run ${runId}: ${JSON.stringify(workspace.branch)} is not a gitgoblin branch; nothing was removed`);
     }
     const existed = existsSync(wsPath);
+    // After publishing, the workspace is where a person answers review comments.
+    if (existed && result?.status === "published" && !options.force) {
+      const left = await unpublishedWork(wsPath, journal.readArtifact<{ commitSha?: unknown }>("delivery")?.commitSha, workspace.branch, env);
+      if (left) throw new Error(`run ${runId} was published, and its workspace has ${left}. Push or copy what you want to keep; once it is safe (pushed already, say), clean with force`);
+    }
     await removeWorkspace({ ...workspace, path: wsPath }, env);
     if (existed) removed.push(wsPath);
   }

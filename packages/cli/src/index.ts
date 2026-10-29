@@ -568,7 +568,7 @@ export function buildProgram(runtime: Runtime): Command {
     .description("Free the disk space finished runs hold (their workspaces); reports, diffs and pull request text stay")
     .argument("[runIds...]", "run ids from `gitgoblin runs`")
     .option("--finished", "clean every run that is not awaiting approval and still keeps its workspace")
-    .option("--force", "also discard a prepared change that is awaiting approval")
+    .option("--force", "also discard a prepared change that is awaiting approval, or work in a published run's workspace that was not pushed")
     .option("--workdir <dir>", "where the engine keeps runs (default: $GITGOBLIN_WORKDIR or ~/.gitgoblin)")
     .action(async (runIds: string[], options: { finished?: boolean; force?: boolean; workdir?: string }) => {
       const workdir = resolveWorkdir(runtime, options.workdir);

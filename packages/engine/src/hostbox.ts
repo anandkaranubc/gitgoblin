@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, lstatSync, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, existsSync, lstatSync, readlinkSync, realpathSync, statSync, type Stats } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -52,8 +52,46 @@ function real(p: string): string {
   }
 }
 
+/**
+ * A path the sandbox lets commands write or read, as the kernel will see it. Symbolic links owned by
+ * root (/tmp and /var on macOS) are followed; resolution stops at the first link anyone else owns
+ * and keeps the rest literal. A command can make such a link inside a folder it may write (replace
+ * `~/.npm` with a link to the home directory), and following it when the next command's profile is
+ * built would hand that command whatever the link points at. Kept literal, the rule matches only
+ * the link, and the kernel judges accesses through it by the target, which no rule allows.
+ */
+export function trustedPath(p: string): string {
+  let rest = path.resolve(p).split(path.sep).filter(Boolean);
+  let current: string = path.sep;
+  for (let hops = 0; rest.length > 0; ) {
+    const name = rest.shift()!;
+    const next = path.join(current, name);
+    let info: Stats;
+    try {
+      info = lstatSync(next);
+    } catch {
+      return path.join(next, ...rest);
+    }
+    if (!info.isSymbolicLink()) {
+      current = next;
+      continue;
+    }
+    if (info.uid !== 0 || ++hops > 40) return path.join(next, ...rest);
+    rest = [...path.resolve(current, readlinkSync(next)).split(path.sep).filter(Boolean), ...rest];
+    current = path.sep;
+  }
+  return current;
+}
+
+/** Denied paths follow every link (a dotfiles manager's `~/.ssh` stays hidden); allowed ones only trusted links. */
 function realSpec(spec: HostSandboxSpec): HostSandboxSpec {
-  return { ...spec, workspace: real(spec.workspace), extraWrite: spec.extraWrite.map(real), denyRead: spec.denyRead.map(real), ...(spec.allowRead ? { allowRead: spec.allowRead.map(real) } : {}) };
+  return {
+    ...spec,
+    workspace: trustedPath(spec.workspace),
+    extraWrite: spec.extraWrite.map(trustedPath),
+    denyRead: spec.denyRead.map(real),
+    ...(spec.allowRead ? { allowRead: spec.allowRead.map(trustedPath) } : {}),
+  };
 }
 
 function onPath(name: string): string | undefined {
@@ -110,9 +148,30 @@ export const OFFLINE_ENV: Readonly<Record<string, string>> = {
 /** Credential locations under the home directory that repository commands never need to read. */
 export const CREDENTIAL_PATHS = [
   ".ssh", ".aws", ".azure", ".gnupg", ".netrc", ".npmrc", ".pypirc", ".git-credentials", ".docker", ".kube", ".terraform.d",
-  ".config/gh", ".config/gcloud", ".config/hub", ".cargo/credentials", ".cargo/credentials.toml", ".claude/.credentials.json", ".claude.json",
+  ".config/gh", ".config/gcloud", ".config/hub", ".cargo/credentials", ".cargo/credentials.toml", ".claude.json",
   "Library/Keychains", ".password-store", ".local/share/keyrings",
 ];
+
+/** Files in Claude's configuration directory that hold a login or lead to one (settings may carry `env` keys or an `apiKeyHelper`). */
+const CLAUDE_SECRETS = [".credentials.json", ".claude.json", "settings.json", "settings.local.json"];
+
+/** Variables that point the cloud SDKs a model may run through (Bedrock, Vertex, Foundry) at credential files. */
+const CREDENTIAL_FILE_VARS = ["GOOGLE_APPLICATION_CREDENTIALS", "AWS_SHARED_CREDENTIALS_FILE", "AWS_CONFIG_FILE", "AZURE_CONFIG_DIR"];
+
+/** Claude's configuration directory: CLAUDE_CONFIG_DIR, or `~/.claude`. */
+export function claudeConfigDir(home: string, env: NodeJS.ProcessEnv = process.env): string {
+  return env["CLAUDE_CONFIG_DIR"] ? path.resolve(env["CLAUDE_CONFIG_DIR"]) : path.join(home, ".claude");
+}
+
+/**
+ * Where logins live on this machine: CREDENTIAL_PATHS under `home`, the secret files in Claude's
+ * configuration directory, and credential files the environment points the cloud SDKs at.
+ */
+export function credentialPaths(home: string, env: NodeJS.ProcessEnv = process.env): string[] {
+  const claude = claudeConfigDir(home, env);
+  const pointed = CREDENTIAL_FILE_VARS.map((name) => env[name]).filter((value): value is string => Boolean(value)).map((value) => path.resolve(value));
+  return [...CREDENTIAL_PATHS.map((rel) => path.join(home, rel)), ...CLAUDE_SECRETS.map((file) => path.join(claude, file)), ...pointed];
+}
 
 /** Tool caches under the home directory that package managers and compilers write to. */
 const CACHE_DIRS = [
@@ -136,6 +195,8 @@ export interface SpecOptions {
   strict?: boolean;
   home?: string;
   tmpdir?: string;
+  /** The environment that says where Claude and the cloud SDKs keep their logins; defaults to process.env. */
+  credentialEnv?: NodeJS.ProcessEnv;
   /**
    * The run's own temp directory. When set it replaces the shared ones (the per-user temp directory
    * and /tmp), where other programs keep their control sockets and FIFOs: a tmux or screen server
@@ -165,7 +226,8 @@ function buildSpec(workspace: string, network: boolean, options: SpecOptions): H
   const systemTmp = existsSync("/tmp") ? ["/tmp"] : [];
   const temp = options.tmp ? [options.tmp, ...pnpmLocks()] : [tmpdir, ...systemTmp];
   const extraWrite = [...temp, ...(options.extraWrite ?? []), ...existing(CACHE_DIRS)];
-  const credentials = CREDENTIAL_PATHS.map((rel) => path.join(home, rel));
+  // Repository commands never need Claude's configuration, which also holds the person's session transcripts.
+  const credentials = [...credentialPaths(home, options.credentialEnv), claudeConfigDir(home, options.credentialEnv)];
   if (!options.strict) return { workspace, extraWrite, denyRead: credentials, network };
   // The running node binary may itself live under the home directory (nvm, volta, fnm).
   const nodeHome = path.dirname(path.dirname(process.execPath));
@@ -209,7 +271,9 @@ function sbpl(value: string): string {
  * then allows the few places a build may write, ending with the `.git` directory denied again.
  */
 export function sandboxExecProfile(spec: HostSandboxSpec): string {
-  const lines = ["(version 1)", "(allow default)"];
+  // Apps started through LaunchServices (`open x.command`) and apps a script drives with Apple events
+  // (Terminal's "do script") run outside the sandbox and do what they are told; builds need neither.
+  const lines = ["(version 1)", "(allow default)", "(deny lsopen)", "(deny appleevent-send)"];
   const writable = [spec.workspace, ...spec.extraWrite];
   if (!spec.network) {
     lines.push(
@@ -268,7 +332,8 @@ export function bwrapArgs(spec: HostSandboxSpec, command: string): string[] {
   // Some systems keep the resolver's configuration under /run (systemd-resolved); lookups need it.
   const resolv = realPathOrUndefined("/etc/resolv.conf");
   if (resolv && SOCKET_DIRS.some((dir) => resolv.startsWith(dir + "/"))) args.push("--ro-bind", resolv, resolv);
-  for (const dir of [spec.workspace, ...spec.extraWrite]) if (existsSync(dir) && !SOCKET_DIRS.includes(dir)) args.push("--bind", dir, dir);
+  // bubblewrap follows links when it binds, so only a path that is already its own real path is bound.
+  for (const dir of [spec.workspace, ...spec.extraWrite]) if (existsSync(dir) && real(dir) === dir && !SOCKET_DIRS.includes(dir)) args.push("--bind", dir, dir);
   const gitDir = path.join(spec.workspace, ".git");
   if (existsSync(gitDir)) args.push("--ro-bind", gitDir, gitDir);
   const hide = (p: string) => {

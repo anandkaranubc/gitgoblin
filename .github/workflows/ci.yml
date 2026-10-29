@@ -24,6 +24,15 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The engine's tests of its Linux sandbox skip themselves when there is no bwrap, and the runner
+      # image has none. Ubuntu also limits the unprivileged user namespaces bwrap is built on. The last
+      # line fails the job if bwrap still cannot sandbox, so those tests can never skip without notice.
+      - name: Install bubblewrap for the engine's sandbox tests
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --unshare-all --die-with-parent --ro-bind / / true
       - run: npm run typecheck
       - run: npm test
       - run: npm run docs:check
