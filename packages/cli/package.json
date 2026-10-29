@@ -1,6 +1,6 @@
 {
   "name": "gitgoblin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Find open-source projects worth your time, work out what they need, and prepare a pull request you approve",
   "keywords": [
     "open-source",
