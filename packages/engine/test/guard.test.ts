@@ -235,7 +235,7 @@ describe("sandboxSettings", () => {
     expect(build.filesystem?.denyWrite).toEqual(["/ws/.git"]);
     expect(build.network?.allowedDomains).toEqual([]);
     expect(build.allowUnsandboxedCommands).toBe(false);
-    expect(build.credentials?.envVars?.map((v) => (v as { name: string }).name)).toEqual(["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]);
+    expect(build.credentials?.envVars?.map((v) => (v as { name: string }).name)).toEqual(expect.arrayContaining(["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]));
     const review = sandboxSettings("/ws", "review");
     expect(review.filesystem?.allowWrite).not.toContain("/ws");
     // The agent can use the shared /tmp (pnpm locks its store there) like the repository's commands can.
@@ -257,7 +257,14 @@ describe("commandEnv", () => {
 describe("sandboxSettings credentials", () => {
   it("hides from the agent's shell what repository commands cannot read, keychains included", () => {
     const denied = sandboxSettings("/ws", "build").filesystem?.denyRead ?? [];
-    for (const rel of ["Library/Keychains", ".claude.json", ".claude/.credentials.json", ".config/gh", ".password-store"]) expect(denied).toContain(path.join(os.homedir(), rel));
+    for (const rel of ["Library/Keychains", ".claude.json", ".config/gh", ".password-store"]) expect(denied).toContain(path.join(os.homedir(), rel));
+    // Claude's login and settings, but not the whole directory, which the shell's own snapshots live in.
+    for (const file of [".credentials.json", "settings.json"]) expect(denied.some((p) => p.endsWith(`${path.sep}${file}`))).toBe(true);
+    expect(denied).not.toContain(path.join(os.homedir(), ".claude"));
+  });
+  it("hides model and cloud keys from the agent's shell", () => {
+    const hidden = (sandboxSettings("/ws", "build").credentials?.envVars ?? []).map((v) => v.name);
+    for (const name of ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "AWS_SECRET_ACCESS_KEY", "AWS_BEARER_TOKEN_BEDROCK", "ANTHROPIC_FOUNDRY_API_KEY"]) expect(hidden).toContain(name);
   });
 });
 

@@ -110,16 +110,29 @@ export const OFFLINE_ENV: Readonly<Record<string, string>> = {
 /** Credential locations under the home directory that repository commands never need to read. */
 export const CREDENTIAL_PATHS = [
   ".ssh", ".aws", ".azure", ".gnupg", ".netrc", ".npmrc", ".pypirc", ".git-credentials", ".docker", ".kube", ".terraform.d",
-  ".config/gh", ".config/gcloud", ".config/hub", ".cargo/credentials", ".cargo/credentials.toml", ".claude/.credentials.json", ".claude.json",
+  ".config/gh", ".config/gcloud", ".config/hub", ".cargo/credentials", ".cargo/credentials.toml", ".claude.json",
   "Library/Keychains", ".password-store", ".local/share/keyrings",
 ];
 
+/** Files in Claude's configuration directory that hold a login or lead to one (settings may carry `env` keys or an `apiKeyHelper`). */
+const CLAUDE_SECRETS = [".credentials.json", ".claude.json", "settings.json", "settings.local.json"];
+
+/** Variables that point the cloud SDKs a model may run through (Bedrock, Vertex, Foundry) at credential files. */
+const CREDENTIAL_FILE_VARS = ["GOOGLE_APPLICATION_CREDENTIALS", "AWS_SHARED_CREDENTIALS_FILE", "AWS_CONFIG_FILE", "AZURE_CONFIG_DIR"];
+
+/** Claude's configuration directory: CLAUDE_CONFIG_DIR, or `~/.claude`. */
+export function claudeConfigDir(home: string, env: NodeJS.ProcessEnv = process.env): string {
+  return env["CLAUDE_CONFIG_DIR"] ? path.resolve(env["CLAUDE_CONFIG_DIR"]) : path.join(home, ".claude");
+}
+
 /**
- * Every credential location under `home`, plus a Claude configuration directory moved elsewhere with
- * CLAUDE_CONFIG_DIR, which holds the same login as `~/.claude`.
+ * Where logins live on this machine: CREDENTIAL_PATHS under `home`, the secret files in Claude's
+ * configuration directory, and credential files the environment points the cloud SDKs at.
  */
-export function credentialPaths(home: string, claudeConfigDir = process.env["CLAUDE_CONFIG_DIR"]): string[] {
-  return [...CREDENTIAL_PATHS.map((rel) => path.join(home, rel)), ...(claudeConfigDir ? [path.resolve(claudeConfigDir)] : [])];
+export function credentialPaths(home: string, env: NodeJS.ProcessEnv = process.env): string[] {
+  const claude = claudeConfigDir(home, env);
+  const pointed = CREDENTIAL_FILE_VARS.map((name) => env[name]).filter((value): value is string => Boolean(value)).map((value) => path.resolve(value));
+  return [...CREDENTIAL_PATHS.map((rel) => path.join(home, rel)), ...CLAUDE_SECRETS.map((file) => path.join(claude, file)), ...pointed];
 }
 
 /** Tool caches under the home directory that package managers and compilers write to. */
@@ -144,8 +157,8 @@ export interface SpecOptions {
   strict?: boolean;
   home?: string;
   tmpdir?: string;
-  /** Where Claude keeps its login when not in `~/.claude`; defaults to CLAUDE_CONFIG_DIR. */
-  claudeConfigDir?: string;
+  /** The environment that says where Claude and the cloud SDKs keep their logins; defaults to process.env. */
+  credentialEnv?: NodeJS.ProcessEnv;
 }
 
 /** The spec for commands in `workspace`: temp dir, tool caches and the given extras writable, credential paths hidden. */
@@ -168,7 +181,8 @@ function buildSpec(workspace: string, network: boolean, options: SpecOptions): H
   const existing = (rels: string[]) => rels.map((rel) => path.join(home, rel)).filter((p) => existsSync(p));
   const systemTmp = existsSync("/tmp") ? ["/tmp"] : [];
   const extraWrite = [tmpdir, ...systemTmp, ...(options.extraWrite ?? []), ...existing(CACHE_DIRS)];
-  const credentials = credentialPaths(home, options.claudeConfigDir);
+  // Repository commands never need Claude's configuration, which also holds the person's session transcripts.
+  const credentials = [...credentialPaths(home, options.credentialEnv), claudeConfigDir(home, options.credentialEnv)];
   if (!options.strict) return { workspace, extraWrite, denyRead: credentials, network };
   // The running node binary may itself live under the home directory (nvm, volta, fnm).
   const nodeHome = path.dirname(path.dirname(process.execPath));

@@ -355,6 +355,11 @@ function tempDirs(): string[] {
   return specFor(os.tmpdir(), false, { home: path.join(os.tmpdir(), "no-home") }).extraWrite.filter((dir) => !dir.includes("no-home"));
 }
 
+const SHELL_HIDDEN_ENV = [
+  "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_FOUNDRY_API_KEY",
+  "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_BEARER_TOKEN_BEDROCK", "AZURE_CLIENT_SECRET", "GOOGLE_APPLICATION_CREDENTIALS",
+];
+
 /**
  * Sandbox for the agent's shell: no network, writes only in the workspace (never `.git`) and the
  * temp dir, nothing at all for reviewers, and no credential files or model keys visible to commands.
@@ -375,12 +380,7 @@ export function sandboxSettings(workspace: string, profile: ToolProfile, extraWr
       // The same credential locations the repository's own commands cannot read, keychains included.
       denyRead: credentialPaths(home),
     },
-    credentials: {
-      envVars: [
-        { name: "ANTHROPIC_API_KEY", mode: "deny" },
-        { name: "ANTHROPIC_AUTH_TOKEN", mode: "deny" },
-        { name: "CLAUDE_CODE_OAUTH_TOKEN", mode: "deny" },
-      ],
-    },
+    // The model's own keys, and the cloud keys it may run through (Bedrock, Vertex, Foundry), stay in the SDK process.
+    credentials: { envVars: SHELL_HIDDEN_ENV.map((name) => ({ name, mode: "deny" as const })) },
   };
 }
