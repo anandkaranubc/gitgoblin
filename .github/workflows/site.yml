@@ -10,10 +10,11 @@ on:
     paths: ["site/**", "brand/**", ".github/workflows/site.yml"]
   workflow_dispatch:
 
+# Each job gets only what it needs. The build runs npm ci and Astro over a few hundred packages, so it
+# holds no OIDC token and cannot write to Pages; only the deploy job, which runs GitHub's own action
+# and no third-party code, can.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages-${{ github.ref }}
@@ -22,11 +23,16 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read # configure-pages reads the site's address
     defaults:
       run:
         working-directory: site
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -53,6 +59,9 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

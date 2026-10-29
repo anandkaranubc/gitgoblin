@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, lstatSync, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, existsSync, lstatSync, readlinkSync, realpathSync, statSync, type Stats } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -52,8 +52,46 @@ function real(p: string): string {
   }
 }
 
+/**
+ * A path the sandbox lets commands write or read, as the kernel will see it. Symbolic links owned by
+ * root (/tmp and /var on macOS) are followed; resolution stops at the first link anyone else owns
+ * and keeps the rest literal. A command can make such a link inside a folder it may write (replace
+ * `~/.npm` with a link to the home directory), and following it when the next command's profile is
+ * built would hand that command whatever the link points at. Kept literal, the rule matches only
+ * the link, and the kernel judges accesses through it by the target, which no rule allows.
+ */
+export function trustedPath(p: string): string {
+  let rest = path.resolve(p).split(path.sep).filter(Boolean);
+  let current: string = path.sep;
+  for (let hops = 0; rest.length > 0; ) {
+    const name = rest.shift()!;
+    const next = path.join(current, name);
+    let info: Stats;
+    try {
+      info = lstatSync(next);
+    } catch {
+      return path.join(next, ...rest);
+    }
+    if (!info.isSymbolicLink()) {
+      current = next;
+      continue;
+    }
+    if (info.uid !== 0 || ++hops > 40) return path.join(next, ...rest);
+    rest = [...path.resolve(current, readlinkSync(next)).split(path.sep).filter(Boolean), ...rest];
+    current = path.sep;
+  }
+  return current;
+}
+
+/** Denied paths follow every link (a dotfiles manager's `~/.ssh` stays hidden); allowed ones only trusted links. */
 function realSpec(spec: HostSandboxSpec): HostSandboxSpec {
-  return { ...spec, workspace: real(spec.workspace), extraWrite: spec.extraWrite.map(real), denyRead: spec.denyRead.map(real), ...(spec.allowRead ? { allowRead: spec.allowRead.map(real) } : {}) };
+  return {
+    ...spec,
+    workspace: trustedPath(spec.workspace),
+    extraWrite: spec.extraWrite.map(trustedPath),
+    denyRead: spec.denyRead.map(real),
+    ...(spec.allowRead ? { allowRead: spec.allowRead.map(trustedPath) } : {}),
+  };
 }
 
 function onPath(name: string): string | undefined {
@@ -217,7 +255,9 @@ function sbpl(value: string): string {
  * then allows the few places a build may write, ending with the `.git` directory denied again.
  */
 export function sandboxExecProfile(spec: HostSandboxSpec): string {
-  const lines = ["(version 1)", "(allow default)"];
+  // Apps started through LaunchServices (`open x.command`) and apps a script drives with Apple events
+  // (Terminal's "do script") run outside the sandbox and do what they are told; builds need neither.
+  const lines = ["(version 1)", "(allow default)", "(deny lsopen)", "(deny appleevent-send)"];
   const writable = [spec.workspace, ...spec.extraWrite];
   if (!spec.network) {
     lines.push(
@@ -276,7 +316,8 @@ export function bwrapArgs(spec: HostSandboxSpec, command: string): string[] {
   // Some systems keep the resolver's configuration under /run (systemd-resolved); lookups need it.
   const resolv = realPathOrUndefined("/etc/resolv.conf");
   if (resolv && SOCKET_DIRS.some((dir) => resolv.startsWith(dir + "/"))) args.push("--ro-bind", resolv, resolv);
-  for (const dir of [spec.workspace, ...spec.extraWrite]) if (existsSync(dir) && !SOCKET_DIRS.includes(dir)) args.push("--bind", dir, dir);
+  // bubblewrap follows links when it binds, so only a path that is already its own real path is bound.
+  for (const dir of [spec.workspace, ...spec.extraWrite]) if (existsSync(dir) && real(dir) === dir && !SOCKET_DIRS.includes(dir)) args.push("--bind", dir, dir);
   const gitDir = path.join(spec.workspace, ".git");
   if (existsSync(gitDir)) args.push("--ro-bind", gitDir, gitDir);
   const hide = (p: string) => {
