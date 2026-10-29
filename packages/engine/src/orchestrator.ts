@@ -327,11 +327,15 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     // under the run directory rather than in the operator's interpreter (which the sandbox refuses).
     const toolchain = await prepareToolchain(task, workspace.path, journal.dir, hostEnv);
     env = { ...baseEnv, ...toolchain.env };
-    hostEnv = commandEnv(env);
+    // The repository's commands get a temp directory of their own, removed with the workspace: the
+    // shared ones hold other programs' control sockets and FIFOs (see SpecOptions.tmp).
+    const commandTmp = journal.pathFor("tmp");
+    mkdirSync(commandTmp, { recursive: true });
+    hostEnv = { ...commandEnv(env), TMPDIR: commandTmp, TMP: commandTmp, TEMP: commandTmp };
     journal.event("run", "toolchain", { notes: toolchain.notes, writeDirs: toolchain.writeDirs });
     for (const note of toolchain.notes) reporter.info(note);
     const wrapFor = (network: boolean, extra: string[] = []) =>
-      hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network, { extraWrite: [...toolchain.writeDirs, ...extra], strict })) };
+      hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network, { extraWrite: [...toolchain.writeDirs, ...extra], strict, tmp: commandTmp })) };
     const timeout = options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {};
     // Checks run with the network cut when sandboxed; say so to the package managers so they fail fast.
     const checkEnv = hostBox.kind === "none" ? hostEnv : { ...hostEnv, ...OFFLINE_ENV };
@@ -718,7 +722,7 @@ export async function cleanRun(runId: string, options: CleanRunOptions = {}): Pr
     await removeWorkspace({ ...workspace, path: wsPath }, env);
     if (existed) removed.push(wsPath);
   }
-  for (const dir of ["toolchain", "egress"]) {
+  for (const dir of ["toolchain", "egress", "tmp"]) {
     const full = journal.pathFor(dir);
     if (existsSync(full)) {
       await rm(full, { recursive: true, force: true });

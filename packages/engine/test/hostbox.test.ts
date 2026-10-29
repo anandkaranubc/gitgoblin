@@ -1,4 +1,5 @@
-import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { closeSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -245,6 +246,58 @@ describe("specFor paths", () => {
   it("lets tools use the shared /tmp as well as the per-user temp directory", () => {
     const spec = specFor(mkdtempSync(path.join(os.tmpdir(), "gg-real-")), false);
     if (existsSync("/tmp")) expect(spec.extraWrite).toContain(realpathSync("/tmp"));
+  });
+});
+
+describe("the run's temp directory", () => {
+  it("replaces the shared temp directories, keeping only pnpm's store locks on macOS", () => {
+    const home = realpathSync(mkdtempSync(path.join(os.tmpdir(), "gg-home-")));
+    const spec = specFor("/ws", false, { home, tmp: "/runs/r/tmp" });
+    expect(spec.extraWrite).toContain("/runs/r/tmp");
+    expect(spec.extraWrite).not.toContain(realpathSync(os.tmpdir()));
+    expect(spec.extraWrite).not.toContain(realpathSync("/tmp"));
+    const locks = path.join(realpathSync("/tmp"), `pnpm-store-operation-locks-${process.getuid?.()}`);
+    expect(spec.extraWrite.includes(locks)).toBe(process.platform === "darwin");
+  });
+});
+
+describe.skipIf(!available)("the run's temp directory (OS)", () => {
+  it("keeps other programs' sockets and FIFOs in the shared temp directory out of reach", async () => {
+    const { root, ws } = layout();
+    const tmp = path.join(root, "tmp");
+    mkdirSync(tmp);
+    const spec = specFor(ws, false, { tmp });
+    const run = (command: string) => execShell(command, { cwd: ws, env: { ...env, TMPDIR: tmp }, wrap: (c) => available!.wrap(c, spec), timeoutMs: 20_000 });
+    // tmux's server socket and screen's FIFO live in the shared temp directory, and both servers run
+    // whatever a client sends them outside the sandbox.
+    const shared = mkdtempSync(path.join(os.tmpdir(), "gg-shared-"));
+    const socket = path.join(shared, "default");
+    const server = net.createServer((c) => c.end("SERVER"));
+    await new Promise<void>((resolve) => server.listen(socket, resolve));
+    const fifo = path.join(shared, "screen");
+    execFileSync("mkfifo", [fifo]);
+    const reader = openSync(fifo, constants.O_RDONLY | constants.O_NONBLOCK);
+    try {
+      const reach = await run(`node -e "require('net').connect('${socket}').on('data',d=>console.log('got',String(d))).on('error',e=>console.log('refused',e.code))"`);
+      expect(reach.output).not.toContain("SERVER");
+      const sent = await run(`printf 'quit\\n' > "${fifo}"`);
+      expect(sent.timedOut).toBe(false);
+      const buf = Buffer.alloc(64);
+      let read = 0;
+      try {
+        read = readSync(reader, buf);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EAGAIN") throw error;
+      }
+      expect(buf.subarray(0, read).toString()).toBe("");
+    } finally {
+      closeSync(reader);
+      server.close();
+    }
+    // The commands' own temp files and sockets (tsx, turbo's daemon) still work there.
+    const own = await run(`touch "$TMPDIR/own" && node -e "const net=require('net'),p=require('path').join(require('os').tmpdir(),'own.sock');const s=net.createServer(c=>c.end('mine')).listen(p,()=>net.connect(p).on('data',d=>{console.log('own',String(d));s.close()}))"`);
+    expect(own.output).toContain("own mine");
+    if (process.platform === "darwin") expect((await run('mkdir -p "/tmp/pnpm-store-operation-locks-$(id -u)" && touch "/tmp/pnpm-store-operation-locks-$(id -u)/gg-probe-$$" && rm "/tmp/pnpm-store-operation-locks-$(id -u)/gg-probe-$$"')).exitCode).toBe(0);
   });
 });
 

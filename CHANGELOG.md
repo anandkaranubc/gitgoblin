@@ -7,6 +7,11 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.1.2 - Unreleased
 
+- Safety: on macOS, the repository's commands could leave the sandbox, in strict isolation too, by
+  sending a command to a tmux or screen server through its socket or FIFO in `/tmp` or the per-user
+  temp directory; those servers run it as you, outside any sandbox. The commands now get a temp
+  directory of their own in the run directory (`TMPDIR`), and the shared ones are read-only to
+  them, except the store locks pnpm keeps in `/tmp`. Linux already gave them an empty `/tmp`.
 - Safety: the repository's install and test commands no longer receive a Claude login token set in
   `CLAUDE_CODE_OAUTH_TOKEN`, and cannot read Claude's configuration directory (`~/.claude`, or the
   one `CLAUDE_CONFIG_DIR` names), whose settings can hold keys, or the credential files that
