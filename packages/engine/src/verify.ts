@@ -44,9 +44,17 @@ export async function runChecks(specs: CheckSpec[], opts: RunChecksOptions): Pro
       durationMs: result.durationMs,
       outputTail: excerpt(result),
     };
-    // A summary from cut-off output could be missing an earlier suite's line, so counts need the whole output.
-    const tests = result.truncated ? undefined : testCounts(result.output);
-    if (tests) check.tests = tests;
+    if (result.truncated) {
+      // Cut-off output keeps only the summaries in its kept end (the first kept line may be partial), so
+      // its failures are a lower bound and its passing tests unknown. A runner's totals usually come last.
+      check.truncated = true;
+      const tests = testCounts(result.output.slice(result.output.indexOf("\n") + 1));
+      // A summary that ran no test at all ("no tests", "no tests ran") is conclusive however long the output.
+      if (tests) check.tests = tests.failed === 0 && tests.passed === 0 ? tests : { failed: tests.failed };
+    } else {
+      const tests = testCounts(result.output);
+      if (tests) check.tests = tests;
+    }
     checks.push(check);
     opts.onOutput?.(check, keptOutput(result));
     opts.onCheck?.(check);
@@ -70,8 +78,8 @@ function count(text: string, word: string): number {
  * runs several suites (workspaces, browsers, crates) prints several lines; they are added up.
  */
 const RUNNERS: { name: string; read: (out: string) => Summary[] }[] = [
-  // vitest: "      Tests  2 failed | 98 passed (100)". "Test Files" lines are not matched.
-  { name: "vitest", read: (out) => [...out.matchAll(/^\s*Tests {2,}(.*\d+ (?:passed|failed).*)$/gm)].map(([, l = ""]) => ({ failed: count(l, "failed"), passed: count(l, "passed") })) },
+  // vitest: "      Tests  2 failed | 98 passed (100)", or "Tests  no tests" when no file loaded. "Test Files" lines are not matched.
+  { name: "vitest", read: (out) => [...out.matchAll(/^\s*Tests {2,}(.*\d+ (?:passed|failed).*|no tests)\s*$/gm)].map(([, l = ""]) => ({ failed: count(l, "failed"), passed: count(l, "passed") })) },
   // jest: "Tests:       1 failed, 2 skipped, 97 passed, 100 total"
   { name: "jest", read: (out) => [...out.matchAll(/^Tests:\s+(.*\btotal)\s*$/gm)].map(([, l = ""]) => ({ failed: count(l, "failed"), passed: count(l, "passed") })) },
   // pytest: "===== 1 failed, 98 passed, 1 error in 2.31s =====". Errors are failures to the person reading.
@@ -178,9 +186,18 @@ export function compareWithBaseline(now: Check[], baseline: Check[] | undefined,
       regressions.push(c.name);
       blocking += 1;
     } else if (base?.status === "fail" && c.status === "fail") {
-      const counted = c.tests && base.tests ? { name: c.name, baseline: base.tests, now: c.tests } : undefined;
-      if (counted) testCounts.push(counted);
-      if (counted && worse(counted.now, counted.baseline)) {
+      // Counts from a cut-off baseline are a lower bound, which proves nothing about the change.
+      const baseline = base.truncated ? undefined : base.tests;
+      if (baseline && c.tests) {
+        testCounts.push({ name: c.name, baseline, now: c.tests });
+        if (worse(c.tests, baseline)) {
+          regressions.push(c.name);
+          blocking += 1;
+        } else preexisting.push(c.name);
+      } else if (baseline && !c.truncated) {
+        // The runner reported results at baseline and none now: the suite no longer gets that far (a
+        // file that does not load, a compile error), which is worse than any count it could report.
+        testCounts.push({ name: c.name, baseline });
         regressions.push(c.name);
         blocking += 1;
       } else preexisting.push(c.name);
@@ -204,6 +221,11 @@ export function describeCounts(v: Verification, name: string): string | undefine
   const counted = v.testCounts?.find((t) => t.name === name);
   if (!counted) return undefined;
   const { now, baseline } = counted;
+  const before = baseline.passed !== undefined ? `${baseline.failed} failing and ${baseline.passed} passing tests` : `${baseline.failed} failing tests`;
+  if (!now) return `the test runner reported no results, against ${before} on the base commit`;
+  if (v.checks.find((c) => c.name === name)?.truncated) {
+    return `at least ${now.failed} failing tests in the end of an output too long to keep whole, against ${before} on the base commit`;
+  }
   if (now.passed !== undefined && baseline.passed !== undefined) {
     return `${now.failed} failing and ${now.passed} passing tests, against ${baseline.failed} and ${baseline.passed} on the base commit`;
   }

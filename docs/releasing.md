@@ -19,7 +19,7 @@ Pushing a tag starts [.github/workflows/release.yml](../.github/workflows/releas
 2. **Draft release.** It creates a draft GitHub release with those files, using the CHANGELOG section as the notes. Nobody sees a draft until the maintainer publishes it.
 3. **npm.** After the draft exists and the maintainer approves the job in the `npm` environment, it checks the files against `SHA256SUMS` and publishes the same tarball it built. npm records provenance that links the package to the workflow run.
 
-The build also fails on a high-severity advisory in a runtime dependency (`npm audit --omit=dev --audit-level=high`). Dependencies that are only used to build or test are not checked there; Dependabot alerts cover them. Known build-only advisories, reviewed on 2026-10-23: `@anthropic-ai/mcpb` (which packs the `.mcpb` bundle) pulls in `node-forge` and `tmp` versions with advisories that have no upstream fix. They matter only to an interactive or signing use of that tool, and the release job runs it non-interactively on files it just built.
+The build also fails on a high-severity advisory in a runtime dependency (`npm audit --omit=dev --audit-level=high`). Dependencies that are only used to build or test are not checked there; Dependabot alerts cover them. Known build-only advisories, reviewed on 2026-10-29: `@anthropic-ai/mcpb` (which packs the `.mcpb` bundle) pulls in `node-forge` and `tmp` versions, and its own copy of zod 3, with advisories that have no upstream fix. They matter only to an interactive or signing use of that tool, or to validating input it did not build, and the release job runs it non-interactively on files it just built. The zod the published packages bundle is a patched 4.x.
 
 To rehearse without a tag, run the workflow by hand: **Actions → Release → Run workflow**, then pick the package. It builds and checks from any branch, and attests, drafts and publishes nothing.
 
@@ -58,7 +58,7 @@ To rehearse without a tag, run the workflow by hand: **Actions → Release → R
 
 The maintainer does this once, before the first release. None of it can be done from a pull request.
 
-1. **npm.** Use an npm account with two-factor authentication. Create the free npm organization `gitgoblin`, which owns the `@gitgoblin` scope. Until the scope and the `gitgoblin` name are claimed, anyone could register them, which is why the docs never tell people to run `npx -y` against either name yet.
+1. **npm.** Use an npm account with two-factor authentication. Create the free npm organization `gitgoblin`, which owns the `@gitgoblin` scope. Until the scope and the `gitgoblin` name are claimed, anyone could register them, so docs never tell people to run `npx -y` against a name before it is published. Both are claimed now: `gitgoblin` since 0.1.0 and `@gitgoblin/mcp` since 0.1.7.
 2. **Tags.** Add a tag ruleset (**Settings → Rules → Rulesets → New tag ruleset**) for `refs/tags/v*` and `refs/tags/mcp-v*` that restricts creations, updates and deletions, with only the maintainer allowed to bypass. Releases can then only start from the maintainer, and a published tag cannot move. The workflow also refuses a tag that is not on `main`.
 3. **The `npm` environment.** In **Settings → Environments**, create `npm`. Add yourself as a required reviewer and limit deployment to tags matching `v*` and `mcp-v*`.
 4. **Turn publishing on.** In **Settings → Secrets and variables → Actions → Variables**, set `NPM_PUBLISH` to `true`. Until then, the workflow drafts releases and never publishes. This makes sure step 3 is done first.
