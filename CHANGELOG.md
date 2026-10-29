@@ -20,7 +20,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - When a project's tests already fail before the change, `contribute` no longer takes "also fails on
   the base commit" at face value: it reads the test runner's summary (vitest, jest, pytest, mocha,
   web-test-runner, node's test runner and TAP, bun, cargo, go, RSpec, PHPUnit) and treats more failing
-  tests, or fewer passing ones, as a regression. The pull request shows both counts.
+  tests, or fewer passing ones, as a regression. The pull request shows both counts. A suite that
+  reported results before the change and none after it (a module that no longer loads, a compile
+  error) is a regression too, and so is an output too long to keep whole whose kept end already
+  shows more failures.
 - Each check's whole output is saved in the run directory (`check-baseline-<check>.txt`,
   `check-verify-<n>-<check>.txt`), and the excerpt kept in the run's files and shown to the agent
   now holds the start of the output as well as the end, so the first error survives a long log.
@@ -42,6 +45,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   for over two years rank lower, documentation issues higher, and comment count no longer adds
   value. In a backtest on 27 repositories the new order put more outsider-fixed issues in each
   repository's top five.
+- `contribute` also stops for you before running checks when the change edits build logic beyond
+  the main build files: pieces they pull in (`*.mk`, `*.cmake`, `*.gradle`, Bazel `*.bzl` and
+  `*.bazelrc`), Gradle's `buildSrc` and `build-logic`, Bazel's `tools/bazel`, Makefiles by other
+  names and autotools' `configure` and `Makefile.am`.
 
 ## gitgoblin 0.1.1 - 2026-10-24
 
@@ -72,6 +79,9 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   and large Gitea and Forgejo repositories are cloned shallowly like large GitHub ones.
 - The analyze tool ranks issues closer to what outsiders fix: long discussions and issues open
   for over two years rank lower, documentation issues higher.
+- The discover tool's `like` repository goes through the same public-only check as every other
+  repository. Before, discovery read it with the person's token, so a private repository's
+  description could reach the search queries and its name ecosyste.ms.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 

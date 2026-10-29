@@ -44,6 +44,17 @@ describe("runChecks", () => {
     expect(counted?.tests).toEqual({ failed: 1, passed: 2 });
     expect(plain?.tests).toBeUndefined();
   });
+  it("reads failures from the kept end of an output too long to keep whole, as a lower bound", async () => {
+    const [long] = await runChecks([{ name: "test", command: "yes ' FAIL  src/a.test.ts > breaks' | head -c 700000; printf '\\n      Tests  302 failed | 98 passed (400)\\n'; exit 1" }], { cwd: process.cwd(), env });
+    expect(long?.truncated).toBe(true);
+    expect(long?.tests).toEqual({ failed: 302 });
+  });
+  it("keeps a long output's verdict that no test ran", async () => {
+    const [none] = await runChecks([{ name: "test", command: "yes ' FAIL  src/a.test.ts [ SyntaxError ]' | head -c 700000; printf '\\n      Tests  no tests\\n'; exit 1" }], { cwd: process.cwd(), env });
+    expect(none?.truncated).toBe(true);
+    expect(none?.tests).toEqual({ failed: 0, passed: 0 });
+    expect(compareWithBaseline([none!], [check("test", "fail", { failed: 1, passed: 8 })], diff).ok).toBe(false);
+  });
 });
 
 describe("testCounts", () => {
@@ -51,6 +62,7 @@ describe("testCounts", () => {
     ["vitest", " Test Files  1 failed | 9 passed (10)\n      Tests  2 failed | 98 passed | 1 skipped (101)\n   Duration  1.2s", { failed: 2, passed: 98 }],
     ["vitest in colour", "\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[31m2 failed\u001b[39m\u001b[22m\u001b[2m | \u001b[22m\u001b[1m\u001b[32m98 passed\u001b[39m\u001b[22m\u001b[90m (100)\u001b[39m", { failed: 2, passed: 98 }],
     ["vitest in two workspaces", "      Tests  3 passed (3)\n      Tests  1 failed | 4 passed (5)", { failed: 1, passed: 7 }],
+    ["vitest when no test file loads", " Test Files  3 failed (3)\n      Tests  no tests\n   Duration  1.2s", { failed: 0, passed: 0 }],
     ["jest", "Test Suites: 1 failed, 4 passed, 5 total\nTests:       2 failed, 1 skipped, 97 passed, 100 total\nSnapshots:   0 total", { failed: 2, passed: 97 }],
     ["pytest", "FAILED tests/test_a.py::test_x\n=========== 2 failed, 97 passed, 1 error in 3.21s ===========", { failed: 3, passed: 97 }],
     ["pytest, all passing", "============ 100 passed in 1.02s (0:00:01) ============", { failed: 0, passed: 100 }],
@@ -121,9 +133,30 @@ describe("compareWithBaseline with test counts", () => {
     expect(compareWithBaseline([check("test", "fail", { failed: 3 })], base, diff).ok).toBe(false);
     expect(describeCounts(compareWithBaseline([check("test", "fail", { failed: 2 })], base, diff), "test")).toBe("2 failing tests, against 2 on the base commit");
   });
-  it("falls back to pass and fail when either side has no counts", () => {
-    expect(compareWithBaseline([check("test", "fail")], before, diff).ok).toBe(true);
+  it("blames the change when the runner reported results at baseline and none now", () => {
+    // A syntax error in a shared module: vitest prints "Tests  no tests", pytest exits at collection.
+    const v = compareWithBaseline([check("test", "fail")], before, diff);
+    expect(v.ok).toBe(false);
+    expect(v.regressions).toEqual(["test"]);
+    expect(describeCounts(v, "test")).toBe("the test runner reported no results, against 7 failing and 10577 passing tests on the base commit");
+  });
+  it("falls back to pass and fail when the baseline has no counts", () => {
     expect(compareWithBaseline([check("test", "fail", { failed: 900 })], [check("test", "fail")], diff).ok).toBe(true);
+  });
+  const cut = (tests?: TestCounts): Check => ({ ...check("test", "fail", tests), truncated: true });
+  it("blames the change when the kept end of a long output already shows more failures", () => {
+    const v = compareWithBaseline([cut({ failed: 302 })], before, diff);
+    expect(v.ok).toBe(false);
+    expect(describeCounts(v, "test")).toBe("at least 302 failing tests in the end of an output too long to keep whole, against 7 failing and 10577 passing tests on the base commit");
+  });
+  it("cannot tell from a long output that shows no more failures, or none at all", () => {
+    expect(compareWithBaseline([cut({ failed: 7 })], before, diff).preexisting).toEqual(["test"]);
+    expect(compareWithBaseline([cut()], before, diff).preexisting).toEqual(["test"]);
+  });
+  it("does not compare against a baseline whose output was cut", () => {
+    const v = compareWithBaseline([check("test", "fail", { failed: 9, passed: 10 })], [cut({ failed: 2 })], diff);
+    expect(v.ok).toBe(true);
+    expect(v.testCounts).toBeUndefined();
   });
   it("still treats a timeout after a baseline failure as the old failure", () => {
     const v = compareWithBaseline([check("test", "timeout")], before, diff);

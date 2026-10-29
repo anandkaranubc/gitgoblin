@@ -219,6 +219,12 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
     async (args, ctx) => {
       const query = toQuery(args, discoveryHosts);
       if (typeof query === "string") return failure(query);
+      // Discovery reads the seed with the person's token, sends its name to ecosyste.ms and its words
+      // to the search, so a private repository would leak through it like through any other tool.
+      if (query.seed) {
+        const refusal = await refusePrivate(query.seed);
+        if (refusal) return failure(`like: ${refusal}`);
+      }
       try {
         const found = await withDiscovery(ctx, (session) => session.discover(query));
         // A token can see private repositories in search results; only confirmed-public ones are shown.
