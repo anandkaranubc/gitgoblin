@@ -2,7 +2,7 @@ import { existsSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { HookCallback, Options, SandboxSettings } from "@anthropic-ai/claude-agent-sdk";
-import { specFor } from "./hostbox.ts";
+import { credentialPaths, specFor } from "./hostbox.ts";
 import { isProtectedPath } from "./policy.ts";
 import type { Task } from "./types.ts";
 
@@ -343,19 +343,22 @@ export function scrubEnv(source: NodeJS.ProcessEnv = process.env): Record<string
   return out;
 }
 
-/** Environment for repository commands the engine runs itself (install, tests): no model auth either. */
+/**
+ * Environment for repository commands the engine runs itself (install, tests): no model auth either,
+ * including a Claude login token (CLAUDE_CODE_OAUTH_TOKEN) and where Claude keeps its configuration.
+ */
 export function commandEnv(env: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(Object.entries(env).filter(([key]) => !/^(ANTHROPIC_|AWS_|GOOGLE_|AZURE_|CLOUD_ML_)/.test(key)));
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !/^(ANTHROPIC_|CLAUDE_|AWS_|GOOGLE_|AZURE_|CLOUD_ML_)/.test(key)));
 }
-
-const CREDENTIAL_PATHS = [
-  ".ssh", ".aws", ".azure", ".gnupg", ".netrc", ".npmrc", ".pypirc", ".git-credentials", ".docker", ".kube", ".terraform.d",
-  ".config/gh", ".config/gcloud", ".config/hub", ".cargo/credentials", ".cargo/credentials.toml", ".claude/.credentials.json",
-];
 
 function tempDirs(): string[] {
   return specFor(os.tmpdir(), false, { home: path.join(os.tmpdir(), "no-home") }).extraWrite.filter((dir) => !dir.includes("no-home"));
 }
+
+const SHELL_HIDDEN_ENV = [
+  "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_FOUNDRY_API_KEY",
+  "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_BEARER_TOKEN_BEDROCK", "AZURE_CLIENT_SECRET", "GOOGLE_APPLICATION_CREDENTIALS",
+];
 
 /**
  * Sandbox for the agent's shell: no network, writes only in the workspace (never `.git`) and the
@@ -374,14 +377,10 @@ export function sandboxSettings(workspace: string, profile: ToolProfile, extraWr
       // repository's own commands get, so the agent can run the project's commands as documented.
       allowWrite: profile === "build" ? [...new Set([workspace, os.tmpdir(), ...specFor(workspace, false, { extraWrite }).extraWrite])] : [os.tmpdir(), ...tempDirs()],
       denyWrite: [path.join(workspace, ".git")],
-      denyRead: CREDENTIAL_PATHS.map((p) => path.join(home, p)),
+      // The same credential locations the repository's own commands cannot read, keychains included.
+      denyRead: credentialPaths(home),
     },
-    credentials: {
-      envVars: [
-        { name: "ANTHROPIC_API_KEY", mode: "deny" },
-        { name: "ANTHROPIC_AUTH_TOKEN", mode: "deny" },
-        { name: "CLAUDE_CODE_OAUTH_TOKEN", mode: "deny" },
-      ],
-    },
+    // The model's own keys, and the cloud keys it may run through (Bedrock, Vertex, Foundry), stay in the SDK process.
+    credentials: { envVars: SHELL_HIDDEN_ENV.map((name) => ({ name, mode: "deny" as const })) },
   };
 }

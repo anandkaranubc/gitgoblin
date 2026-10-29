@@ -106,6 +106,19 @@ describe("specFor strict mode", () => {
   });
 });
 
+describe("credential paths", () => {
+  it("hides Claude's configuration, wherever it lives, and the files cloud credentials point at", () => {
+    // A real folder as the home directory: /home is an automounter path on macOS, slow to look up.
+    const home = realpathSync(mkdtempSync(path.join(os.tmpdir(), "gg-home-")));
+    const env = { CLAUDE_CONFIG_DIR: "/opt/claude", GOOGLE_APPLICATION_CREDENTIALS: "/keys/sa.json", AWS_SHARED_CREDENTIALS_FILE: "/keys/aws" };
+    for (const strict of [false, true]) {
+      const denied = specFor("/ws", false, { home, strict, credentialEnv: env }).denyRead;
+      for (const p of ["/opt/claude", "/keys/sa.json", "/keys/aws"]) expect(denied).toContain(p);
+    }
+    expect(specFor("/ws", false, { home, credentialEnv: {} }).denyRead).toContain(path.join(home, ".claude"));
+  });
+});
+
 describe.skipIf(!available)("host sandbox (OS)", () => {
   const sandbox = available!;
   const wrap = (spec: HostSandboxSpec) => (command: string) => sandbox.wrap(command, spec);
@@ -124,6 +137,16 @@ describe.skipIf(!available)("host sandbox (OS)", () => {
     const home = await execShell(`echo x > "$HOME/gg-hostbox-pwned"`, { cwd: ws, env, wrap: wrap(spec) });
     expect(home.exitCode).not.toBe(0);
     expect(existsSync(path.join(env.HOME, "gg-hostbox-pwned"))).toBe(false);
+  });
+
+  it("hides a Claude login kept outside the home directory", async () => {
+    const { root, ws } = layout();
+    const config = path.join(root, "claude-config");
+    mkdirSync(config);
+    writeFileSync(path.join(config, ".credentials.json"), "CLAUDE-LOGIN");
+    const spec = specFor(ws, false, { credentialEnv: { CLAUDE_CONFIG_DIR: config } });
+    const read = await execShell(`cat "${path.join(config, ".credentials.json")}"`, { cwd: ws, env, wrap: wrap(spec) });
+    expect(read.output).not.toContain("CLAUDE-LOGIN");
   });
 
   it("hides credential paths and cuts the network while keeping localhost", async () => {
