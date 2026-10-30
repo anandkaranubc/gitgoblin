@@ -33,7 +33,7 @@ const history: HistoryAsOf = {
 const current = {
   facts: { host: "github.com", owner: "o", name: "n", url: "https://github.com/o/n", topics: [], stars: 500, forks: 20, openIssues: 9, createdAt: "2020-01-01T00:00:00Z", pushedAt: "2026-09-30T00:00:00Z", archived: false, fork: false },
   details: {
-    hasContributing: true, hasCodeOfConduct: false, issueTemplates: 1, pullRequestTemplates: 0, hasIssuesEnabled: true, archived: false, license: "MIT", diskUsageKb: 100,
+    hasContributing: true, hasCodeOfConduct: false, issueTemplates: 1, hasIssuesEnabled: true, archived: false, license: "MIT",
     starterIssues: 7, starterIssueSamples: [], openIssues: 9, mergedPullRequests: 400, lastMergedAt: "2026-09-29T00:00:00Z", commitCount: 999, lastCommitAt: "2026-09-30T00:00:00Z", mentionableUsers: 40, releases: 9, latestReleaseAt: "2026-09-01T00:00:00Z",
   },
 };
