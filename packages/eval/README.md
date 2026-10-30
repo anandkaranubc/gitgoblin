@@ -51,7 +51,7 @@ newcomer's odds (correlation with the share of their pull requests merged).
 Design a change on one date and test it on the others; `docs/design.md`
 records the rule used so far, and why the last candidate was retired.
 
- (`gh auth login` or `GITHUB_TOKEN`) and caches
+`fetch` needs a GitHub token (`gh auth login` or `GITHUB_TOKEN`) and caches
 every response under `packages/eval/.cache/`, so a snapshot can be re-derived
 without the network. `evaluate`, `learn`, `tracker` and `report` are offline
 and run on the committed files under `data/`.
