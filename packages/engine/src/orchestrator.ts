@@ -49,7 +49,7 @@ import {
   type Verification,
 } from "./types.ts";
 import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
-import { AS_TEXT, binaryChanges, DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, unpublishedWork, type Workspace } from "./workspace.ts";
+import { AS_TEXT, binaryChanges, DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, recordUntracked, removeWorkspace, showAtBase, unpublishedWork, type Workspace } from "./workspace.ts";
 
 export interface RunInput {
   /** A Task written by hand or exported from an earlier run. */
@@ -342,7 +342,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network, { extraWrite: [...toolchain.writeDirs, ...extra], strict, tmp: commandTmp })) };
     const timeout = options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {};
     // Checks run with the network cut when sandboxed; say so to the package managers so they fail fast.
-    const checkEnv = hostBox.kind === "none" ? hostEnv : { ...hostEnv, ...OFFLINE_ENV };
+    // Python's bytecode cache would otherwise land beside every module the change adds.
+    const checkEnv = { ...(hostBox.kind === "none" ? hostEnv : { ...hostEnv, ...OFFLINE_ENV }), PYTHONDONTWRITEBYTECODE: "1" };
     const checkOptions = { cwd: workspace.path, env: checkEnv, ...timeout, ...wrapFor(false) };
     // Each check's whole output goes to a file in the run directory; the artifacts keep an excerpt.
     const logChecks = (stage: string) => ({ ...checkOptions, onOutput: (check: Check, output: string) => journal.text(`check-${stage}-${check.name}.txt`, output) });
@@ -429,6 +430,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const baselineChecks = await runChecks(checkSpecs(task.commands), logChecks("baseline"));
     const baseline = compareWithBaseline(baselineChecks, undefined, { files: 0, insertions: 0, deletions: 0, changedFiles: [] });
     journal.artifact("baseline", baseline);
+    // What the install and the checks wrote so far is theirs, not the agent's: keep it out of the change.
+    await recordUntracked(workspace.path, env);
     for (const c of baselineChecks.filter((c) => c.status !== "pass")) reporter.warn(`baseline ${c.name}: ${c.status}`);
     // A browser test suite whose browsers are missing fails before testing anything; say what fixes it.
     if (baselineChecks.some((c) => c.status !== "pass" && /ms-playwright/.test(c.outputTail) && /Executable doesn't exist|browserType\.launch|Please run the following command to download new browsers/.test(c.outputTail))) {
@@ -740,7 +743,8 @@ export async function cleanRun(runId: string, options: CleanRunOptions = {}): Pr
     await removeWorkspace({ ...workspace, path: wsPath }, env);
     if (existed) removed.push(wsPath);
   }
-  for (const dir of ["toolchain", "egress", "tmp"]) {
+  // Setup can fail after cloning (an empty repository, a failed checkout), before the workspace is recorded.
+  for (const dir of [...(workspace ? [] : ["workspace"]), "toolchain", "egress", "tmp"]) {
     const full = journal.pathFor(dir);
     if (existsSync(full)) {
       await rm(full, { recursive: true, force: true });
