@@ -190,6 +190,11 @@ test that could not load without an OS sandbox. This is the same release.
 - Two analyses of the same repository at once, from one server or two, no longer clone into the
   same directory; the second waits for the first. Before, one of them failed with git's "File
   exists" or "destination path already exists" error.
+- The discover tool says when its ranking may be partial: refused searches and failed lookups are
+  listed after the results and in a `warnings` field. Before, they went only to the server's log.
+- The briefing tool finds a stale pull request by its number (`issue_number: 663` for "Revive PR
+  #663"). Before, only issue numbers matched.
+
 - The `gitgoblin contribute` command a briefing suggests for a GitLab or Codeberg repository keeps
   its host, so it no longer points at the GitHub repository with the same name.
 - The discover tool searches public repositories only and refuses filter words that are GitHub
