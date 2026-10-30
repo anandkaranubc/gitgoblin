@@ -1,4 +1,4 @@
-import { closeSync, existsSync, mkdirSync, openSync, readSync, realpathSync, statSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
@@ -77,6 +77,8 @@ export interface RunnerContext {
   env?: Record<string, string>;
   /** Directories outside the workspace the agent's shell may write, such as the run's toolchain prefix. */
   extraWrite?: string[];
+  /** The run's own temp directory, which the agent's shell gets instead of the shared ones. */
+  tmp?: string;
 }
 
 export interface RunOptions {
@@ -256,6 +258,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   let verification: Verification | undefined;
   let review: Review | undefined;
   let delivery: PreparedDelivery | undefined;
+  let agentTmp: string | undefined;
 
   const maxPatchBytes = options.maxPatchBytes ?? DEFAULT_MAX_PATCH_BYTES;
   journal.artifact("task", task);
@@ -447,7 +450,12 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       );
     }
 
-    const runner = (options.runnerFactory ?? defaultRunnerFactory(options, reporter))({ workspace: workspace.path, task, env, extraWrite: toolchain.writeDirs });
+    // The SDK gives the agent's shell a temp directory under CLAUDE_CODE_TMPDIR, by default /tmp/claude-<uid>,
+    // which every Claude Code session of this user shares. This one is the run's alone, and short, because
+    // the SDK falls back to the shared one when the path is too long for the sockets it puts there.
+    agentTmp = (options.isolation ?? "sandbox") === "sandbox" && process.platform !== "win32" ? mkdtempSync("/tmp/gg-") : undefined;
+    const agentEnv = agentTmp ? { ...env, CLAUDE_CODE_TMPDIR: agentTmp } : env;
+    const runner = (options.runnerFactory ?? defaultRunnerFactory(options, reporter))({ workspace: workspace.path, task, env: agentEnv, extraWrite: toolchain.writeDirs, tmp: commandTmp });
     const builderPrompt = builderSystemPrompt(task, workspace.path, guidance);
     const common = { systemPrompt: builderPrompt, profile: "build" as const, ...(options.model ? { model: options.model } : {}), ...(options.effort ? { effort: options.effort } : {}) };
 
@@ -588,6 +596,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const message = err instanceof Error ? err.message : String(err);
     journal.event("run", "error", { message });
     return finish("failed", message, []);
+  } finally {
+    if (agentTmp) await rm(agentTmp, { recursive: true, force: true });
   }
 
   function finish(status: RunResult["status"], reason: string, questions: string[]): RunResult {
@@ -632,6 +642,7 @@ function defaultRunnerFactory(options: RunOptions, reporter: Reporter): (ctx: Ru
       task: ctx.task,
       ...(ctx.env ? { env: ctx.env } : {}),
       ...(ctx.extraWrite ? { extraWrite: ctx.extraWrite } : {}),
+      ...(ctx.tmp ? { tmp: ctx.tmp } : {}),
       ...(options.model ? { model: options.model } : {}),
       ...(options.isolation ? { isolation: options.isolation } : {}),
       onToolUse: (phaseName, tool, summary) => reporter.info(`${phaseName} ${tool} ${summary}`),

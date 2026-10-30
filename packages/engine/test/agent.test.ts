@@ -19,6 +19,9 @@ describe("SessionCostTracker", () => {
   });
 });
 
+import { mkdtempSync, realpathSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { z } from "zod";
 import { createSdkRunner, type PhaseSpec } from "../src/agent.ts";
 
@@ -42,6 +45,17 @@ const spec: PhaseSpec<{ done: boolean }> = { name: "orient", systemPrompt: "s", 
 const init = (id: string): Msg => ({ type: "system", subtype: "init", session_id: id });
 const success = (id: string, total: number, turns: number): Msg => ({ type: "result", subtype: "success", session_id: id, total_cost_usd: total, num_turns: turns, structured_output: { done: true }, result: "ok", errors: [] });
 const failure = (id: string, subtype: string, errors: string[], total = 0.1): Msg => ({ type: "result", subtype, session_id: id, total_cost_usd: total, num_turns: 2, errors });
+
+describe("createSdkRunner temp directory", () => {
+  it("gives a sandboxed agent the run's temp directory", async () => {
+    const tmp = realpathSync(mkdtempSync(path.join(os.tmpdir(), "gg-run-tmp-")));
+    const { query, calls } = scriptedQuery([[init("s1"), success("s1", 0.1, 1)]]);
+    await createSdkRunner({ workspace: "/ws", task: { kind: "issue" }, env: { TMPDIR: "/shared" }, tmp, query }).run(spec);
+    const options = calls[0]!.options as { env: Record<string, string>; sandbox: { filesystem: { allowWrite: string[] } } };
+    expect(options.env).toMatchObject({ TMPDIR: tmp, TMP: tmp, TEMP: tmp });
+    expect(options.sandbox.filesystem.allowWrite).toContain(tmp);
+  });
+});
 
 describe("createSdkRunner transient failures", () => {
   it("resumes the session once after an error during execution", async () => {
