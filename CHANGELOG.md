@@ -26,6 +26,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - An `@name` or "Closes #12" in text the model wrote stays inert in the pull request when the text
   also holds a backtick that pairs with nothing. Before, one stray backtick paired with the code
   span that wraps the mention, and the person was notified.
+- That check also covers files git ignores, which never appear in the diff: a `conftest.py` the
+  agent added together with a `.gitignore` line for it was loaded by the tests unseen. And when the
+  first look at the issue turned up lint, build or typecheck commands, they ran on whatever that
+  step had written, including edited scripts, before any check; that now stops for you too.
 
 **Other changes**
 
