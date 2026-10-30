@@ -116,6 +116,10 @@ test that could not load without an OS sandbox. This is the same release.
 - The discover tool's `like` repository goes through the same public-only check as every other
   repository. Before, discovery read it with the person's token, so a private repository's
   description could reach the search queries and its name ecosyste.ms.
+- The discover tool searches public repositories only and refuses filter words that are GitHub
+  search syntax (`is:private`, `user:` and the like). Before, a keyword such as `is:private` ran as
+  part of a search made with the person's token, and each private repository it found was looked up
+  on ecosyste.ms by name before the public check left it out of the results.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
