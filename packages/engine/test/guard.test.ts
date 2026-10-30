@@ -242,6 +242,15 @@ describe("sandboxSettings", () => {
     if (existsSync("/tmp")) expect(build.filesystem?.allowWrite).toContain(realpathSync("/tmp"));
     expect(build.filesystem?.allowWrite).toContain(realpathSync(os.tmpdir()));
   });
+  it("gives the agent's shell the run's temp directory instead of the shared ones, where screen and tmux keep theirs", () => {
+    const tmp = realpathSync(mkdtempSync(path.join(os.tmpdir(), "gg-run-tmp-")));
+    const build = sandboxSettings("/ws", "build", [], tmp).filesystem?.allowWrite ?? [];
+    expect(build).toContain(tmp);
+    if (existsSync("/tmp")) expect(build).not.toContain(realpathSync("/tmp"));
+    expect(build).not.toContain(realpathSync(os.tmpdir()));
+    expect(build).not.toContain(os.tmpdir());
+    expect(sandboxSettings("/ws", "review", [], tmp).filesystem?.allowWrite).toEqual([tmp]);
+  });
 });
 
 describe("commandEnv", () => {

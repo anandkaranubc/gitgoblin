@@ -7,6 +7,13 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.1.4 - Unreleased
 
+**Safety**
+
+- The agent's own shell no longer writes to the shared temp directories, where
+  a `screen` or `tmux` server keeps the FIFO or socket it takes commands from, or to the one every
+  Claude Code session of yours shares (`/tmp/claude-<uid>`). It gets the run's temp directory and a
+  short one of its own that is removed when the run ends. This closes the gap 0.1.3 left open.
+
 **Other changes**
 
 - `explain`, `--like` and the discovery hints `analyze` and `contribute` use no longer describe
