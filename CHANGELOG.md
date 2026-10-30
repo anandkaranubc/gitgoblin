@@ -5,6 +5,15 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
+## gitgoblin 0.1.4 - Unreleased
+
+**Safety**
+
+- The agent's own shell no longer writes to the shared temp directories, where
+  a `screen` or `tmux` server keeps the FIFO or socket it takes commands from, or to the one every
+  Claude Code session of yours shares (`/tmp/claude-<uid>`). It gets the run's temp directory and a
+  short one of its own that is removed when the run ends. This closes the gap 0.1.3 left open.
+
 ## gitgoblin 0.1.3 - 2026-10-29
 
 Upgrade from 0.1.0 and 0.1.1: both let a repository's commands get around the sandbox in the
