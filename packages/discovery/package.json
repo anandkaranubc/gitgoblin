@@ -1,6 +1,7 @@
 {
   "name": "@gitgoblin/discovery",
   "version": "0.1.0",
+  "private": true,
   "description": "gitgoblin's discovery engine: finds repositories worth your time for a given goal and explains why",
   "type": "module",
   "license": "MIT",
