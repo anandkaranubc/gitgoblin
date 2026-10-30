@@ -26,6 +26,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   the GitHub repository with the same owner and name when given a GitLab or Codeberg one: `explain`
   and `--like` say they read GitHub only, and `analyze` goes without hints. Commands `gitgoblin`
   suggests for such a repository keep its host, so they no longer point at GitHub.
+- A connection to GitHub or ecosyste.ms that broke off, or hit the 20-second timeout, while a
+  response was still arriving failed the request at once. It is now retried like any other network
+  failure, and an earlier cached answer is used if the retries fail too. The limit of four requests
+  at a time per host also holds again: a request arriving as another finished could go past the queue.
 - `contribute` stops for a person when the agent says its change is not finished, instead of
   preparing a pull request because the checks passed and the reviewer approved the half-done work.
 - The run's time limit holds: no agent session starts once the run is past it, and an agent
@@ -130,6 +134,10 @@ test that could not load without an OS sandbox. This is the same release.
 
 ## @gitgoblin/mcp 0.1.8 - Unreleased
 
+- A connection to GitHub or ecosyste.ms that broke off, or hit the 20-second timeout, while a
+  response was still arriving failed the request at once. It is now retried like any other network
+  failure, and an earlier cached answer is used if the retries fail too. The limit of four requests
+  at a time per host also holds again: a request arriving as another finished could go past the queue.
 - The discover tool gets each repository's GitHub details again (starter issues, contributing guide,
   recent merges). GitHub timed out on its requests for 20 repositories at a time with HTTP 502, and
   one failed request dropped the details of every candidate; it now asks for 10 at a time, splits a
@@ -147,6 +155,10 @@ test that could not load without an OS sandbox. This is the same release.
   description could reach the search queries and its name ecosyste.ms.
 - The `gitgoblin contribute` command a briefing suggests for a GitLab or Codeberg repository keeps
   its host, so it no longer points at the GitHub repository with the same name.
+- The discover tool searches public repositories only and refuses filter words that are GitHub
+  search syntax (`is:private`, `user:` and the like). Before, a keyword such as `is:private` ran as
+  part of a search made with the person's token, and each private repository it found was looked up
+  on ecosyste.ms by name before the public check left it out of the results.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
