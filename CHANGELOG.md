@@ -51,6 +51,13 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   repository that does not ignore `node_modules`, or over the files above.
 - Cleaning a run whose setup failed after cloning (an empty repository, a failed checkout) now
   removes the clone.
+- Repository names that start with a dot or an underscore, or end with an underscore (such as
+  `microsoft/.github` or `octo/_site`), are accepted. A GitLab project in a subgroup
+  (`gitlab.com/group/subgroup/project`) is refused with a clear error. Before, its URL was read as
+  the project named after the subgroup, a different repository or none.
+- Hosts written as numbers in hex or octal (`0x7f.1`, which is 127.0.0.1) are refused like any
+  other IP address, so `analyze` and `contribute` cannot be pointed at your own machine or network
+  that way.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -157,6 +164,10 @@ test that could not load without an OS sandbox. This is the same release.
   because the incomplete answer stayed cached. It now asks for each missing repository on its own
   once and does not cache the incomplete answer. A repository's last merge is also the latest
   merge now, not the merge of the pull request someone commented on most recently.
+- Repository names that start with a dot or an underscore, or end with an underscore (such as
+  `microsoft/.github` or `octo/_site`), are accepted. A GitLab project in a subgroup
+  (`gitlab.com/group/subgroup/project`) is refused with a clear error. Before, its URL was read as
+  the project named after the subgroup, a different repository or none.
 
 - The discover tool gets each repository's GitHub details again (starter issues, contributing guide,
   recent merges). GitHub timed out on its requests for 20 repositories at a time with HTTP 502, and
