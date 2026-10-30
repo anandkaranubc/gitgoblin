@@ -49,7 +49,7 @@ import {
   type Verification,
 } from "./types.ts";
 import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
-import { AS_TEXT, binaryChanges, DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, unpublishedWork, type Workspace } from "./workspace.ts";
+import { AS_TEXT, binaryChanges, DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, ignoredFiles, prepareWorkspace, removeWorkspace, showAtBase, unpublishedWork, type Workspace } from "./workspace.ts";
 
 export interface RunInput {
   /** A Task written by hand or exported from an earlier run. */
@@ -429,6 +429,9 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const baselineChecks = await runChecks(checkSpecs(task.commands), logChecks("baseline"));
     const baseline = compareWithBaseline(baselineChecks, undefined, { files: 0, insertions: 0, deletions: 0, changedFiles: [] });
     journal.artifact("baseline", baseline);
+    // Control files git ignores never reach the diff the gates read. What is there now is the
+    // repository's and its checks'; one that appears or changes once the agent has run is its doing.
+    let ignoredControl = await ignoredFiles(workspace.path, env, controlsChecks);
     for (const c of baselineChecks.filter((c) => c.status !== "pass")) reporter.warn(`baseline ${c.name}: ${c.status}`);
     // A browser test suite whose browsers are missing fails before testing anything; say what fixes it.
     if (baselineChecks.some((c) => c.status !== "pass" && /ms-playwright/.test(c.outputTail) && /Executable doesn't exist|browserType\.launch|Please run the following command to download new browsers/.test(c.outputTail))) {
@@ -456,6 +459,20 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const runner = (options.runnerFactory ?? defaultRunnerFactory(options, reporter))({ workspace: workspace.path, task, env: agentEnv, extraWrite: toolchain.writeDirs, tmp: commandTmp });
     const builderPrompt = builderSystemPrompt(task, workspace.path, guidance);
     const common = { systemPrompt: builderPrompt, profile: "build" as const, ...(options.model ? { model: options.model } : {}), ...(options.effort ? { effort: options.effort } : {}) };
+    // The checks run on this machine. If the agent rewired what they execute, in the diff or in a file git
+    // ignores, a person reads that first; the engine does not run it.
+    const refuseControlChanges = async (changedFiles: string[], patchName: string): Promise<void> => {
+      const ws = workspace!;
+      const hidden = [...(await ignoredFiles(ws.path, env, controlsChecks))].filter(([file, hash]) => ignoredControl.get(file) !== hash).map(([file]) => `${file} (ignored by git, so not in the diff)`);
+      const control = [...(await checkControlChanges(ws.path, ws.baseSha, changedFiles, env)), ...hidden];
+      if (control.length === 0) return;
+      journal.text(patchName, await patch(ws));
+      throw new RunAborted(
+        "escalated",
+        `the change edits files that decide what the verification commands run on this machine (${control.join(", ")}); the engine did not run them`,
+        ["Read the diff of those files. If the change is intended, run the repository's checks yourself before trusting it."],
+      );
+    };
 
     // Orient.
     const orient = await phase(runner, { ...common, name: "orient", prompt: orientPrompt(task, baseline), schema: InvestigationSchema, maxTurns: PHASE_TURNS.orient, maxBudgetUsd: 0 });
@@ -469,9 +486,12 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       // one because the reproduction test already in the tree is meant to fail.
       const late = checkSpecs(Object.fromEntries(adopted.filter((k) => k !== "test").map((k) => [k, task.commands[k]])));
       if (late.length > 0) {
+        // Orient may have written files (a reproduction test, or worse); these checks would run them.
+        await refuseControlChanges((await diffStats(workspace.path, workspace.baseSha, env)).changedFiles, "diff-orient.patch");
         reporter.phase("baseline", `late: ${late.map((s) => s.name).join(", ")}`);
         baseline.checks.push(...(await runChecks(late, logChecks("baseline"))));
         journal.artifact("baseline", baseline);
+        ignoredControl = await ignoredFiles(workspace.path, env, controlsChecks);
       }
     }
     let session = orient.sessionId;
@@ -509,17 +529,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       const diff = await diffStats(workspace.path, workspace.baseSha, env);
       if (diff.files === 0) throw new RunAborted("stopped", "the implementation changed no files");
       decide("diff", afterDiff(diff, task, limits));
-      // The checks below run on this machine. If the change rewired what they execute, a person reads
-      // that diff first; the engine does not run it.
-      const control = await checkControlChanges(workspace.path, workspace.baseSha, diff.changedFiles, env);
-      if (control.length > 0) {
-        journal.text(`diff-${attempt}.patch`, await patch(workspace));
-        throw new RunAborted(
-          "escalated",
-          `the change edits files that decide what the verification commands run on this machine (${control.join(", ")}); the engine did not run them`,
-          ["Read the diff of those files. If the change is intended, run the repository's checks yourself before trusting it."],
-        );
-      }
+      await refuseControlChanges(diff.changedFiles, `diff-${attempt}.patch`);
       const binary = await binaryChanges(workspace.path, workspace.baseSha, env);
       if (binary.length > 0) {
         throw new RunAborted("escalated", `the change adds or edits binary files (${binary.slice(0, 5).join(", ")}), which cannot be reviewed as a diff`, [
@@ -529,6 +539,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       decide("verify", checkBudget(costUsd, Date.now() - started, limits));
       reporter.phase("verify", `${diff.files} files changed, +${diff.insertions} -${diff.deletions}`);
       const checks = await runChecks(checkSpecs(task.commands, reproduction), logChecks(`verify-${attempt}`));
+      // What the checks themselves wrote is not the agent's; the next attempt is compared with this.
+      ignoredControl = await ignoredFiles(workspace.path, env, controlsChecks);
       verification = compareWithBaseline(checks, baseline.checks, diff);
       journal.artifact(`verification-${attempt}`, verification);
       for (const c of checks) reporter.info(`${c.name}: ${c.status}`);

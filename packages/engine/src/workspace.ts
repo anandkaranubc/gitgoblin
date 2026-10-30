@@ -1,4 +1,5 @@
-import { closeSync, existsSync, openSync, readSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { closeSync, existsSync, openSync, readFileSync, readSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "./exec.ts";
@@ -200,6 +201,24 @@ async function numstat(wsPath: string, baseSha: string, env: Record<string, stri
       const [ins = "", del = "", ...rest] = entry.split("\t");
       return { ins, del, file: rest.join("\t") };
     });
+}
+
+/**
+ * Untracked files the repository ignores, outside the stray caches, that `keep` picks, each with a hash
+ * of its content. Staging leaves ignored files out, so a file the agent adds together with a .gitignore
+ * line for it (or under a path already ignored) never reaches the diff, while the checks still load it.
+ */
+export async function ignoredFiles(wsPath: string, env: Record<string, string>, keep: (file: string) => boolean): Promise<Map<string, string>> {
+  const listing = await git(["ls-files", "-o", "-i", "--exclude-standard", "-z", "--", ".", ...STRAY_CACHES.map((p) => p.replace(":(glob)", ":(exclude,glob)"))], wsPath, env, 5 * 60_000, DEFAULT_MAX_PATCH_BYTES);
+  const files = new Map<string, string>();
+  for (const file of listing.split("\0").filter((f) => f && keep(f))) {
+    let hash = "unreadable";
+    try {
+      hash = createHash("sha256").update(readFileSync(path.join(wsPath, file))).digest("hex");
+    } catch {}
+    files.set(file, hash);
+  }
+  return files;
 }
 
 /** Changes since the run's base commit, whether the agent committed them or not. */
