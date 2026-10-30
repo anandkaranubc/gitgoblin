@@ -1,11 +1,12 @@
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync, existsSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cloneDirFor } from "@gitgoblin/intel";
 import { defaultCacheDir } from "@gitgoblin/sources";
 import { afterAll, describe, expect, it } from "vitest";
-import { analysisEnv, mcpCacheDir, pruneClones, removeLegacyClones } from "../src/deps.ts";
+import { analysisEnv, mcpCacheDir, pruneClones, removeLegacyClones, withCloneLock } from "../src/deps.ts";
 import { ANALYSIS_HOSTS, capDeep, capText, DISCOVERY_HOSTS, MAX_RESULT_CHARS, stripControl, stripControlDeep } from "../src/safety.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "gitgoblin-mcp-safety-"));
@@ -49,7 +50,7 @@ describe("clone cache", () => {
     expect(cloneDirFor(root, { host: "codeberg.org", owner: "o", name: "r" })).not.toBe(cloneDirFor(root, { host: "github.com", owner: "o", name: "r" }));
   });
 
-  it("deletes one forge's least recently used clones beyond the limit, never one in use", () => {
+  it("deletes one forge's least recently used clones beyond the limit, never one an analysis holds", () => {
     const root = join(scratch, "cache");
     const clone = (host: string, owner: string, name: string) => cloneDirFor(root, { host, owner, name });
     for (let i = 0; i < 5; i++) {
@@ -58,12 +59,57 @@ describe("clone cache", () => {
     }
     mkdirSync(clone("codeberg.org", "o", "old"), { recursive: true });
     utimesSync(clone("codeberg.org", "o", "old"), 1, 1);
-    const removed = pruneClones(root, "github.com", 2, new Set([clone("github.com", "o0", "r0")]));
+    writeFileSync(`${clone("github.com", "o0", "r0")}.lock`, "1");
+    const removed = pruneClones(root, "github.com", 2);
     expect(removed.sort()).toEqual([clone("github.com", "o1", "r1"), clone("github.com", "o0", "r2")].sort());
     expect(existsSync(clone("github.com", "o0", "r0"))).toBe(true);
     expect(existsSync(clone("github.com", "o0", "r4"))).toBe(true);
     expect(existsSync(clone("codeberg.org", "o", "old"))).toBe(true);
-    expect(pruneClones(join(scratch, "missing"), "github.com", 2, new Set())).toEqual([]);
+    expect(pruneClones(join(scratch, "missing"), "github.com", 2)).toEqual([]);
+  });
+});
+
+describe("clone lock", () => {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it("runs one analysis of a repository at a time, and different repositories side by side", async () => {
+    const root = join(scratch, "locks");
+    const active = new Map<string, number>();
+    let peakSame = 0;
+    let peakAll = 0;
+    const analysis = (clone: string) =>
+      withCloneLock(clone, async () => {
+        active.set(clone, (active.get(clone) ?? 0) + 1);
+        peakSame = Math.max(peakSame, active.get(clone) ?? 0);
+        peakAll = Math.max(peakAll, [...active.values()].reduce((a, b) => a + b, 0));
+        await sleep(60);
+        active.set(clone, (active.get(clone) ?? 1) - 1);
+      }, undefined, 10);
+    const a = join(root, "repos", "github.com", "o", "a");
+    const b = join(root, "repos", "github.com", "o", "b");
+    await Promise.all([analysis(a), analysis(a), analysis(a), analysis(b)]);
+    expect(peakSame).toBe(1);
+    expect(peakAll).toBe(2);
+    expect(existsSync(`${a}.lock`)).toBe(false);
+  });
+
+  it("takes over a lock whose process is gone, and stops waiting when the client cancels", async () => {
+    const clone = join(scratch, "locks", "repos", "github.com", "o", "c");
+    mkdirSync(join(clone, ".."), { recursive: true });
+    const gone = spawn(process.execPath, ["-e", ""]);
+    await once(gone, "exit");
+    writeFileSync(`${clone}.lock`, String(gone.pid));
+    expect(await withCloneLock(clone, async () => "ran", undefined, 10)).toBe("ran");
+
+    writeFileSync(`${clone}.lock`, String(process.pid));
+    const controller = new AbortController();
+    let ran = false;
+    const waiting = withCloneLock(clone, async () => (ran = true), controller.signal, 10);
+    await sleep(50);
+    controller.abort();
+    await expect(waiting).rejects.toThrow(/cancelled by the client/);
+    expect(ran).toBe(false);
+    expect(readFileSync(`${clone}.lock`, "utf8")).toBe(String(process.pid));
   });
 });
 
