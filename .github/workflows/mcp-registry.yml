@@ -25,6 +25,8 @@ concurrency:
 jobs:
   publish:
     name: Publish server.json
+    # The registry gets the server.json that was reviewed and merged, not one from another branch.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
