@@ -5,7 +5,11 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
-## gitgoblin 0.1.4 - Unreleased
+## gitgoblin 0.1.4 - 2026-10-30
+
+Upgrade from any earlier version. In each of them the agent's own shell can write where a
+`screen` or `tmux` server takes commands, and code the agent writes can get past the checks
+listed under Safety and run on your machine during verification.
 
 **Safety**
 
