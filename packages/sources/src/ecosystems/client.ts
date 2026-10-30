@@ -21,7 +21,6 @@ const RepoSchema = z.object({
   topics: z.array(z.string()).nullish(),
   homepage: z.string().nullish(),
   tags_count: z.number().nullish(),
-  last_synced_at: z.string().nullish(),
   status: z.string().nullish(),
   commit_stats: z
     .object({
@@ -57,7 +56,6 @@ export interface EcosystemsRepo {
   topics: string[];
   homepage?: string | undefined;
   tagsCount: number;
-  lastSyncedAt?: string | undefined;
   commitStats?:
     | {
         totalCommits: number;
@@ -97,7 +95,6 @@ function toRepo(raw: z.infer<typeof RepoSchema>): EcosystemsRepo {
     topics: raw.topics ?? [],
     homepage: raw.homepage || undefined,
     tagsCount: raw.tags_count ?? 0,
-    lastSyncedAt: raw.last_synced_at ?? undefined,
     commitStats: stats
       ? {
           totalCommits: stats.total_commits ?? 0,
@@ -125,8 +122,6 @@ const PackageSchema = z.object({
   latest_release_published_at: z.string().nullish(),
   versions_count: z.number().nullish(),
   status: z.string().nullish(),
-  critical: z.boolean().nullish(),
-  rankings: z.object({ average: z.number().nullish() }).nullish(),
 });
 
 /** A published package built from a repository, as indexed by packages.ecosyste.ms. */
@@ -143,9 +138,6 @@ export interface EcosystemsPackage {
   latestReleaseAt?: string | undefined;
   versions: number;
   status?: string | undefined;
-  critical: boolean;
-  /** Average percentile across the registry (0 is best). */
-  rankingAverage?: number | undefined;
 }
 
 function toPackage(raw: z.infer<typeof PackageSchema>): EcosystemsPackage {
@@ -162,8 +154,6 @@ function toPackage(raw: z.infer<typeof PackageSchema>): EcosystemsPackage {
     latestReleaseAt: raw.latest_release_published_at ?? undefined,
     versions: raw.versions_count ?? 0,
     status: raw.status ?? undefined,
-    critical: raw.critical ?? false,
-    rankingAverage: raw.rankings?.average ?? undefined,
   };
 }
 
@@ -180,7 +170,6 @@ const IssueStatsSchema = z.object({
   past_year_avg_time_to_close_pull_request: z.number().nullish(),
   past_year_pull_request_authors_count: z.number().nullish(),
   past_year_issue_authors_count: z.number().nullish(),
-  last_synced_at: z.string().nullish(),
 });
 
 /** Issue and pull-request statistics from issues.ecosyste.ms. Durations are seconds. */
@@ -199,7 +188,6 @@ export interface EcosystemsIssueStats {
     prAuthors: number;
     issueAuthors: number;
   };
-  lastSyncedAt?: string | undefined;
 }
 
 function toIssueStats(raw: z.infer<typeof IssueStatsSchema>): EcosystemsIssueStats {
@@ -218,7 +206,6 @@ function toIssueStats(raw: z.infer<typeof IssueStatsSchema>): EcosystemsIssueSta
       prAuthors: raw.past_year_pull_request_authors_count ?? 0,
       issueAuthors: raw.past_year_issue_authors_count ?? 0,
     },
-    lastSyncedAt: raw.last_synced_at ?? undefined,
   };
 }
 
