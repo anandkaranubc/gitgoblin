@@ -52,7 +52,9 @@ issue to trigger.
   during install, and then only to package registries. A change that edits
   what those commands execute (package scripts, Makefiles, test-runner
   configuration) must stop for a person before the engine runs it. A way
-  around any of these is a vulnerability.
+  around any of these is a vulnerability. One known limit: the agent can
+  change the dependencies the install put in the checkout (`node_modules` and
+  the like), which the commands then run; only the OS sandbox contains that.
 - **Credentials never reach the agent.** GitHub tokens, cloud credentials, and
   anything else beyond what the agent needs for model access must stay in the
   operator's process.

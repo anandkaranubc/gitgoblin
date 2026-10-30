@@ -19,6 +19,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   the agent's code run on your machine in the verification step; `.github/workflows/rélease.yml`, a
   `.env` made by renaming, or an image named `ïmage.png` went through unflagged. Both names of a
   renamed file are now checked, and every name as it is on disk.
+- That check also covers files git ignores, which never appear in the diff: a `conftest.py` the
+  agent added together with a `.gitignore` line for it was loaded by the tests unseen. And when the
+  first look at the issue turned up lint, build or typecheck commands, they ran on whatever that
+  step had written, including edited scripts, before any check; that now stops for you too.
 
 **Other changes**
 
