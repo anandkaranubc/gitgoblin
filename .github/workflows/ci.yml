@@ -36,6 +36,16 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run docs:check
+      # The two published packages are bundles of every other package. Pack and install both into an
+      # empty prefix, as the release does, so a bundle that breaks shows up here rather than at tag time.
+      - name: The npm packages install and start
+        run: |
+          mkdir "$RUNNER_TEMP/out"
+          npm pack -w gitgoblin -w @gitgoblin/mcp --pack-destination "$RUNNER_TEMP/out" > /dev/null
+          prefix="$RUNNER_TEMP/smoke"
+          npm install --global --prefix "$prefix" --no-audit --no-fund "$RUNNER_TEMP"/out/*.tgz
+          "$prefix/bin/gitgoblin" goals > /dev/null
+          node scripts/smoke-mcp.mjs "$prefix/bin/gitgoblin-mcp" "$(node -p "require('./packages/mcp/package.json').version")"
 
   # Not a required check: Windows is not a supported platform yet (issue #80), and this job is how we
   # find out what works there. The engine is left out on purpose: its sandbox for repository commands
