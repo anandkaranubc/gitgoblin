@@ -285,6 +285,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   };
 
   const phase = async <T>(runner: AgentRunner, spec: PhaseSpec<T>): Promise<PhaseResult<T> & { output: T }> => {
+    decide(spec.name, checkBudget(costUsd, Date.now() - started, limits));
     reporter.phase(spec.name);
     journal.event(spec.name, "start", { resume: spec.resume ?? null });
     // The remaining wall-clock budget bounds the phase itself, not just the gate after it, so a
@@ -541,6 +542,12 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
         continue;
       }
       decide("verify", afterVerifyDecision);
+      // Passing checks do not make a half-done change whole; the implementer's own word does not go unread.
+      if (!notes.done) {
+        throw new RunAborted("escalated", `the implementer reports the change is not finished (${notes.summary.slice(0, 300)})`, [
+          "Read the implementation notes and the diff. Finish the remaining steps yourself, or run again with a smaller plan.",
+        ]);
+      }
 
       reviewedPatch = await patch(workspace);
       journal.text(`diff-${attempt}.patch`, reviewedPatch);

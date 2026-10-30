@@ -145,7 +145,9 @@ async function main(argv: string[]): Promise<void> {
       process.stdout.write(journal.readText("report.md") ?? fail(`no report for run ${runId}`));
       return;
     }
-    const title = journal.readText("pr-title.txt")?.trim() ?? fail(`run ${runId} has nothing to publish`);
+    // The title publishing sends, from delivery.json; pr-title.txt is a copy for reading.
+    const delivered = journal.readArtifact<{ prTitle?: unknown }>("delivery")?.prTitle;
+    const title = typeof delivered === "string" ? delivered.trim() : fail(`run ${runId} has nothing to publish`);
     process.stderr.write(`About to push and open a ${values.ready ? "ready" : "draft"} pull request: ${title}\nRead ${journal.pathFor("pr.md")} and ${journal.pathFor("diff.patch")} first.\n`);
     if (!values["dry-run"] && !(await confirm("Publish now?"))) {
       process.stderr.write("Not published.\n");

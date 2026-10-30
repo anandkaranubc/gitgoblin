@@ -35,6 +35,13 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   because the incomplete answer stayed cached. It now asks for each missing repository on its own
   once and does not cache the incomplete answer. A repository's last merge is also the latest
   merge now, not the merge of the pull request someone commented on most recently.
+- `contribute` stops for a person when the agent says its change is not finished, instead of
+  preparing a pull request because the checks passed and the reviewer approved the half-done work.
+- The run's time limit holds: no agent session starts once the run is past it, and an agent
+  session that resumes after a dropped connection, or wraps up after running out of turns, gets
+  what is left of its time rather than starting the clock again.
+- `gitgoblin-engine publish` asks for confirmation with the title publishing sends (the one in
+  `delivery.json`), not the one in `pr-title.txt`, which publishing does not read.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
