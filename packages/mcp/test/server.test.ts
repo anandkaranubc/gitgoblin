@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { runInChild } from "../src/isolate.ts";
 import type { Visibility } from "../src/public.ts";
 import { DATA_NOTICE } from "../src/server.ts";
+import { formatOpportunity } from "../src/format.ts";
 
 const fixtureReport = JSON.parse(readFileSync(new URL("../../intel/fixtures/tenacity.report.json", import.meta.url), "utf8")) as AnalysisReport;
 
@@ -226,6 +227,11 @@ describe("server", () => {
     const { client } = await connect(deps);
     const result = await client.callTool({ name: "analyze_repository", arguments: { repository: "jd/tenacity" } });
     expect(result.isError).toBeFalsy();
+  });
+
+  it("names the forge in the contribute command for a repository outside GitHub", () => {
+    const report = { ...fixtureReport, profile: { ...fixtureReport.profile, repo: { ...fixtureReport.profile.repo, host: "codeberg.org" } } };
+    expect(formatOpportunity(report, report.opportunities[0]!)).toContain("gitgoblin contribute codeberg.org/jd/tenacity --opportunity");
   });
 
   it("briefs one opportunity from the cached report, by id or issue number", async () => {

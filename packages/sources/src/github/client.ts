@@ -1,4 +1,4 @@
-import { type IssueCandidate, type RepoFacts, type RepoRef, repoId } from "@gitgoblin/core";
+import { type IssueCandidate, normalizeHost, type RepoFacts, type RepoRef, repoId } from "@gitgoblin/core";
 import { z } from "zod";
 import { type HttpClient, HttpError, RateLimitError, type RateLimitState } from "../http/client.ts";
 
@@ -339,8 +339,10 @@ export class GitHubClient {
     return { total: parsed.total_count, items: parsed.items.map((item) => toRepoFacts(item, this.host)) };
   }
 
-  /** Returns undefined when the repository does not exist or is private. */
+  /** Returns undefined when the repository does not exist, is private, or is on another forge. */
   async getRepository(ref: RepoRef): Promise<RepoFacts | undefined> {
+    // This client looks repositories up by owner and name, which on another forge name a different one.
+    if (!this.#ownHost(ref)) return undefined;
     try {
       const raw = await this.rest(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.name)}`, {
         ttlMs: REPO_TTL_MS,
@@ -358,9 +360,10 @@ export class GitHubClient {
    * would not compute: a batch that times out (502) or fails is split in half and asked again, down
    * to single repositories, so one heavy repository costs only its own details. After six failures in
    * a row it stops and returns what it has. It throws when nothing could be fetched, and at once for
-   * rate limits and authentication errors.
+   * rate limits and authentication errors. Repositories on another forge are left out too.
    */
   async repoDetails(refs: RepoRef[]): Promise<Map<string, GitHubRepoDetails>> {
+    refs = refs.filter((ref) => this.#ownHost(ref));
     const result = new Map<string, GitHubRepoDetails>();
     let fetched = 0;
     let failuresInARow = 0;
@@ -398,6 +401,10 @@ export class GitHubClient {
     }
     if (fetched === 0 && lastError !== undefined) throw lastError;
     return result;
+  }
+
+  #ownHost(ref: RepoRef): boolean {
+    return normalizeHost(ref.host) === normalizeHost(this.host);
   }
 
   #detailsBatch(batch: RepoRef[]): Promise<Record<string, unknown>> {
