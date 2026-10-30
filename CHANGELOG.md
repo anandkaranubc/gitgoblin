@@ -63,6 +63,15 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   never came back.
 - `discover --limit` above 48 shows 48 results and says so. Before, it showed 48 without a word,
   although the help said up to 100. Only the 48 most promising candidates get the full lookups.
+- `analyze` gives the token advice when GitHub's rate limit stops it, as `discover` does. Before,
+  it printed "GitHub rate limit reached" with no hint to set `GITHUB_TOKEN` or run `gh auth login`.
+- A bad value for `discover --limit`, `--min-stars`, `--max-stars`, `--pushed-within`,
+  `--created-within`, `--seed` or `--like` is a usage error with exit code 2, as the README says,
+  instead of exit code 1.
+- `contribute --max-cost` takes only a finite positive number of dollars. Before, `Infinity` or
+  `1e400` were accepted, and the question asked about "spending up to $Infinity".
+- Without the Claude Agent SDK, `clean` says it needs the SDK too. Before, the install hint named
+  only `contribute` and `publish`, right after `runs` suggested `clean --finished`.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
