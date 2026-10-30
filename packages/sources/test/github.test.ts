@@ -44,6 +44,15 @@ describe("GitHubClient.getRepository", () => {
     expect(await github.getRepository({ host: "github.com", owner: "nobody", name: "nothing" })).toBeUndefined();
   });
 
+  it("never answers for a repository on another forge with the GitHub one of the same name", async () => {
+    const { github, calls } = makeGitHub(() => jsonResponse(fixture<{ items: unknown[] }>("github-search.json").items[0]), "t0k");
+    expect(await github.getRepository({ host: "gitlab.com", owner: "inkscape", name: "inkscape" })).toBeUndefined();
+    expect((await github.repoDetails([{ host: "codeberg.org", owner: "forgejo", name: "forgejo" }])).size).toBe(0);
+    expect(calls).toHaveLength(0);
+    // Hosts compare normalized, so "GitHub.com" and "www.github.com" are still GitHub.
+    expect(await github.getRepository({ host: "GitHub.com", owner: "a", name: "b" })).toBeDefined();
+  });
+
   it("encodes owner and name in the path", async () => {
     const { github, calls } = makeGitHub(() => jsonResponse(fixture<{ items: unknown[] }>("github-search.json").items[0]));
     await github.getRepository({ host: "github.com", owner: "a b", name: "c" });

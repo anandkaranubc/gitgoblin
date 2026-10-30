@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { DiscoveryQuery, DiscoveryResult, Goal, RepoRef } from "@gitgoblin/core";
-import { GOAL_DESCRIPTIONS, GOALS, parseRepoRef, sameRepo } from "@gitgoblin/core";
+import { GOAL_DESCRIPTIONS, GOALS, normalizeHost, parseRepoRef, sameRepo } from "@gitgoblin/core";
 import type { CheckIsolation, Effort, Reporter, RunOptions } from "@gitgoblin/engine";
 import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/intel";
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
@@ -13,7 +13,7 @@ import { Command, InvalidArgumentError } from "commander";
 import { type PlanContextLike, checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, missingToolchains, onPath, recommendedRank, selectOpportunity, toolchainWarning } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { explainMissingRepository, explainNetworkFailure } from "./errors.ts";
-import { type DiscoverOptions, parseGoal, toQuery } from "./options.ts";
+import { type DiscoverOptions, onGitHub, parseGoal, toQuery } from "./options.ts";
 import { directorySize, formatBytes, formatRuns, installSummary, isRunId, listRuns, readInstall, readRun } from "./runs.ts";
 import { type IntelModule, type ModuleLoader, importSibling, loadEngine, loadIntel } from "./siblings.ts";
 import { discardTypeAhead } from "./prompt.ts";
@@ -117,6 +117,7 @@ async function confirmPublish(runtime: Runtime, question: string): Promise<boole
 
 /** Discovery's view of a repository, passed to intel as hints it validates rather than trusts. */
 async function discoveryHints(runtime: Runtime, ref: RepoRef, goal: Goal): Promise<AnalysisOptions["hints"]> {
+  if (!onGitHub(ref)) return undefined;
   const session = await runtime.createEngine({ onProgress: () => {} });
   try {
     const result = await session.engine.explain(ref, goal);
@@ -178,8 +179,9 @@ function explainFailure(error: unknown, runtime: Runtime): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** owner/name on GitHub, host/owner/name elsewhere, so a printed command names the same repository. */
 function slug(ref: RepoRef): string {
-  return `${ref.owner}/${ref.name}`;
+  return onGitHub(ref) ? `${ref.owner}/${ref.name}` : `${normalizeHost(ref.host)}/${ref.owner}/${ref.name}`;
 }
 
 /** Where the engine keeps runs and clones. One default for every command, so a run started by `contribute` is found by `publish`. */
@@ -303,6 +305,7 @@ export function buildProgram(runtime: Runtime): Command {
     .option("--json", "print JSON instead of text")
     .option("-v, --verbose", "show progress on stderr")
     .action(async (ref: RepoRef, options: { goal: Goal; json?: boolean; verbose?: boolean }) => {
+      if (!onGitHub(ref)) throw new Error(`explain reads repositories on GitHub only; for ${slug(ref)}, run gitgoblin analyze ${slug(ref)}.`);
       const session = await runtime.createEngine({
         onProgress: (event) => {
           if (options.verbose) runtime.stderr(`${event.stage}: ${plain(event.message)}`);
