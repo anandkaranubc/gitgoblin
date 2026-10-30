@@ -5,6 +5,16 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
+## gitgoblin 0.1.4 - Unreleased
+
+**Other changes**
+
+- `analyze` no longer skips a whole project as deprecated because a README heading near the top
+  mentions deprecated or archived things ("Deprecated options", "Archived releases", "Python end of
+  life policy"); only a heading that says the project itself is deprecated counts. A library whose
+  description mentions learning, examples or samples ("reinforcement learning algorithms", "audio
+  samples") is no longer taken for a tutorial, which skipped most of the analysis.
+
 ## gitgoblin 0.1.3 - 2026-10-29
 
 Upgrade from 0.1.0 and 0.1.1: both let a repository's commands get around the sandbox in the
@@ -116,6 +126,9 @@ test that could not load without an OS sandbox. This is the same release.
 - The discover tool's `like` repository goes through the same public-only check as every other
   repository. Before, discovery read it with the person's token, so a private repository's
   description could reach the search queries and its name ecosyste.ms.
+- The analyze tool no longer treats a project as deprecated because a README heading mentions
+  deprecated or archived things ("Deprecated options"), and no longer takes a library whose
+  description mentions learning or samples for a tutorial; both skipped most of the analysis.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
