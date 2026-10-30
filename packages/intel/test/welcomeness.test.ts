@@ -69,6 +69,15 @@ describe("welcomeness", () => {
     expect(findDeprecationNotice(undefined, "DEPRECATED: use foo-ng")).toMatchObject({ where: "repository description" });
     expect(findDeprecationNotice("# Foo\n\nFoo removes deprecated APIs from your code.", "Find deprecated functions")).toBeUndefined();
     expect(findDeprecationNotice("# Foo\n\n## Changelog\n- deprecated the old parser", undefined)).toBeUndefined();
+  });
+
+  it("takes a heading as a notice only when it declares the project itself deprecated", () => {
+    for (const heading of ["## DEPRECATED", "# ⚠️ Deprecated ⚠️", "# request (deprecated)", "# foo - UNMAINTAINED", "# foo [archived]", "## Archived", "## No longer maintained", "## Status: unmaintained", "# DEPRECATED: use foo-ng instead", "## Project deprecated", "## End of life", "# foo is deprecated", "## Status: deprecated in favour of bar"]) {
+      expect(findDeprecationNotice(`# foo\n\nFast config parsing.\n\n${heading}\n\nSee below.\n`, undefined), heading).toBeDefined();
+    }
+    for (const heading of ["## Deprecated options", "### Archived releases", "## Python end of life policy", "## Unmaintained plugins", "## Handling deprecated options", "## Deprecated APIs", "## Python 2 is deprecated", "## Deprecated, removed and renamed options"]) {
+      expect(findDeprecationNotice(`# confparse\n\nFast config parsing.\n\n## Install\n\n    pip install confparse\n\n${heading}\n\n- \`load_ini()\` is replaced by \`load()\`.\n`, undefined), heading).toBeUndefined();
+    }
     const w = assessWelcomeness({ meta, samples: samples(), activity, inventory: inventoryOf(["README.md"]), docs: { readme: "# DEPRECATED\n\nUse something else." }, now });
     expect(w.level).toBe("closed");
   });

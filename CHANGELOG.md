@@ -85,6 +85,11 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   of unclosed `require (` lines, Python source with long runs of blank lines, a Markdown heading
   full of `<` and a few similar shapes took seconds to minutes per file, growing with the square of
   its size. Each file is now read in time proportional to its size.
+- `analyze` no longer skips a whole project as deprecated because a README heading near the top
+  mentions deprecated or archived things ("Deprecated options", "Archived releases", "Python end of
+  life policy"); only a heading that says the project itself is deprecated counts. A library whose
+  description mentions learning, examples or samples ("reinforcement learning algorithms", "audio
+  samples") is no longer taken for a tutorial, which skipped most of the analysis.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -233,6 +238,9 @@ test that could not load without an OS sandbox. This is the same release.
 - The analyze tool no longer stalls on repository files shaped to slow down its text matching (a
   go.mod of unclosed `require (` lines, long runs of blank lines in Python source, a Markdown
   heading full of `<`); one such file could hold the server for minutes.
+- The analyze tool no longer treats a project as deprecated because a README heading mentions
+  deprecated or archived things ("Deprecated options"), and no longer takes a library whose
+  description mentions learning or samples for a tutorial; both skipped most of the analysis.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 

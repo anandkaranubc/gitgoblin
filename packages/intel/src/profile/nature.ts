@@ -25,6 +25,7 @@ export function classifyNature(input: NatureInput): NatureResult {
   const files = inventory.files.filter((f) => !f.vendored);
   const source = files.filter((f) => f.category === "source");
   const docs = files.filter((f) => f.category === "docs");
+  const fromManifest = classifyFromManifests(manifests, files.map((f) => f.path));
 
   if (/^awesome([-_]|$)/.test(name) || topics.includes("awesome-list") || topics.includes("awesome")) {
     return { nature: "awesome_list", reason: "name or topics mark it as an awesome list" };
@@ -38,7 +39,11 @@ export function classifyNature(input: NatureInput): NatureResult {
   if (/\b(cheat-?sheets?|roadmaps?|interview|curriculum|syllabus)\b/.test(name + " " + description)) {
     return { nature: "docs", reason: "a reference document rather than software" };
   }
-  if (/\b(tutorials?|course|workshop|exercises?|katas?|learn(ing)?|examples?|samples?|playground|the-book|handbook|100-days|30-days|challenges?)\b/.test(name + " " + description) && source.length < 400) {
+  const learning = /\b(tutorials?|course|workshop|exercises?|katas?|learn(ing)?|examples?|samples?|playground|the-book|handbook|100-days|30-days|challenges?)\b/;
+  // Descriptions use these words for libraries too ("reinforcement learning algorithms", "audio samples"): there a manifest
+  // that makes it a library or CLI wins. A name that says so still counts (golang/example has a go.mod).
+  const packaged = fromManifest?.nature === "library" || fromManifest?.nature === "cli";
+  if ((learning.test(name) || (learning.test(description) && !packaged)) && source.length < 400) {
     return { nature: "tutorial", reason: "name or description describes learning material" };
   }
   if (files.length > 0 && docs.length / files.length > 0.7 && source.length < 5) {
@@ -60,7 +65,6 @@ export function classifyNature(input: NatureInput): NatureResult {
     return { nature: "framework", reason: "describes itself as a framework" };
   }
 
-  const fromManifest = classifyFromManifests(manifests, files.map((f) => f.path));
   if (fromManifest) return fromManifest;
 
   if (files.some((f) => /^(Dockerfile|docker-compose\.ya?ml|compose\.ya?ml)$/.test(f.path))) {
