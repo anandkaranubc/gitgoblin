@@ -149,7 +149,8 @@ function parseGoMod(text: string): LockedPackage[] {
   for (const single of text.matchAll(/^require\s+(\S+\s+\S+.*)$/gm)) lines.push(single[1]!);
   for (const raw of lines) {
     const m = /^\s*(\S+)\s+v(\S+)/.exec(raw);
-    if (m) out.push({ ecosystem: "Go", name: m[1]!, version: m[2]!, dev: /\/\/\s*indirect/.test(raw) });
+    // `// indirect` means transitive, not development-only; Go has no development dependencies.
+    if (m) out.push({ ecosystem: "Go", name: m[1]!, version: m[2]!, dev: false });
   }
   return out;
 }

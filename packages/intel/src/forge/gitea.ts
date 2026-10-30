@@ -82,7 +82,8 @@ export async function fetchGitea(host: string, owner: string, name: string, opti
       closedAt: i.closed_at ?? undefined, locked: i.is_locked, author: actorOf(i.user?.login), association: associationOf(i.user?.login, maintainers),
       labels: i.labels.map((l) => l.name), assignees: (i.assignees ?? []).map((a) => a.login), reactions: 0, commentCount: i.comments,
       firstComments: all.slice(0, 3).map((c) => ({ ...c, body: undefined })), lastComments: all.slice(-6), linkedPrs: linkedFor(i.number),
-      commentsFetched: i.comments === 0 || all.length > 0,
+      // The 90-day window can hold only the latest comments of a thread; a partly read thread is not a read one.
+      commentsFetched: all.length >= i.comments,
     };
   };
   const reviewsFor = async (n: number): Promise<ReviewSample[]> =>
@@ -102,7 +103,8 @@ export async function fetchGitea(host: string, owner: string, name: string, opti
       association: associationOf(p.user?.login, maintainers), additions: p.additions ?? 0, deletions: p.deletions ?? 0, changedFiles: p.changed_files ?? 0,
       headRefName: p.head?.ref ?? "", labels: p.labels.map((l) => l.name), closingIssues: referencedIssues(p.body), firstComments: all.slice(0, 3).map((c) => ({ ...c, body: undefined })),
       lastComments: all.slice(-5), reviews: reviews.get(p.number) ?? [],
-      commentsFetched: p.comments === 0 || all.length > 0 || reviews.has(p.number),
+      // Gitea counts a review with a body as a pull request comment.
+      commentsFetched: all.length + (reviews.get(p.number)?.length ?? 0) >= p.comments,
     };
   };
 

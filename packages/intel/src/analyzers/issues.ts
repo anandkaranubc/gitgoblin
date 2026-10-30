@@ -447,12 +447,15 @@ function issueFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessme
 
 function triageFinding(ctx: AnalysisContext, issue: IssueSample, a: IssueAssessment, profile: RepositoryProfile): Finding {
   const age = Math.round(daysAgo(issue.createdAt, ctx.now));
+  // A needs-info issue can be offered with up to two replies from others (see assessIssue); say how many.
+  const replies = issue.lastComments.filter((c) => c.author && !c.author.isBot && c.author.login !== issue.author?.login).length;
+  const repliesText = `${replies > 0 && issue.commentCount > issue.lastComments.length ? "at least " : ""}${replies} ${replies === 1 ? "reply" : "replies"}`;
   return {
     kind: "triage",
     clusterKey: `issue:${issue.number}`,
     title: `Triage #${issue.number}: ${truncate(issue.title, 90)}`,
-    summary: `Opened ${age} days ago by an outside user and nobody has replied. ${a.hasRepro ? "It includes reproduction details, so it can be confirmed or refuted." : "It lacks details, so a good first reply asks for a reproduction."}`,
-    evidence: [evidence(ctx, "issue", issue.url, { excerpt: issue.title, note: `0 replies after ${age} days; labels: ${issue.labels.join(", ") || "none"}` })],
+    summary: `Opened ${age} days ago by an outside user and ${replies === 0 ? "nobody has replied" : `is still waiting on details after ${repliesText} from others`}. ${a.hasRepro ? "It includes reproduction details, so it can be confirmed or refuted." : "It lacks details, so a good first reply asks for a reproduction."}`,
+    evidence: [evidence(ctx, "issue", issue.url, { excerpt: issue.title, note: `${repliesText} after ${age} days; labels: ${issue.labels.join(", ") || "none"}` })],
     files: [],
     effort: "trivial",
     skills: ["communication", ...profile.languages.slice(0, 1).map((l) => l.name.toLowerCase())],
