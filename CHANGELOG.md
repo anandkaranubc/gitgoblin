@@ -106,6 +106,13 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
     replied".
   - On Gitea and Forgejo, an issue whose comments were only partly read is no longer treated as
     fully read.
+- `analyze` drops five kinds of false finding:
+  - `pip install -r requirements.txt` in a README taken for a package with the wrong name.
+  - Click's `--color/--no-color` and argparse's `BooleanOptionalAction` making `--no-color` look
+    undefined.
+  - Python 3.7 flagged in a CI job that pins `ubuntu-22.04`, where it still installs.
+  - Links above the repository root, such as `../../issues`, reported as missing files.
+  - A maintainer's "please provide a PR" read as pushback on the issue.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -262,6 +269,10 @@ test that could not load without an OS sandbox. This is the same release.
   development-only, TODOs citing other projects' issues are not checked against this repository, a
   needs-info triage item says how many people replied, and partly read Gitea threads are not taken
   as fully read.
+- The analyze tool drops five kinds of false finding: `pip install -r requirements.txt` as a wrong
+  package name, `--no-color` from Click's `--color/--no-color` as undefined, Python 3.7 in a CI job
+  pinned to ubuntu-22.04, links above the repository root (`../../issues`) as missing files, and
+  "please provide a PR" as maintainer pushback.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 

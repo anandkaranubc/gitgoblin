@@ -60,6 +60,9 @@ describe("anchors and relative links", () => {
     expect(await checkRelativeLink(link("README.md", "docs/guide.md#missing"), exists, existsDir, read)).toMatchObject({ problem: "missing-anchor" });
     expect(await checkRelativeLink(link("docs/guide.md", "../src/a.py"), exists, existsDir, read)).toBeUndefined();
     expect(await checkRelativeLink(link("docs/guide.md", "../src/"), exists, existsDir, read)).toBeUndefined();
+    // Above the repository root: GitHub's own pages, not files in the checkout.
+    expect(await checkRelativeLink(link("README.md", "../../issues"), exists, existsDir, read)).toBeUndefined();
+    expect(await checkRelativeLink(link("docs/guide.md", "../../releases"), exists, existsDir, read)).toBeUndefined();
     expect(await checkRelativeLink(link("docs/guide.md", "gone.md"), exists, existsDir, read)).toMatchObject({ problem: "missing-file", resolved: "docs/gone.md" });
     expect(await checkRelativeLink(link("README.md", "/src/a.py"), exists, existsDir, read)).toBeUndefined();
     expect(await checkRelativeLink(link("README.md", "#setup"), exists, existsDir, read)).toMatchObject({ problem: "missing-anchor" });

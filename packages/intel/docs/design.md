@@ -206,12 +206,14 @@ the unanswered items. The budget notes say which of these applied.
 
 `src/llm/` holds a tiny `LlmClient` interface (one structured `parse` call via
 the Anthropic SDK's `messages.parse` with a zod output format) and the issue
-review in `issue-review.ts`: batches of 15 issues, a fixed system prompt that
-is the cache prefix, results cached on disk per issue and `updatedAt`, and a
-`reconcile` step in the issues analyzer that applies the rules above. Rescued
-issues get confidence 0.65 and say so; demotions carry the model's rationale
-in `skipped`. Any API failure disables the pass for the run and is noted in
-`budget.notes`. Not yet validated against live model output for lack of
+review in `issue-review.ts`: one issue per call (four calls at a time), so text
+in one issue cannot sway the verdict on another, a fixed system prompt that is
+the cache prefix, results cached on disk per issue and `updatedAt` and used
+only when their quote occurs in the issue, and a `reconcile` step in the issues
+analyzer that applies the rules above. Rescued issues get confidence 0.65 and
+say so; demotions carry the model's rationale in `skipped`. A timeout, refused
+key, rate limit or server error stops the pass for the run; `budget.notes` says
+how many issues went unreviewed. Not yet validated against live model output for lack of
 credentials in the build environment; the unit tests use a fake client.
 
 ## Not in v0

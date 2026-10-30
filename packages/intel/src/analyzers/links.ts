@@ -160,7 +160,10 @@ export async function checkRelativeLink(
   // Inside a generated docs site, root-relative links are routes we cannot verify statically.
   if (rootRelative && docsSite) return undefined;
   const base = rootRelative ? decoded.slice(1) : posix.join(dirname(link.path), decoded);
-  const resolved = normalize(base).replace(/^(\.\.\/)+/, "").replace(/\/$/, "");
+  const normalized = normalize(base);
+  // Above the repository root: GitHub's own pages (../../issues, ../../releases) or another repository, not a file here.
+  if (normalized === ".." || normalized.startsWith("../")) return undefined;
+  const resolved = normalized.replace(/\/$/, "");
   let targetPath = decoded === "" ? link.path : resolved;
   if (decoded !== "" && !exists(targetPath) && !existsDir(targetPath)) {
     // Sites render .md as .html and directories as index pages.
