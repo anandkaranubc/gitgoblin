@@ -51,7 +51,7 @@ Ranks repositories for a goal and says why. Goals: `contribute`, `learn`,
 | `--include-archived`, `--include-forks` | Keep archived repositories or forks. |
 | `--exclude-owner <owner>` | Skip an owner. Repeatable. |
 | `--like <repo>` | "More like this": uses the seed's topics, package keywords or description instead of the goal's search slices. |
-| `-n, --limit <n>` | Results to show (default 10, max 100). |
+| `-n, --limit <n>` | Results to show (default 10, max 48). |
 | `--seed <n>` | Random seed; makes `explore` reproducible. The seed used is printed on stderr. |
 | `--json` | JSON instead of text. |
 | `-v, --verbose` | Progress and GitHub rate limits on stderr. |

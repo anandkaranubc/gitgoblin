@@ -58,6 +58,11 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 - Hosts written as numbers in hex or octal (`0x7f.1`, which is 127.0.0.1) are refused like any
   other IP address, so `analyze` and `contribute` cannot be pointed at your own machine or network
   that way.
+- Discovery for the `revive` goal finds archived projects again. Its searches asked GitHub for
+  unarchived repositories only, so archived projects, which revive means to suggest for forking,
+  never came back.
+- `discover --limit` above 48 shows 48 results and says so. Before, it showed 48 without a word,
+  although the help said up to 100. Only the 48 most promising candidates get the full lookups.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -168,6 +173,9 @@ test that could not load without an OS sandbox. This is the same release.
   `microsoft/.github` or `octo/_site`), are accepted. A GitLab project in a subgroup
   (`gitlab.com/group/subgroup/project`) is refused with a clear error. Before, its URL was read as
   the project named after the subgroup, a different repository or none.
+- Discovery for the `revive` goal finds archived projects again. Its searches asked GitHub for
+  unarchived repositories only, so archived projects, which revive means to suggest for forking,
+  never came back.
 
 - The discover tool gets each repository's GitHub details again (starter issues, contributing guide,
   recent merges). GitHub timed out on its requests for 20 repositories at a time with HTTP 502, and
