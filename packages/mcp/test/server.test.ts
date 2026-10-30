@@ -3,6 +3,7 @@ import { type DiscoveryQuery, type DiscoveryResult, type RepoRef, SIGNAL_NAMES }
 import type { AnalysisReport } from "@gitgoblin/intel";
 import { RateLimitError } from "@gitgoblin/sources";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import { buildSearchPlans } from "@gitgoblin/discovery";
 import { describe, expect, it } from "vitest";
 import type { AnalyzeOptions, ServerDeps } from "../src/deps.ts";
 import { createServer, toQuery } from "../src/server.ts";
@@ -11,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { runInChild } from "../src/isolate.ts";
 import type { Visibility } from "../src/public.ts";
 import { DATA_NOTICE } from "../src/server.ts";
+import { formatOpportunity } from "../src/format.ts";
 
 const fixtureReport = JSON.parse(readFileSync(new URL("../../intel/fixtures/tenacity.report.json", import.meta.url), "utf8")) as AnalysisReport;
 
@@ -227,6 +229,11 @@ describe("server", () => {
     expect(result.isError).toBeFalsy();
   });
 
+  it("names the forge in the contribute command for a repository outside GitHub", () => {
+    const report = { ...fixtureReport, profile: { ...fixtureReport.profile, repo: { ...fixtureReport.profile.repo, host: "codeberg.org" } } };
+    expect(formatOpportunity(report, report.opportunities[0]!)).toContain("gitgoblin contribute codeberg.org/jd/tenacity --opportunity");
+  });
+
   it("briefs one opportunity from the cached report, by id or issue number", async () => {
     const { deps, recorded } = fakeDeps();
     const { client } = await connect(deps);
@@ -408,6 +415,44 @@ describe("public repositories only", () => {
     expect(structured.omitted).toBe(1);
     expect(textOf(result)).not.toContain("internal-billing");
     expect(textOf(result)).toContain("1 result was left out because gitgoblin could not confirm it is public.");
+  });
+});
+
+describe("search syntax", () => {
+  it("refuses filter values that would add qualifiers to a search run with the person's token", () => {
+    const refused: Record<string, unknown>[] = [
+      ...["is:private", "user:acme", "org:acme", "repo:acme/secret", "foo is:private", "-archived", '"widget"', "NOT", "OR"].map((k) => ({ keywords: ["ok", k] })),
+      { topics: ["is:private"] },
+      { languages: ["rust", "go user:acme"] },
+      { license: "mit is:private" },
+      { license: "mit:x" },
+      { license: "-mit" },
+    ];
+    for (const args of refused) expect(toQuery(args), JSON.stringify(args)).toMatch(/^(keywords|topics|languages|license): ".*" is (GitHub search syntax|not an SPDX id)/);
+    expect(toQuery({ keywords: ["web framework", "tui"], languages: ["c++", "Jupyter Notebook"], topics: ["cli"], license: "Apache-2.0" })).not.toBeTypeOf("string");
+  });
+
+  it("searches public repositories only, for goals and like seeds, so no private name reaches ecosyste.ms", () => {
+    const now = Date.parse("2026-10-29T00:00:00Z");
+    const seedFacts = { ...sampleResult().repo, topics: ["widgets", "cli"] };
+    for (const goal of ["contribute", "learn", "adopt", "revive", "explore"] as const) {
+      const query = toQuery({ goal, keywords: ["widget"], languages: ["rust"] });
+      if (typeof query === "string") throw new Error(query);
+      for (const context of [{ now, random: () => 0 }, { now, random: () => 0, seedFacts }]) {
+        const plans = buildSearchPlans(query, context);
+        expect(plans.length).toBeGreaterThan(0);
+        for (const plan of plans) expect(plan.q.split(" "), plan.q).toContain("is:public");
+      }
+    }
+  });
+
+  it("refuses search syntax before discovering anything", async () => {
+    const { deps, recorded } = fakeDeps();
+    const { client } = await connect(deps);
+    const result = await client.callTool({ name: "discover_repositories", arguments: { keywords: ["is:private"] } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/^keywords: "is:private" is GitHub search syntax/);
+    expect(recorded.queries).toHaveLength(0);
   });
 });
 
