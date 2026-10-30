@@ -184,15 +184,29 @@ export async function unpublishedWork(wsPath: string, commitSha: unknown, branch
   return parts.length > 0 ? parts.join(" and ") : undefined;
 }
 
+/**
+ * `git diff --numstat` against the base, one entry per path as it is on disk. The gates match these
+ * names against control, protected and binary files, so a rename counts as its old and new path
+ * (not "a => b") and a non-ASCII or odd name is not C-quoted. The cap is the patch cap, so a huge
+ * change is measured and then escalated by the file limit with a readable reason, rather than failing
+ * on the size of this listing.
+ */
+async function numstat(wsPath: string, baseSha: string, env: Record<string, string>): Promise<{ ins: string; del: string; file: string }[]> {
+  const out = await git(["diff", "--cached", "--numstat", "-z", "--no-renames", baseSha], wsPath, env, 5 * 60_000, DEFAULT_MAX_PATCH_BYTES);
+  return out
+    .split("\0")
+    .filter(Boolean)
+    .map((entry) => {
+      const [ins = "", del = "", ...rest] = entry.split("\t");
+      return { ins, del, file: rest.join("\t") };
+    });
+}
+
 /** Changes since the run's base commit, whether the agent committed them or not. */
 export async function diffStats(wsPath: string, baseSha: string, env: Record<string, string>): Promise<DiffStats> {
   await stageAll(wsPath, env, baseSha);
-  // One line per file; the cap is the patch cap, so a huge change is measured and then escalated by
-  // the file limit with a readable reason, rather than failing on the size of this listing.
-  const numstat = await git(["diff", "--cached", "--numstat", baseSha], wsPath, env, 5 * 60_000, DEFAULT_MAX_PATCH_BYTES);
   const stats: DiffStats = { files: 0, insertions: 0, deletions: 0, changedFiles: [] };
-  for (const line of numstat.split("\n").filter(Boolean)) {
-    const [ins, del, file] = line.split("\t");
+  for (const { ins, del, file } of await numstat(wsPath, baseSha, env)) {
     if (!file) continue;
     stats.files += 1;
     stats.insertions += Number(ins) || 0;
@@ -209,8 +223,7 @@ export async function diffStats(wsPath: string, baseSha: string, env: Record<str
 export async function binaryChanges(wsPath: string, baseSha: string, env: Record<string, string>): Promise<string[]> {
   await stageAll(wsPath, env, baseSha);
   // Without --text, numstat marks files it treats as binary with "-"; a -diff attribute does that to text too.
-  const numstat = await git(["diff", "--cached", "--numstat", "--no-renames", baseSha], wsPath, env, 5 * 60_000, DEFAULT_MAX_PATCH_BYTES);
-  const flagged = numstat.split("\n").filter((line) => line.startsWith("-\t-\t")).map((line) => line.slice(4));
+  const flagged = (await numstat(wsPath, baseSha, env)).filter((e) => e.ins === "-" && e.del === "-").map((e) => e.file);
   return flagged.filter((file) => hasNul(path.join(wsPath, file)));
 }
 
