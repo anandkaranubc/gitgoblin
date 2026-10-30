@@ -105,6 +105,14 @@ jobs:
           cat release-notes.md
 
       - run: npm ci
+      # As in CI: without bwrap the engine's Linux sandbox tests skip, so a release could ship a sandbox
+      # those tests would have caught. The last line fails the job if bwrap still cannot sandbox.
+      - name: Install bubblewrap for the engine's sandbox tests
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --unshare-all --die-with-parent --ro-bind / / true
       - run: npm run typecheck
       - run: npm test
       - run: npm run docs:check
