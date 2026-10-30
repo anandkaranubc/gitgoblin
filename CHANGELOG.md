@@ -72,6 +72,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   `1e400` were accepted, and the question asked about "spending up to $Infinity".
 - Without the Claude Agent SDK, `clean` says it needs the SDK too. Before, the install hint named
   only `contribute` and `publish`, right after `runs` suggested `clean --finished`.
+- `analyze` no longer stalls on repository files shaped to slow down its text matching: a go.mod
+  of unclosed `require (` lines, Python source with long runs of blank lines, a Markdown heading
+  full of `<` and a few similar shapes took seconds to minutes per file, growing with the square of
+  its size. Each file is now read in time proportional to its size.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -211,13 +215,15 @@ test that could not load without an OS sandbox. This is the same release.
   listed after the results and in a `warnings` field. Before, they went only to the server's log.
 - The briefing tool finds a stale pull request by its number (`issue_number: 663` for "Revive PR
   #663"). Before, only issue numbers matched.
-
 - The `gitgoblin contribute` command a briefing suggests for a GitLab or Codeberg repository keeps
   its host, so it no longer points at the GitHub repository with the same name.
 - The discover tool searches public repositories only and refuses filter words that are GitHub
   search syntax (`is:private`, `user:` and the like). Before, a keyword such as `is:private` ran as
   part of a search made with the person's token, and each private repository it found was looked up
   on ecosyste.ms by name before the public check left it out of the results.
+- The analyze tool no longer stalls on repository files shaped to slow down its text matching (a
+  go.mod of unclosed `require (` lines, long runs of blank lines in Python source, a Markdown
+  heading full of `<`); one such file could hold the server for minutes.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 

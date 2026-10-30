@@ -103,7 +103,7 @@ export const CI_RULES: CiRule[] = [
   {
     id: "python-eol-on-latest",
     severity: "broken",
-    pattern: /python-version:.*(^|[\s\["'])(2\.7|3\.[5-7])(?=[\s\]"',]|$)/,
+    pattern: /python-version:.{0,200}(^|[\s\["'])(2\.7|3\.[5-7])(?=[\s\]"',]|$)/,
     title: "Workflow asks setup-python for a Python that ubuntu-latest cannot install",
     detail: "ubuntu-latest is Ubuntu 24.04, and the python-versions manifest has no 3.7 or older builds for it; setup-python fails unless the job pins ubuntu-22.04.",
     fix: "Drop the end-of-life Python versions from the matrix (and from python_requires if still claimed), or pin runs-on to ubuntu-22.04.",
