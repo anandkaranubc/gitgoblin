@@ -164,6 +164,12 @@ test that could not load without an OS sandbox. This is the same release.
 - The discover tool's `like` repository goes through the same public-only check as every other
   repository. Before, discovery read it with the person's token, so a private repository's
   description could reach the search queries and its name ecosyste.ms.
+- A running analysis stops when the server stops. Before, when the client closed the server or
+  it was terminated, an analysis still in progress kept running on its own, with its git, and a
+  stuck one kept a CPU core busy until killed by hand.
+- Two analyses of the same repository at once, from one server or two, no longer clone into the
+  same directory; the second waits for the first. Before, one of them failed with git's "File
+  exists" or "destination path already exists" error.
 - The `gitgoblin contribute` command a briefing suggests for a GitLab or Codeberg repository keeps
   its host, so it no longer points at the GitHub repository with the same name.
 - The discover tool searches public repositories only and refuses filter words that are GitHub
