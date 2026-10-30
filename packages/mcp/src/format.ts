@@ -331,7 +331,7 @@ export function formatOpportunity(report: AnalysisReport, o: ContributionOpportu
   lines.push(
     "",
     "Before acting: check the issue for new comments or linked PRs, follow the project's contributing guide, disclose AI assistance in the pull request description, and let the person decide whether anything gets published.",
-    `With the gitgoblin command line installed, \`gitgoblin contribute ${p.repo.owner}/${p.repo.name} --opportunity ${o.id}\` drafts this change with a person approving each step.`,
+    `With the gitgoblin command line installed, \`gitgoblin contribute ${p.repo.host === "github.com" ? "" : `${p.repo.host}/`}${p.repo.owner}/${p.repo.name} --opportunity ${o.id}\` drafts this change with a person approving each step.`,
   );
   return lines.join("\n");
 }
