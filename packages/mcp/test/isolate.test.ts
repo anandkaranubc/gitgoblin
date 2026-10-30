@@ -1,10 +1,12 @@
+import { fork, spawn } from "node:child_process";
+import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { IsolationTimeoutError, runInChild, Semaphore } from "../src/isolate.ts";
+import { CHILD_FLAG, IsolationTimeoutError, runInChild, Semaphore } from "../src/isolate.ts";
 
 const fixture = fileURLToPath(new URL("./fixtures/child-fixture.ts", import.meta.url));
 const scratch = mkdtempSync(join(tmpdir(), "gitgoblin-isolate-"));
@@ -70,6 +72,44 @@ describe("runInChild", () => {
     const run = runInChild(fixture, { mode: "hang" }, { timeoutMs: 60_000, signal: controller.signal });
     setTimeout(() => controller.abort(), 1_000);
     await expect(run).rejects.toThrow(/cancelled by the client/);
+  });
+});
+
+async function waitFor(check: () => boolean, ms = 5_000): Promise<boolean> {
+  for (const end = Date.now() + ms; Date.now() < end; await new Promise((resolve) => setTimeout(resolve, 50))) if (check()) return true;
+  return check();
+}
+
+describe.skipIf(process.platform === "win32")("a child never outlives the server", () => {
+  const server = fileURLToPath(new URL("./fixtures/server-fixture.ts", import.meta.url));
+
+  for (const how of ["exit", "SIGTERM", "SIGINT"]) {
+    it(`kills a running analysis and what it started when the server ${how === "exit" ? "exits" : `gets ${how}`}`, async () => {
+      const pidFile = join(scratch, `orphan-${how}.pid`);
+      const parent = spawn(process.execPath, [server, fixture, pidFile, how], { stdio: "ignore" });
+      await once(parent, "exit");
+      expect(existsSync(pidFile)).toBe(true);
+      const pid = Number(readFileSync(pidFile, "utf8"));
+      try {
+        expect(await waitFor(() => !alive(pid))).toBe(true);
+      } finally {
+        if (alive(pid)) process.kill(pid, "SIGKILL");
+      }
+    });
+  }
+
+  it("stops an analysis child whose server went away without a word", async () => {
+    const entry = fileURLToPath(new URL("./fixtures/analysis-child-fixture.ts", import.meta.url));
+    const child = fork(entry, [CHILD_FLAG], { stdio: ["ignore", "ignore", "ignore", "ipc"], detached: true, execArgv: [], serialization: "advanced" });
+    try {
+      const started = once(child, "message");
+      child.send({ type: "task", task: { kind: "analyze", ref: { host: "github.com", owner: "acme", name: "widget" }, options: {}, cacheDir: scratch } });
+      expect((await started)[0]).toEqual({ type: "log", message: "started" });
+      child.disconnect();
+      expect(await waitFor(() => child.exitCode !== null || child.signalCode !== null)).toBe(true);
+    } finally {
+      child.kill("SIGKILL");
+    }
   });
 });
 

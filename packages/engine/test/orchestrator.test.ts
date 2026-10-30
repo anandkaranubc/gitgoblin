@@ -527,6 +527,30 @@ describe("runContribution", () => {
     expect(calls[1]!.timeoutMs!).toBeLessThanOrEqual(calls[0]!.timeoutMs!);
   });
 
+  it("starts no model phase once the run is past its time limit", async () => {
+    const calls: PhaseSpec<unknown>[] = [];
+    const result = await run(happyPath, calls, { limits: { maxWallClockMs: 1 } })(await createFixtureRepo(), workdir());
+    expect(result.status).toBe("stopped");
+    expect(result.reason).toMatch(/time limit/);
+    expect(calls).toEqual([]);
+    expect(result.costUsd).toBe(0);
+  });
+
+  it("escalates when the implementer says the change is not finished, before spending on a review", async () => {
+    const calls: PhaseSpec<unknown>[] = [];
+    const unfinished: Record<string, PhaseHandler> = {
+      ...happyPath,
+      implement: (_spec, ws) => {
+        write(ws, "src/paginate.js", FIXED);
+        return { ...notes, summary: "Ran out of turns halfway through step 2.", done: false };
+      },
+    };
+    const result = await run(unfinished, calls)(await createFixtureRepo(), workdir());
+    expect(result.status).toBe("escalated");
+    expect(result.reason).toMatch(/not finished.*halfway through step 2/);
+    expect(calls.map((c) => c.name)).toEqual(["orient", "plan", "implement-1"]);
+  });
+
   it("restores tracked files the install rewrote, so the change carries none of that churn", async () => {
     const repo = await createFixtureRepo();
     writeFileSync(path.join(repo, "package-lock.json"), JSON.stringify({ name: "fixture", lockfileVersion: 3, packages: { "": {}, "node_modules/gone": { version: "1.0.0" } } }, null, 2));
