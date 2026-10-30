@@ -44,10 +44,19 @@ export function severityOf(v: OsvVuln, pkg: LockedPackage): Vulnerability["sever
   return "UNKNOWN";
 }
 
+/** The fix on the locked version's own release line: the lowest fixed version above it (4.2.5 gets 4.2.15, not 5.0.8). */
 export function fixedVersion(v: OsvVuln, pkg: LockedPackage): string | undefined {
   const affected = v.affected?.filter((a) => a.package?.ecosystem === pkg.ecosystem && a.package.name.toLowerCase() === pkg.name.toLowerCase()) ?? [];
-  for (const a of affected) for (const r of a.ranges ?? []) for (const e of r.events) if (e.fixed) return e.fixed;
-  return undefined;
+  const fixes = affected.flatMap((a) => a.ranges ?? []).filter((r) => r.type !== "GIT").flatMap((r) => r.events.map((e) => e.fixed));
+  return fixes.filter((f): f is string => f !== undefined && compareVersionNumbers(f, pkg.version) > 0).sort(compareVersionNumbers)[0];
+}
+
+/** Dotted versions compared number by number (4.2.15 after 4.2.9); pre-release and build suffixes are ignored. */
+export function compareVersionNumbers(a: string, b: string): number {
+  const parts = (v: string) => v.split(/[-+]/)[0]!.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const [x, y] = [parts(a), parts(b)];
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0);
+  return 0;
 }
 
 const RANK: Record<Vulnerability["severity"], number> = { CRITICAL: 4, HIGH: 3, MODERATE: 2, LOW: 1, UNKNOWN: 1.5 };
@@ -143,7 +152,7 @@ export const dependenciesAnalyzer: Analyzer = {
       // A library's lockfile pins its development environment, not what users install.
       const runtimeDeps = new Set([...(ctx.manifests.python?.dependencies ?? []), ...(ctx.manifests.node?.dependencies ?? []), ...(ctx.manifests.rust?.dependencies ?? [])].filter((d) => !d.dev).map((d) => d.name));
       if (["library", "framework", "plugin"].includes(profile.nature) && !runtimeDeps.has(pkg.name) && pkg.ecosystem !== "Go") pkg.dev = true;
-      const fixed = details.map((d) => d.fixed).filter((f): f is string => Boolean(f)).sort().pop();
+      const fixed = details.map((d) => d.fixed).filter((f): f is string => Boolean(f)).sort(compareVersionNumbers).pop();
       const bot = profile.welcomeness.rules.dependencyBot;
       findings.push({
         kind: "dependency",

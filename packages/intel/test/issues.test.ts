@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { assessIssue, findNearDuplicate, looksLikeRequestTitle, plainText } from "../src/analyzers/issues.ts";
+import { assessIssue, findNearDuplicate, issuesAnalyzer, looksLikeRequestTitle, plainText } from "../src/analyzers/issues.ts";
+import { BudgetTracker } from "../src/context.ts";
 import { assessStalePr } from "../src/analyzers/stale-prs.ts";
 import type { CommentSample, IssueSample, PrSample, ReviewSample } from "../src/github/types.ts";
 
@@ -106,6 +107,24 @@ describe("assessIssue", () => {
     const vague = issue({ title: "Something odd with timing", body: "Not sure what happened." });
     expect(assessIssue(vague, now, true, REPO).kind).toBe("triage");
     expect(assessIssue(vague, now, false, REPO).skipReason).toMatch(/unclear|endorsement/);
+  });
+
+  it("says how many people replied to a needs-info issue it offers for triage", async () => {
+    const maint = comment("Thanks. Which version are you on, and can you share the file?", { createdAt: "2026-09-02T00:00:00Z", author: { login: "maint", isBot: false }, association: "OWNER" });
+    const other = comment("Same here on 2.3.", { createdAt: "2026-09-05T00:00:00Z", author: { login: "user2", isBot: false } });
+    const run = async (lastComments: CommentSample[]) => {
+      const open = issue({ title: "Export to CSV drops the last row", body: "When I export, the last row is missing.", createdAt: "2026-09-01T00:00:00Z", labels: ["needs info"], commentCount: lastComments.length, lastComments });
+      const ctx = { samples: { openIssues: [open], closedIssues: [], openPrs: [], closedPrs: [], labels: [], isMirror: false, openIssueCount: 1, openPrCount: 0 }, options: { cacheDir: "/nonexistent" }, ref: { host: "github.com", owner: "o", name: "r" }, now, nowIso: now.toISOString(), budget: new BudgetTracker(undefined), inventory: { files: [], byPath: new Map() } };
+      const [f] = await issuesAnalyzer.run(ctx as never, { welcomeness: { level: "open" }, languages: [] } as never);
+      return f!;
+    };
+    const answered = await run([maint, other]);
+    expect(answered.kind).toBe("triage");
+    expect(answered.summary).not.toMatch(/nobody has replied/);
+    expect(answered.evidence[0]?.note).toMatch(/^2 replies after 51 days/);
+    const silent = await run([]);
+    expect(silent.summary).toMatch(/nobody has replied/);
+    expect(silent.evidence[0]?.note).toMatch(/^0 replies after 51 days/);
   });
 
   it("reads bare noun-phrase titles as requests that need endorsement", () => {
