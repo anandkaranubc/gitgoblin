@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { PhaseSpec } from "../src/agent.ts";
 import { silentReporter } from "../src/journal.ts";
 import { detectHostSandbox } from "../src/hostbox.ts";
-import { publishRun, readGuidance, runContribution } from "../src/orchestrator.ts";
+import { publishRun, readGuidance, runContribution, type RunnerContext } from "../src/orchestrator.ts";
 import { git } from "../src/workspace.ts";
 import { approve, createFixtureRepo, env, FIXED, fixtureTask, investigation, notes, plan, REPRO_TEST, scriptedRunner, type PhaseHandler } from "./helpers/fixture.ts";
 
@@ -34,6 +34,33 @@ function run(handlers: Record<string, PhaseHandler>, calls: PhaseSpec<unknown>[]
 }
 
 describe("runContribution", () => {
+  it("gives the agent the run's temp directory, and the SDK a short one of its own that goes with the run", async () => {
+    const repo = await createFixtureRepo();
+    const seen: RunnerContext[] = [];
+    let existedDuringRun = false;
+    const result = await runContribution(
+      { task: fixtureTask(repo) },
+      {
+        workdir: workdir(),
+        env,
+        reporter: silentReporter,
+        runnerFactory: (ctx) => {
+          seen.push(ctx);
+          existedDuringRun = existsSync(ctx.env?.["CLAUDE_CODE_TMPDIR"] ?? "");
+          return scriptedRunner(ctx.workspace, happyPath);
+        },
+      },
+    );
+    expect(result.status).toBe("awaiting_approval");
+    expect(seen[0]?.tmp).toBe(path.join(result.runDir, "tmp"));
+    if (process.platform === "win32") return;
+    const sdkTmp = seen[0]?.env?.["CLAUDE_CODE_TMPDIR"] ?? "";
+    expect(existedDuringRun).toBe(true);
+    // The SDK falls back to the shared /tmp/claude-<uid> when its socket directory's path is longer than about 30 bytes.
+    expect(Buffer.byteLength(path.join(sdkTmp, "claude-99999"))).toBeLessThanOrEqual(30);
+    expect(existsSync(sdkTmp)).toBe(false);
+  });
+
   it("takes a fixture bug from baseline to a prepared pull request", async () => {
     const repo = await createFixtureRepo();
     const wd = workdir();
@@ -498,6 +525,30 @@ describe("runContribution", () => {
       expect(c.timeoutMs).toBeLessThanOrEqual(10 * 60_000);
     }
     expect(calls[1]!.timeoutMs!).toBeLessThanOrEqual(calls[0]!.timeoutMs!);
+  });
+
+  it("starts no model phase once the run is past its time limit", async () => {
+    const calls: PhaseSpec<unknown>[] = [];
+    const result = await run(happyPath, calls, { limits: { maxWallClockMs: 1 } })(await createFixtureRepo(), workdir());
+    expect(result.status).toBe("stopped");
+    expect(result.reason).toMatch(/time limit/);
+    expect(calls).toEqual([]);
+    expect(result.costUsd).toBe(0);
+  });
+
+  it("escalates when the implementer says the change is not finished, before spending on a review", async () => {
+    const calls: PhaseSpec<unknown>[] = [];
+    const unfinished: Record<string, PhaseHandler> = {
+      ...happyPath,
+      implement: (_spec, ws) => {
+        write(ws, "src/paginate.js", FIXED);
+        return { ...notes, summary: "Ran out of turns halfway through step 2.", done: false };
+      },
+    };
+    const result = await run(unfinished, calls)(await createFixtureRepo(), workdir());
+    expect(result.status).toBe("escalated");
+    expect(result.reason).toMatch(/not finished.*halfway through step 2/);
+    expect(calls.map((c) => c.name)).toEqual(["orient", "plan", "implement-1"]);
   });
 
   it("restores tracked files the install rewrote, so the change carries none of that churn", async () => {

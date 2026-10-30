@@ -1,6 +1,7 @@
 {
   "name": "@gitgoblin/engine",
   "version": "0.1.0",
+  "private": true,
   "description": "Execution, orchestration, review and delivery engine for gitgoblin",
   "type": "module",
   "license": "MIT",

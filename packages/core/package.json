@@ -1,6 +1,7 @@
 {
   "name": "@gitgoblin/core",
   "version": "0.1.0",
+  "private": true,
   "description": "Shared contracts for gitgoblin: repository identity, discovery goals, results and signals",
   "type": "module",
   "license": "MIT",
