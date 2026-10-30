@@ -87,6 +87,19 @@ describe("cleanRun", () => {
     expect(existsSync(result.workspace!)).toBe(true);
   });
 
+  it("removes the clone of a run whose setup failed before the workspace was recorded", async () => {
+    const bare = mkdtempSync(path.join(os.tmpdir(), "gg-empty-"));
+    await git(["init", "-q", "--bare"], bare, env);
+    const workdir = mkdtempSync(path.join(os.tmpdir(), "gg-clean-"));
+    const { localPath: _, ...repo } = fixtureTask("/unused").repo;
+    const result = await runContribution({ task: { ...fixtureTask("/unused"), repo: { ...repo, cloneUrl: `file://${bare}` } } }, { workdir, env, reporter: silentReporter, runnerFactory: (ctx) => scriptedRunner(ctx.workspace, {}) });
+    expect(result.status).toBe("failed");
+    const clone = path.join(result.runDir, "workspace");
+    expect(existsSync(clone)).toBe(true);
+    expect((await cleanRun(result.runId, { workdir, env })).removed).toContain(clone);
+    expect(existsSync(clone)).toBe(false);
+  });
+
   it("refuses a workspace record that points outside the run, or a branch it did not create", async () => {
     const { workdir, result } = await runOn(stop);
     const file = path.join(result.runDir, "workspace.json");

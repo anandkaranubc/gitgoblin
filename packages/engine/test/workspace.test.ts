@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, renameSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { binaryChanges, commitAll, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace } from "../src/workspace.ts";
-import { findSecrets } from "../src/policy.ts";
+import { binaryChanges, commitAll, diffPatch, diffStats, git, GitError, prepareWorkspace, recordUntracked, removeWorkspace, uncommittedChanges } from "../src/workspace.ts";
+import { controlsChecks, findSecrets, isProtectedPath } from "../src/policy.ts";
 import { branchNameFor, slugify } from "../src/naming.ts";
 import { TaskSchema } from "../src/types.ts";
 
@@ -203,6 +203,70 @@ describe("git output caps", () => {
     await expect(git(["diff", "--cached"], repo, env, 60_000, 1000)).rejects.toThrow(/exceeded/);
     await expect(diffPatch(repo, await git(["rev-parse", "HEAD"], repo, env), env, 1000)).rejects.toThrow(/exceeded/);
     expect(await git(["diff", "--cached", "--stat"], repo, env)).toContain("big.txt");
+  });
+});
+
+describe("untracked output from before the agent ran", () => {
+  it("leaves out what the install and the baseline checks left, and does not count it as uncommitted", async () => {
+    const repo = await sampleRepo();
+    const ws = await prepareWorkspace(TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", localPath: repo }, title: "T" }), mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env);
+    // A Python repository that does not ignore __pycache__, and a coverage report every run rewrites.
+    mkdirSync(path.join(ws.path, "tests", "__pycache__"), { recursive: true });
+    writeFileSync(path.join(ws.path, "tests", "__pycache__", "test_a.cpython-313.pyc"), Buffer.from([0x61, 0x0d, 0x0d, 0x0a, 0, 0]));
+    writeFileSync(path.join(ws.path, "coverage.txt"), "baseline\n");
+    await recordUntracked(ws.path, env);
+    writeFileSync(path.join(ws.path, "a.txt"), "changed\n");
+    writeFileSync(path.join(ws.path, "coverage.txt"), "rewritten by the verify run\n");
+    writeFileSync(path.join(ws.path, "new.txt"), "new\n");
+    expect((await diffStats(ws.path, ws.baseSha, env)).changedFiles).toEqual(["a.txt", "new.txt"]);
+    expect(await binaryChanges(ws.path, ws.baseSha, env)).toEqual([]);
+    const sha = await commitAll(ws.path, ws.baseSha, "fix: change", env);
+    expect(await git(["show", "--name-only", "--format=", sha], ws.path, env)).toBe("a.txt\nnew.txt");
+    expect(await uncommittedChanges(ws.path, env)).toBe("");
+    writeFileSync(path.join(ws.path, "a.txt"), "edited after\n");
+    expect(await uncommittedChanges(ws.path, env)).toBe(" M a.txt");
+    // The record lives in the worktree's own git directory, not in the operator's checkout.
+    expect(existsSync(path.join(repo, ".git", "gitgoblin-untracked"))).toBe(false);
+  });
+});
+
+describe("changed file names the gates read", () => {
+  const task = TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n" }, title: "T" });
+
+  it("names both sides of a rename, so moving a file into a control or protected path is seen", async () => {
+    const repo = await sampleRepo();
+    mkdirSync(path.join(repo, "tests"));
+    mkdirSync(path.join(repo, "docs"));
+    writeFileSync(path.join(repo, "tests", "helpers.py"), Array.from({ length: 30 }, (_, i) => `def helper_${i}(x):\n    return x + ${i}\n`).join(""));
+    writeFileSync(path.join(repo, "docs", "ci-example.yml"), "name: ci\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n");
+    writeFileSync(path.join(repo, "config.example"), "A=1\nB=2\nC=3\n");
+    await git(["add", "."], repo, env);
+    await git(["commit", "-q", "-m", "files"], repo, env);
+    const base = await git(["rev-parse", "HEAD"], repo, env);
+    renameSync(path.join(repo, "tests", "helpers.py"), path.join(repo, "tests", "conftest.py"));
+    mkdirSync(path.join(repo, ".github", "workflows"), { recursive: true });
+    renameSync(path.join(repo, "docs", "ci-example.yml"), path.join(repo, ".github", "workflows", "ci.yml"));
+    renameSync(path.join(repo, "config.example"), path.join(repo, ".env"));
+    const { changedFiles } = await diffStats(repo, base, env);
+    expect(changedFiles).toEqual(expect.arrayContaining(["tests/conftest.py", "tests/helpers.py", ".github/workflows/ci.yml", ".env"]));
+    expect(changedFiles.filter(controlsChecks)).toEqual(["tests/conftest.py"]);
+    expect(changedFiles.filter((f) => isProtectedPath(f, task)).sort()).toEqual([".env", ".github/workflows/ci.yml"]);
+  });
+
+  it("names non-ASCII paths as they are on disk, not C-quoted", async () => {
+    const repo = await sampleRepo();
+    const base = await git(["rev-parse", "HEAD"], repo, env);
+    mkdirSync(path.join(repo, "tests", "ünï"), { recursive: true });
+    writeFileSync(path.join(repo, "tests", "ünï", "conftest.py"), "import os\n");
+    mkdirSync(path.join(repo, ".github", "workflows"), { recursive: true });
+    writeFileSync(path.join(repo, ".github", "workflows", "rélease.yml"), "on: push\n");
+    writeFileSync(path.join(repo, "tab\tname.txt"), "x\n");
+    writeFileSync(path.join(repo, "ïmage.png"), Buffer.from([0x89, 0x50, 0, 0, 1, 2, 3]));
+    const { changedFiles } = await diffStats(repo, base, env);
+    expect(changedFiles.sort()).toEqual([".github/workflows/rélease.yml", "tab\tname.txt", "tests/ünï/conftest.py", "ïmage.png"]);
+    expect(changedFiles.filter(controlsChecks)).toEqual(["tests/ünï/conftest.py"]);
+    expect(changedFiles.filter((f) => isProtectedPath(f, task))).toEqual([".github/workflows/rélease.yml"]);
+    expect(await binaryChanges(repo, base, env)).toEqual(["ïmage.png"]);
   });
 });
 

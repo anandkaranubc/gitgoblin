@@ -56,7 +56,6 @@ export function pkg(overrides: Partial<EcosystemsPackage> = {}): EcosystemsPacka
     downloads: 2_000_000,
     downloadsPeriod: "last-month",
     versions: 40,
-    critical: false,
     ...overrides,
   };
 }
@@ -86,11 +85,9 @@ export function details(overrides: Partial<GitHubRepoDetails> = {}): GitHubRepoD
     hasContributing: true,
     hasCodeOfConduct: true,
     issueTemplates: 2,
-    pullRequestTemplates: 1,
     hasIssuesEnabled: true,
     archived: false,
     license: "MIT",
-    diskUsageKb: 5000,
     starterIssues: 7,
     starterIssueSamples: [
       { number: 42, title: "Add --color flag", url: "https://github.com/x/y/issues/42", labels: ["good first issue"], createdAt: daysAgo(10) },
