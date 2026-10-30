@@ -251,6 +251,7 @@ async function numstat(wsPath: string, baseSha: string, env: Record<string, stri
  * the checks still load it.
  */
 export async function untrackedFiles(wsPath: string, env: Record<string, string>, keep: (file: string) => boolean): Promise<Map<string, string>> {
+  // shortcut: past ~500k untracked paths (32 MiB of names) this throws and fails the run; filter by name in git if that shows up.
   const listing = await git(["ls-files", "-o", "-z", "--", ".", ...NOT_STRAY], wsPath, env, 5 * 60_000, DEFAULT_MAX_PATCH_BYTES);
   const files = new Map<string, string>();
   for (const file of listing.split("\0").filter((f) => f && keep(f))) {
