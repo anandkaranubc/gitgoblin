@@ -77,15 +77,15 @@ function run(file: string, args: string[], display: string, opts: ExecOptions): 
     let timedOut = false;
     let done = false;
     let graceTimer: NodeJS.Timeout | undefined;
-    const append = (chunk: Buffer) => {
-      received += chunk.length;
-      const text = chunk.toString("utf8");
+    const append = (text: string) => {
+      received += Buffer.byteLength(text);
       if (head.length < HEAD_CHARS) head += text.slice(0, HEAD_CHARS - head.length);
       output += text;
       if (output.length > maxBytes * 2) output = output.slice(-maxBytes);
     };
-    child.stdout.on("data", append);
-    child.stderr.on("data", append);
+    // Decoded per stream, so a character whose bytes arrive in two chunks is not turned into U+FFFD.
+    child.stdout.setEncoding("utf8").on("data", append);
+    child.stderr.setEncoding("utf8").on("data", append);
     const killGroup = () => {
       try {
         if (child.pid) process.kill(-child.pid, "SIGKILL");
