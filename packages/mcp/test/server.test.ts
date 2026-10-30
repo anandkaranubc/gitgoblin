@@ -3,6 +3,7 @@ import { type DiscoveryQuery, type DiscoveryResult, type RepoRef, SIGNAL_NAMES }
 import type { AnalysisReport } from "@gitgoblin/intel";
 import { RateLimitError } from "@gitgoblin/sources";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import { buildSearchPlans } from "@gitgoblin/discovery";
 import { describe, expect, it } from "vitest";
 import type { AnalyzeOptions, ServerDeps } from "../src/deps.ts";
 import { createServer, toQuery } from "../src/server.ts";
@@ -256,6 +257,41 @@ describe("server", () => {
     }
   });
 
+  it("briefs a stale pull request by its number, which has no issue", async () => {
+    const base = fixtureReport.opportunities[0]!;
+    const stale = { ...base, id: "opp-5ta1e663", kind: "stale_pr" as const, title: "Revive PR #663: add retry_unless_exception_cause_type", issue: undefined, evidence: [{ ...base.evidence[0]!, kind: "pull_request" as const, locator: "https://github.com/jd/tenacity/pull/663" }] };
+    const report = { ...fixtureReport, opportunities: [...fixtureReport.opportunities, stale] };
+    const { deps } = fakeDeps({ analyze: async () => report });
+    const { client } = await connect(deps);
+    const result = await client.callTool({ name: "get_opportunity", arguments: { repository: "jd/tenacity", issue_number: 663 } });
+    expect(result.isError).toBeFalsy();
+    expect(textOf(result)).toContain("Revive PR #663");
+    const missing = await client.callTool({ name: "get_opportunity", arguments: { repository: "jd/tenacity", issue_number: 99_999 } });
+    expect(textOf(missing)).toContain("opp-5ta1e663 (#663): Revive PR #663");
+  });
+
+  it("says when a ranking is partial because searches were refused", async () => {
+    const { deps } = fakeDeps();
+    deps.openDiscovery = async (onProgress) => ({
+      discover: async () => {
+        onProgress("search: 3 searches");
+        onProgress("warning: search failed: GitHub search rate limit reached");
+        onProgress("warning: search failed: GitHub search rate limit reached");
+        return [sampleResult()];
+      },
+      explain: async () => undefined,
+      close: () => {},
+    });
+    const { client } = await connect(deps);
+    const result = await client.callTool({ name: "discover_repositories", arguments: {} });
+    expect(textOf(result)).toContain("Warnings, so this ranking may be incomplete:\n- search failed: GitHub search rate limit reached");
+    expect((result.structuredContent as { warnings: string[] }).warnings).toEqual(["search failed: GitHub search rate limit reached"]);
+    const clean = await connect(fakeDeps().deps);
+    const quiet = await clean.client.callTool({ name: "discover_repositories", arguments: {} });
+    expect((quiet.structuredContent as { warnings: string[] }).warnings).toEqual([]);
+    expect(textOf(quiet)).not.toContain("Warnings");
+  });
+
   it("re-analyzes when the cached report is missing or stale and lists what exists for a bad id", async () => {
     let clock = 1_000_000;
     const { deps, recorded } = fakeDeps({ now: () => clock });
@@ -414,6 +450,44 @@ describe("public repositories only", () => {
     expect(structured.omitted).toBe(1);
     expect(textOf(result)).not.toContain("internal-billing");
     expect(textOf(result)).toContain("1 result was left out because gitgoblin could not confirm it is public.");
+  });
+});
+
+describe("search syntax", () => {
+  it("refuses filter values that would add qualifiers to a search run with the person's token", () => {
+    const refused: Record<string, unknown>[] = [
+      ...["is:private", "user:acme", "org:acme", "repo:acme/secret", "foo is:private", "-archived", '"widget"', "NOT", "OR"].map((k) => ({ keywords: ["ok", k] })),
+      { topics: ["is:private"] },
+      { languages: ["rust", "go user:acme"] },
+      { license: "mit is:private" },
+      { license: "mit:x" },
+      { license: "-mit" },
+    ];
+    for (const args of refused) expect(toQuery(args), JSON.stringify(args)).toMatch(/^(keywords|topics|languages|license): ".*" is (GitHub search syntax|not an SPDX id)/);
+    expect(toQuery({ keywords: ["web framework", "tui"], languages: ["c++", "Jupyter Notebook"], topics: ["cli"], license: "Apache-2.0" })).not.toBeTypeOf("string");
+  });
+
+  it("searches public repositories only, for goals and like seeds, so no private name reaches ecosyste.ms", () => {
+    const now = Date.parse("2026-10-29T00:00:00Z");
+    const seedFacts = { ...sampleResult().repo, topics: ["widgets", "cli"] };
+    for (const goal of ["contribute", "learn", "adopt", "revive", "explore"] as const) {
+      const query = toQuery({ goal, keywords: ["widget"], languages: ["rust"] });
+      if (typeof query === "string") throw new Error(query);
+      for (const context of [{ now, random: () => 0 }, { now, random: () => 0, seedFacts }]) {
+        const plans = buildSearchPlans(query, context);
+        expect(plans.length).toBeGreaterThan(0);
+        for (const plan of plans) expect(plan.q.split(" "), plan.q).toContain("is:public");
+      }
+    }
+  });
+
+  it("refuses search syntax before discovering anything", async () => {
+    const { deps, recorded } = fakeDeps();
+    const { client } = await connect(deps);
+    const result = await client.callTool({ name: "discover_repositories", arguments: { keywords: ["is:private"] } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/^keywords: "is:private" is GitHub search syntax/);
+    expect(recorded.queries).toHaveLength(0);
   });
 });
 

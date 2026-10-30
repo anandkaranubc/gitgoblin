@@ -49,7 +49,7 @@ reports a `cache-fallback` event rather than failing. Tokens are never stored.
 - `graphql(query, variables, { ttlMs })`: GraphQL, returns `data` (partial data with errors included), throws `GraphQLError` when nothing came back and `RateLimitError` when the GraphQL budget is exhausted; an errors-only answer is never kept in the cache. Needs a token.
 - `searchRepositories(q, { sort, order, perPage, page })` → `RepoFacts[]` plus total.
 - `getRepository(ref)` → `RepoFacts | undefined`.
-- `repoDetails(refs)`: one GraphQL request per 10 repositories (a batch GitHub times out on is split in half and asked again; repositories it still cannot compute are left out) returning contributing guide, code of conduct, templates, open starter issues (with samples), merged pull requests, commit count and last commit, releases. Needs a token.
+- `repoDetails(refs)`: one GraphQL request per 10 repositories (a batch GitHub times out on is split in half and asked again; a repository missing from an answer without a NOT_FOUND is asked for once on its own, and that answer is not cached; repositories it still cannot compute are left out) returning contributing guide, code of conduct, issue templates, open starter issues (with samples), merged pull requests and the latest merge, commit count and last commit, releases. Needs a token.
 - `rateLimits()`: `{ core, search, graphql }` with `remaining`, `limit`, `resetAt`.
 
 Tokens come from `GITHUB_TOKEN`, then `GH_TOKEN`, then `gh auth token`
@@ -62,7 +62,7 @@ Tokens come from `GITHUB_TOKEN`, then `GH_TOKEN`, then `gh auth token`
 every major package registry, with no authentication, at 5000 requests per hour per IP.
 
 - `lookupRepository(ref)`: stars, topics, license, commit statistics (committers, development distribution score), community files found, funding, OpenSSF Scorecard.
-- `lookupPackages(ref)`: packages published from the repository with dependents, downloads, keywords and registry rankings.
+- `lookupPackages(ref)`: packages published from the repository with dependents, downloads and keywords.
 - `lookupIssueStats(ref)`: issue and pull request counts and average time to close, all-time and past year.
 
 Responses are cached for a day. GitHub and GitLab use the direct host routes;

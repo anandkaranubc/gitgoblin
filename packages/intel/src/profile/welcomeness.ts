@@ -229,7 +229,7 @@ export function extractRules(input: Pick<WelcomenessInput, "inventory" | "docs" 
     helpLabels: (input.samples?.labels ?? []).filter((l) => HELP_LABEL.test(l.name)).map((l) => l.name),
     rejectedChanges: rejected,
     dependencyBot: paths.some((p) => /^(\.github\/dependabot\.ya?ml|renovate\.json5?|\.renovaterc(\.json)?|\.github\/renovate\.json5?)$/.test(p)),
-    requiresTests: /\b(include|add|write|with|accompan\w+|require\w*)\b[^.]{0,40}\btests?\b/i.test(texts) || /\[ \][^\n]*\btests?\b/i.test(input.docs.prTemplate ?? ""),
+    requiresTests: /\b(include|add|write|with|accompan\w+|require\w*)\b[^.]{0,40}\btests?\b/i.test(texts) || /\[ \][^\n]{0,300}\btests?\b/i.test(input.docs.prTemplate ?? ""),
     requiresChangelog: /\bchangelog\b|CHANGES\.(md|rst)|news fragment|towncrier|changeset/i.test(texts),
   };
   if (contributingPath) rules.contributingPath = contributingPath;

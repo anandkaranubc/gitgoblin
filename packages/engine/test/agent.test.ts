@@ -134,6 +134,29 @@ describe("createSdkRunner deadlines", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("keeps a resume and a wrap-up within the phase's deadline instead of starting it again", async () => {
+    const calls: unknown[] = [];
+    const slow = ((args: { options: Record<string, unknown> }) => {
+      calls.push(args);
+      const n = calls.length;
+      const signal = (args.options["abortController"] as AbortController).signal;
+      return (async function* () {
+        yield init("s4");
+        await new Promise<void>((resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted by caller")));
+          setTimeout(resolve, 250);
+        });
+        yield n === 1 ? failure("s4", "error_during_execution", ["overloaded"]) : n === 2 ? failure("s4", "error_max_turns", []) : success("s4", 0.3, 1);
+      })();
+    }) as never;
+    const started = Date.now();
+    const result = await createSdkRunner({ workspace: "/ws", task: { kind: "issue" }, isolation: "none", env: {}, query: slow }).run({ ...spec, timeoutMs: 400 });
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/timed out after/);
+    expect(calls).toHaveLength(2);
+    expect(Date.now() - started).toBeLessThan(700);
+  });
+
   it("passes no deadline when none is set", async () => {
     const { query, calls } = scriptedQuery([[init("s1"), success("s1", 0.1, 1)]]);
     const result = await createSdkRunner({ workspace: "/ws", task: { kind: "issue" }, isolation: "none", env: {}, query }).run(spec);

@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, renameSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { binaryChanges, commitAll, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace } from "../src/workspace.ts";
+import { binaryChanges, commitAll, diffPatch, diffStats, git, GitError, prepareWorkspace, recordUntracked, removeWorkspace, uncommittedChanges } from "../src/workspace.ts";
 import { controlsChecks, findSecrets, isProtectedPath } from "../src/policy.ts";
 import { branchNameFor, slugify } from "../src/naming.ts";
 import { TaskSchema } from "../src/types.ts";
@@ -203,6 +203,30 @@ describe("git output caps", () => {
     await expect(git(["diff", "--cached"], repo, env, 60_000, 1000)).rejects.toThrow(/exceeded/);
     await expect(diffPatch(repo, await git(["rev-parse", "HEAD"], repo, env), env, 1000)).rejects.toThrow(/exceeded/);
     expect(await git(["diff", "--cached", "--stat"], repo, env)).toContain("big.txt");
+  });
+});
+
+describe("untracked output from before the agent ran", () => {
+  it("leaves out what the install and the baseline checks left, and does not count it as uncommitted", async () => {
+    const repo = await sampleRepo();
+    const ws = await prepareWorkspace(TaskSchema.parse({ id: "x", repo: { owner: "o", name: "n", localPath: repo }, title: "T" }), mkdtempSync(path.join(os.tmpdir(), "gg-run-")), env);
+    // A Python repository that does not ignore __pycache__, and a coverage report every run rewrites.
+    mkdirSync(path.join(ws.path, "tests", "__pycache__"), { recursive: true });
+    writeFileSync(path.join(ws.path, "tests", "__pycache__", "test_a.cpython-313.pyc"), Buffer.from([0x61, 0x0d, 0x0d, 0x0a, 0, 0]));
+    writeFileSync(path.join(ws.path, "coverage.txt"), "baseline\n");
+    await recordUntracked(ws.path, env);
+    writeFileSync(path.join(ws.path, "a.txt"), "changed\n");
+    writeFileSync(path.join(ws.path, "coverage.txt"), "rewritten by the verify run\n");
+    writeFileSync(path.join(ws.path, "new.txt"), "new\n");
+    expect((await diffStats(ws.path, ws.baseSha, env)).changedFiles).toEqual(["a.txt", "new.txt"]);
+    expect(await binaryChanges(ws.path, ws.baseSha, env)).toEqual([]);
+    const sha = await commitAll(ws.path, ws.baseSha, "fix: change", env);
+    expect(await git(["show", "--name-only", "--format=", sha], ws.path, env)).toBe("a.txt\nnew.txt");
+    expect(await uncommittedChanges(ws.path, env)).toBe("");
+    writeFileSync(path.join(ws.path, "a.txt"), "edited after\n");
+    expect(await uncommittedChanges(ws.path, env)).toBe(" M a.txt");
+    // The record lives in the worktree's own git directory, not in the operator's checkout.
+    expect(existsSync(path.join(repo, ".git", "gitgoblin-untracked"))).toBe(false);
   });
 });
 

@@ -75,10 +75,10 @@ refusing to do something.
   yourself. Approval is the safety boundary; use it.
 - Keep the sandboxes on. Inside one, a repository's install script runs as
   you but reaches only package registries; `--install-network open` (on
-  `gitgoblin contribute` and `gitgoblin-engine run`) lifts that for a
+  `gitgoblin contribute`, and on the engine's own `run` in a clone) lifts that for a
   repository that needs other hosts.
   For a repository you do not trust, also use `--check-isolation strict` (on
-  `gitgoblin contribute` and `gitgoblin-engine run`), which hides your home
+  `gitgoblin contribute`, and on the engine's own `run`), which hides your home
   directory from its commands, or run the engine in a container. Without an
   OS sandbox the install's network cannot be limited, and the run says so;
   `--no-sandbox` and `--check-isolation none` are for platforms without one.

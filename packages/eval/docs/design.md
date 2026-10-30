@@ -55,7 +55,8 @@ it adds no survivorship bias; a closed range `pushed:A..B` would select
 repositories whose last push fell in the range, which is exactly the set that
 went quiet after T (see the results note). Label-based slices are not used
 because label counts cannot be pinned to T; starter issues open at T come
-from the issue history instead.
+from the issue history instead (open as of T, but labelled as they are now;
+see Known limits).
 
 Inputs as of T, from GitHub GraphQL history: pull requests (created,
 merged, closed, author, association, first responses), issues (created,
@@ -222,6 +223,10 @@ data/               committed derived tables, named by experiment and date
 
 - Stars, forks, community files and committer statistics are current, not
   as of T. Stars favour the popularity baseline if anything.
+- Starter issues open at T are read with their current labels: GitHub's
+  search finds issues by the labels they have now, and an issue relabelled
+  since T (or with more than six labels) is counted as it looks today. This
+  feeds discovery's newcomer-friendliness signal and the starter baselines.
 - Author association is the current one; a newcomer who became a
   collaborator since T is counted as a maintainer and dropped.
 - Repositories with more pull requests than the fetch cap in the two years

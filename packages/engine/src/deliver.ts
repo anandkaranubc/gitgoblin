@@ -3,7 +3,7 @@ import { execFile } from "./exec.ts";
 import { sanitizeText } from "./intake.ts";
 import type { ChangePlan, ImplementationNotes, Investigation, PreparedDelivery, Review, Task, Verification } from "./types.ts";
 import { describeCounts } from "./verify.ts";
-import { commitAll, git } from "./workspace.ts";
+import { commitAll, git, uncommittedChanges } from "./workspace.ts";
 
 export interface DeliveryInput {
   task: Task;
@@ -277,7 +277,7 @@ export async function publishPullRequest(opts: PublishOptions): Promise<PublishR
     // Publish exactly what the human read: the prepared commit, with nothing left over in the tree.
     const head = await git(["rev-parse", "HEAD"], wsPath, env);
     if (head !== delivery.commitSha) throw new Error(`workspace HEAD ${head.slice(0, 7)} is not the prepared commit ${delivery.commitSha.slice(0, 7)}; run the engine again`);
-    const dirty = await git(["status", "--porcelain"], wsPath, env);
+    const dirty = await uncommittedChanges(wsPath, env);
     if (dirty) throw new Error(`workspace has uncommitted changes:\n${dirty}`);
   }
   const login = opts.dryRun ? "<login>" : await ghCall(["api", "user", "--jq", ".login"]);

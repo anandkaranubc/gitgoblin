@@ -527,6 +527,30 @@ describe("runContribution", () => {
     expect(calls[1]!.timeoutMs!).toBeLessThanOrEqual(calls[0]!.timeoutMs!);
   });
 
+  it("starts no model phase once the run is past its time limit", async () => {
+    const calls: PhaseSpec<unknown>[] = [];
+    const result = await run(happyPath, calls, { limits: { maxWallClockMs: 1 } })(await createFixtureRepo(), workdir());
+    expect(result.status).toBe("stopped");
+    expect(result.reason).toMatch(/time limit/);
+    expect(calls).toEqual([]);
+    expect(result.costUsd).toBe(0);
+  });
+
+  it("escalates when the implementer says the change is not finished, before spending on a review", async () => {
+    const calls: PhaseSpec<unknown>[] = [];
+    const unfinished: Record<string, PhaseHandler> = {
+      ...happyPath,
+      implement: (_spec, ws) => {
+        write(ws, "src/paginate.js", FIXED);
+        return { ...notes, summary: "Ran out of turns halfway through step 2.", done: false };
+      },
+    };
+    const result = await run(unfinished, calls)(await createFixtureRepo(), workdir());
+    expect(result.status).toBe("escalated");
+    expect(result.reason).toMatch(/not finished.*halfway through step 2/);
+    expect(calls.map((c) => c.name)).toEqual(["orient", "plan", "implement-1"]);
+  });
+
   it("restores tracked files the install rewrote, so the change carries none of that churn", async () => {
     const repo = await createFixtureRepo();
     writeFileSync(path.join(repo, "package-lock.json"), JSON.stringify({ name: "fixture", lockfileVersion: 3, packages: { "": {}, "node_modules/gone": { version: "1.0.0" } } }, null, 2));
@@ -541,6 +565,18 @@ describe("runContribution", () => {
     expect(verification.diff.changedFiles).not.toContain("package-lock.json");
     expect(readFileSync(path.join(result.runDir, "events.jsonl"), "utf8")).toMatch(/"phase":"install","type":"end".*"restored":\["package-lock.json"\]/);
     expect(readFileSync(path.join(result.runDir, "report.md"), "utf8")).toMatch(/install rewrote package-lock\.json; restored/);
+  });
+
+  it("leaves what the baseline checks wrote out of the change, and tells Python not to write bytecode", async () => {
+    const repo = await createFixtureRepo();
+    // Output the repository does not ignore, as coverage tools and Python's bytecode cache leave.
+    const task = { ...fixtureTask(repo), commands: { test: "npm test && echo \"bytecode=${PYTHONDONTWRITEBYTECODE:-on}\" > check-output.txt" } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(result.status).toBe("awaiting_approval");
+    expect(readFileSync(path.join(result.workspace!, "check-output.txt"), "utf8")).toBe("bytecode=1\n");
+    const verification = JSON.parse(readFileSync(path.join(result.runDir, "verification-1.json"), "utf8"));
+    expect(verification.diff.changedFiles).toEqual(["src/paginate.js", "test/paginate.test.js"]);
+    expect(await git(["show", "--name-only", "--format=", "HEAD"], result.workspace!, env)).not.toContain("check-output.txt");
   });
 
   it("says when the tests need Playwright's browsers", async () => {
