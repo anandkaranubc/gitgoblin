@@ -67,6 +67,10 @@ describe("execFile", () => {
     const r = await execFile("echo", ["$HOME"], opts);
     expect(r.output.trim()).toBe("$HOME");
   });
+  it("keeps a character whose bytes arrive in separate writes", async () => {
+    const r = await execFile(process.execPath, ["-e", "const b = Buffer.from('é'); process.stdout.write(b.subarray(0, 1)); setTimeout(() => process.stdout.write(b.subarray(1)), 50)"], opts);
+    expect(r.output).toBe("é");
+  });
   it("reports a missing executable instead of throwing", async () => {
     const r = await execFile("definitely-not-a-command-xyz", [], opts);
     expect(r.exitCode).not.toBe(0);
