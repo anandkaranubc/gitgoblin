@@ -67,6 +67,8 @@ export interface SdkRunnerOptions {
   readRoots?: string[];
   /** Directories outside the workspace the agent's shell may write, such as the run's toolchain prefix. */
   extraWrite?: string[];
+  /** The run's own temp directory, used instead of the shared ones when sandboxed. */
+  tmp?: string;
   onToolUse?: (phase: string, tool: string, summary: string) => void;
   onMessage?: (phase: string, message: SDKMessage) => void;
   /** The SDK's query function; tests substitute a scripted one. */
@@ -92,7 +94,8 @@ const RESUME_PROMPT =
 export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
   const isolation = opts.isolation ?? "sandbox";
   // The agent's shell has no network inside the sandbox; package managers should know it.
-  const env = { ...(opts.env ?? scrubEnv()), ...(isolation === "sandbox" ? OFFLINE_ENV : {}) };
+  const tmp = isolation === "sandbox" && opts.tmp ? { TMPDIR: opts.tmp, TMP: opts.tmp, TEMP: opts.tmp } : {};
+  const env = { ...(opts.env ?? scrubEnv()), ...(isolation === "sandbox" ? OFFLINE_ENV : {}), ...tmp };
   const costs = new SessionCostTracker();
   const run = opts.query ?? query;
 
@@ -131,7 +134,7 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
       ...(spec.model ?? opts.model ? { model: spec.model ?? opts.model } : {}),
       ...(spec.effort ? { effort: spec.effort } : {}),
       ...(spec.resume ? { resume: spec.resume } : {}),
-      ...(isolation === "sandbox" ? { sandbox: sandboxSettings(opts.workspace, spec.profile, opts.extraWrite ?? []) } : {}),
+      ...(isolation === "sandbox" ? { sandbox: sandboxSettings(opts.workspace, spec.profile, opts.extraWrite ?? [], opts.tmp) } : {}),
       ...overrides,
     };
 
