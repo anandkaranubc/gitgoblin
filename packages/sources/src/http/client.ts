@@ -88,13 +88,13 @@ class Semaphore {
   }
 
   async acquire(): Promise<() => void> {
-    if (this.#active >= this.#limit) {
-      await new Promise<void>((resolve) => this.#queue.push(resolve));
-    }
-    this.#active++;
+    if (this.#active < this.#limit) this.#active++;
+    else await new Promise<void>((resolve) => this.#queue.push(resolve));
     return () => {
-      this.#active--;
-      this.#queue.shift()?.();
+      // The slot passes straight to the next waiter, so a request arriving meanwhile cannot take it.
+      const next = this.#queue.shift();
+      if (next) next();
+      else this.#active--;
     };
   }
 }
@@ -277,6 +277,7 @@ export class HttpClient {
     let waitedForRateLimit = false;
     for (;;) {
       let response: Response;
+      let body: string;
       try {
         response = await this.#fetch(url, {
           method: init.method,
@@ -284,7 +285,11 @@ export class HttpClient {
           ...(init.body === undefined ? {} : { body: init.body }),
           signal: AbortSignal.timeout(this.#requestTimeoutMs),
         });
+        this.#recordRateLimit(url, response.headers);
+        // A connection reset or the timeout can strike while the body streams, not only before it.
+        body = await this.#readBody(response, url);
       } catch (error) {
+        if (error instanceof HttpError) throw error; // the size limit, which no retry changes
         const retryDelay = ttl.retryDelaysMs[attempt];
         if (retryDelay !== undefined) {
           this.#onEvent({ type: "retry", url, attempt: ++attempt, delayMs: retryDelay, reason: String(error) });
@@ -294,7 +299,6 @@ export class HttpClient {
         return { body: this.#staleOrThrow(cached, url, error), fromCache: true };
       }
 
-      this.#recordRateLimit(url, response.headers);
       const now = this.#now();
 
       if (response.status === 304 && cached) {
@@ -302,8 +306,6 @@ export class HttpClient {
         this.#cacheSet(key, { ...cached, fetchedAt: now }, url);
         return { body: this.#unwrap(cached, url), fromCache: true };
       }
-
-      const body = await this.#readBody(response, url);
 
       if (response.ok) {
         this.#cacheSet(key, {
