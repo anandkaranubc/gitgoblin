@@ -250,6 +250,21 @@ describe("run", () => {
     expect(missing.err.join("\n")).toMatch(/was not found/);
   });
 
+  it("never describes the GitHub repository of the same name for one on another forge", async () => {
+    let asked = 0;
+    const { runtime, err } = fakeRuntime({
+      explain: async () => {
+        asked += 1;
+        return sampleResult();
+      },
+    });
+    expect(await run(["explain", "gitlab.com/inkscape/inkscape"], runtime)).toBe(1);
+    expect(err.join("\n")).toMatch(/GitHub only; for gitlab\.com\/inkscape\/inkscape, run gitgoblin analyze gitlab\.com\/inkscape\/inkscape/);
+    expect(await run(["discover", "contribute", "--like", "https://codeberg.org/forgejo/forgejo"], runtime)).toBe(1);
+    expect(err.join("\n")).toMatch(/--like reads repositories on GitHub only/);
+    expect(asked).toBe(0);
+  });
+
   it("turns rate limits into advice and usage errors into exit code 2", async () => {
     const limited = fakeRuntime({
       discover: async () => {
