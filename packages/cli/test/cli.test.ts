@@ -260,7 +260,7 @@ describe("run", () => {
     });
     expect(await run(["explain", "gitlab.com/inkscape/inkscape"], runtime)).toBe(1);
     expect(err.join("\n")).toMatch(/GitHub only; for gitlab\.com\/inkscape\/inkscape, run gitgoblin analyze gitlab\.com\/inkscape\/inkscape/);
-    expect(await run(["discover", "contribute", "--like", "https://codeberg.org/forgejo/forgejo"], runtime)).toBe(1);
+    expect(await run(["discover", "contribute", "--like", "https://codeberg.org/forgejo/forgejo"], runtime)).toBe(2);
     expect(err.join("\n")).toMatch(/--like reads repositories on GitHub only/);
     expect(asked).toBe(0);
   });
@@ -278,6 +278,27 @@ describe("run", () => {
     expect(await run(["discover", "famous"], runtime)).toBe(2);
     expect(err.join("\n")).toMatch(/Unknown goal "famous"/);
     expect(await run(["explain", "???"], runtime)).toBe(2);
+  });
+
+  it("treats a bad number or seed repository for discover as a usage error", async () => {
+    for (const args of [["--limit", "0"], ["--min-stars", "lots"], ["--max-stars", "-1"], ["--pushed-within", "0"], ["--created-within", "1.5"], ["--seed", "x"], ["--like", "nope"]]) {
+      let searched = false;
+      const { runtime, err } = fakeRuntime({ discover: async () => ((searched = true), []) });
+      expect(await run(["discover", "learn", ...args], runtime), args.join(" ")).toBe(2);
+      expect(err.join("\n"), args.join(" ")).toMatch(/error: option .* argument .* is invalid/);
+      expect(searched).toBe(false);
+    }
+  });
+
+  it("gives rate-limit advice for intel's rate limit error too", async () => {
+    const siblings = fakeSiblings();
+    // intel throws a RateLimitError class of its own, not the one from @gitgoblin/sources.
+    (siblings.modules["@gitgoblin/intel"] as { analyzeRepository: unknown }).analyzeRepository = async () => {
+      throw Object.assign(new Error("GitHub rate limit reached (0 left, resets 05:00 UTC)"), { name: "RateLimitError" });
+    };
+    const { runtime, err } = fakeRuntime({}, { modules: siblings.modules });
+    expect(await run(["analyze", "acme/widget"], runtime)).toBe(1);
+    expect(err.join("\n")).toMatch(/GitHub rate limit reached .*Set GITHUB_TOKEN or run `gh auth login`/);
   });
 
   it("lists goals and reports on the cache", async () => {
@@ -376,6 +397,17 @@ describe("contribute", () => {
     expect(err.join("\n")).toContain("==> run: 20261022-abcd for Fix #42");
     expect(err.join("\n")).toContain("    orient Read src/main.rs");
     expect(err.join("\n")).toContain(" !! baseline lint: fail");
+  });
+
+  it("refuses a --max-cost that is not a finite positive number before anything runs", async () => {
+    for (const value of ["Infinity", "1e400", "0", "-2", "ten"]) {
+      const siblings = fakeSiblings();
+      const { runtime, err, asked } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y"] });
+      expect(await run(["contribute", "acme/widget", "--issue", "42", "--max-cost", value, "--workdir", siblings.workdir], runtime), value).toBe(2);
+      expect(err.join("\n")).toMatch(/Expected a positive number of dollars/);
+      expect(asked).toEqual([]);
+      expect(siblings.calls).toEqual([]);
+    }
   });
 
   it("honours an explicit --max-cost and shows it in the question", async () => {
@@ -771,6 +803,12 @@ describe("an install without the Agent SDK", () => {
     const publish = withoutSdk(siblings.modules, ["y"]);
     expect(await run(["publish", "20261022-093000-bbbb", "--workdir", siblings.workdir], publish.runtime)).toBe(1);
     expect(publish.err.join("\n")).toContain(AGENT_SDK_HINT);
+
+    // `runs` suggests `clean --finished`; the engine that cleans needs the SDK too, so the hint names it.
+    writeRun(siblings.workdir, "20261023-182616-x3md", { status: "stopped", workspaceBytes: 1024 });
+    const clean = withoutSdk(siblings.modules);
+    expect(await run(["clean", "--finished", "--workdir", siblings.workdir], clean.runtime)).toBe(1);
+    expect(clean.err.join("\n")).toMatch(/contribute, publish and clean need the Claude Agent SDK/);
     expect(siblings.calls.filter((c) => c.fn !== "analyzeRepository")).toEqual([]);
   });
 });

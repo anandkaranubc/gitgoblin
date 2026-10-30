@@ -30,6 +30,15 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   response was still arriving failed the request at once. It is now retried like any other network
   failure, and an earlier cached answer is used if the retries fail too. The limit of four requests
   at a time per host also holds again: a request arriving as another finished could go past the queue.
+- `analyze` gives the token advice when GitHub's rate limit stops it, as `discover` does. Before,
+  it printed "GitHub rate limit reached" with no hint to set `GITHUB_TOKEN` or run `gh auth login`.
+- A bad value for `discover --limit`, `--min-stars`, `--max-stars`, `--pushed-within`,
+  `--created-within`, `--seed` or `--like` is a usage error with exit code 2, as the README says,
+  instead of exit code 1.
+- `contribute --max-cost` takes only a finite positive number of dollars. Before, `Infinity` or
+  `1e400` were accepted, and the question asked about "spending up to $Infinity".
+- Without the Claude Agent SDK, `clean` says it needs the SDK too. Before, the install hint named
+  only `contribute` and `publish`, right after `runs` suggested `clean --finished`.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 

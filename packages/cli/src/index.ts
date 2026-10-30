@@ -8,7 +8,7 @@ import { GOAL_DESCRIPTIONS, GOALS, normalizeHost, parseRepoRef, sameRepo } from 
 import type { CheckIsolation, Effort, Reporter, RunOptions } from "@gitgoblin/engine";
 import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/intel";
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
-import { type HttpCache, MissingTokenError, RateLimitError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
+import { type HttpCache, MissingTokenError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
 import { type PlanContextLike, checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, missingToolchains, onPath, recommendedRank, selectOpportunity, toolchainWarning } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
@@ -168,8 +168,28 @@ function effortArgument(value: string): Effort {
   throw new InvalidArgumentError(`Expected one of ${EFFORTS.join(", ")}, got "${value}"`);
 }
 
+/** A whole number of at least `min`. Checked by commander, so a bad value is a usage error (exit 2). */
+function wholeNumberArgument(min: number): (value: string) => string {
+  return (value) => {
+    if (!Number.isInteger(Number(value)) || Number(value) < min) throw new InvalidArgumentError(`Expected a whole number >= ${min}, got "${value}"`);
+    return value;
+  };
+}
+
+function likeArgument(value: string): string {
+  if (!onGitHub(repoArgument(value))) throw new InvalidArgumentError(`--like reads repositories on GitHub only, got "${value}"`);
+  return value;
+}
+
+function costArgument(value: string): number {
+  const usd = Number(value);
+  if (!Number.isFinite(usd) || usd <= 0) throw new InvalidArgumentError(`Expected a positive number of dollars, got "${value}"`);
+  return usd;
+}
+
 function explainFailure(error: unknown, runtime: Runtime): string {
-  if (error instanceof RateLimitError) {
+  // By name: intel throws a RateLimitError class of its own, which instanceof the one from sources misses.
+  if (error instanceof Error && error.name === "RateLimitError") {
     const hint = runtime.env.GITHUB_TOKEN || runtime.env.GH_TOKEN ? "Try again after the reset." : "Set GITHUB_TOKEN or run `gh auth login` for a much higher limit.";
     return `${error.message}. ${hint}`;
   }
@@ -255,17 +275,17 @@ export function buildProgram(runtime: Runtime): Command {
     .option("-l, --language <name>", "programming language (repeatable)", collect)
     .option("-t, --topic <name>", "GitHub topic (repeatable)", collect)
     .option("-k, --keyword <text>", "words to search for (repeatable)", collect)
-    .option("--min-stars <n>", "minimum stars")
-    .option("--max-stars <n>", "maximum stars")
-    .option("--pushed-within <days>", "only repositories pushed in the last N days")
-    .option("--created-within <days>", "only repositories created in the last N days")
+    .option("--min-stars <n>", "minimum stars", wholeNumberArgument(0))
+    .option("--max-stars <n>", "maximum stars", wholeNumberArgument(0))
+    .option("--pushed-within <days>", "only repositories pushed in the last N days", wholeNumberArgument(1))
+    .option("--created-within <days>", "only repositories created in the last N days", wholeNumberArgument(1))
     .option("--license <spdx>", "require this license, e.g. mit or apache-2.0")
     .option("--include-archived", "keep archived repositories")
     .option("--include-forks", "keep forks")
     .option("--exclude-owner <owner>", "skip this owner (repeatable)", collect)
-    .option("--like <repo>", "find repositories similar to owner/name")
-    .option("-n, --limit <n>", "how many results", "10")
-    .option("--seed <n>", "random seed, makes the explore goal reproducible")
+    .option("--like <repo>", "find repositories similar to owner/name", likeArgument)
+    .option("-n, --limit <n>", "how many results", wholeNumberArgument(1), "10")
+    .option("--seed <n>", "random seed, makes the explore goal reproducible", wholeNumberArgument(0))
     .option("--json", "print JSON instead of text")
     .option("-v, --verbose", "show progress and rate limits on stderr")
     .action(async (goal: Goal | undefined, options: DiscoverOptions & { json?: boolean; verbose?: boolean }) => {
@@ -421,7 +441,7 @@ export function buildProgram(runtime: Runtime): Command {
     .option("--report <file>", "reuse a report saved by `analyze --json --out` instead of analyzing again")
     .option("--opportunity <id>", "work on this opportunity: its id from the report, or its rank in the list")
     .option("--issue <n>", "work on the opportunity for this issue number")
-    .option("--max-cost <usd>", "spending cap for the agent run in dollars (default: the engine's own limit, 10). A run that stops at the cap leaves nothing to publish")
+    .option("--max-cost <usd>", "spending cap for the agent run in dollars (default: the engine's own limit, 10). A run that stops at the cap leaves nothing to publish", costArgument)
     .option("--workdir <dir>", "where the engine keeps runs and clones (default: $GITGOBLIN_WORKDIR or ~/.gitgoblin)")
     .option("--model <id>", "model for the engine")
     .option("--effort <level>", `effort for the engine, one of ${EFFORTS.join(", ")}`, effortArgument)
@@ -437,7 +457,7 @@ export function buildProgram(runtime: Runtime): Command {
     )
     .option("--install-browsers", "after the install, download the browsers a Playwright test suite needs, with the project's own Playwright, from Playwright's servers (off by default; the run says when the tests need them)")
     .option("-g, --goal <goal>", "discovery goal used for hints", goalArgument, "contribute")
-    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: string; workdir?: string; model?: string; effort?: Effort; checkIsolation?: CheckIsolation; installNetwork?: InstallNetwork; installBrowsers?: boolean; goal: Goal }) => {
+    .action(async (ref: RepoRef, options: { report?: string; opportunity?: string; issue?: string; maxCost?: number; workdir?: string; model?: string; effort?: Effort; checkIsolation?: CheckIsolation; installNetwork?: InstallNetwork; installBrowsers?: boolean; goal: Goal }) => {
       if (!runtime.canPrompt) {
         throw new Error("contribute needs an interactive terminal: it asks before running an agent and again before publishing anything.");
       }
@@ -445,8 +465,7 @@ export function buildProgram(runtime: Runtime): Command {
       const missing = [intel ? undefined : "@gitgoblin/intel", engine ? undefined : "@gitgoblin/engine"].filter((name): name is string => name !== undefined);
       if (!intel || !engine) throw new Error(`contribute needs ${missing.join(" and ")}, not available in this install.`);
       // The engine's default is the cap a real run needs; the two live runs so far cost $1 to $2 for orientation alone.
-      const maxCostUsd = options.maxCost === undefined ? (engine.DEFAULT_LIMITS?.maxCostUsd ?? 10) : Number(options.maxCost);
-      if (!(maxCostUsd > 0)) throw new Error("--max-cost must be a positive number of dollars");
+      const maxCostUsd = options.maxCost ?? engine.DEFAULT_LIMITS?.maxCostUsd ?? 10;
       const workdir = resolveWorkdir(runtime, options.workdir);
       if (options.issue !== undefined && options.opportunity !== undefined) throw new Error("Give either --issue or --opportunity, not both.");
 
