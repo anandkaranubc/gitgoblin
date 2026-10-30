@@ -138,6 +138,10 @@ test that could not load without an OS sandbox. This is the same release.
 - The discover tool's `like` repository goes through the same public-only check as every other
   repository. Before, discovery read it with the person's token, so a private repository's
   description could reach the search queries and its name ecosyste.ms.
+- The discover tool says when its ranking may be partial: refused searches and failed lookups are
+  listed after the results and in a `warnings` field. Before, they went only to the server's log.
+- The briefing tool finds a stale pull request by its number (`issue_number: 663` for "Revive PR
+  #663"). Before, only issue numbers matched.
 - The `gitgoblin contribute` command a briefing suggests for a GitLab or Codeberg repository keeps
   its host, so it no longer points at the GitHub repository with the same name.
 

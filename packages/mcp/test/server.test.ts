@@ -256,6 +256,41 @@ describe("server", () => {
     }
   });
 
+  it("briefs a stale pull request by its number, which has no issue", async () => {
+    const base = fixtureReport.opportunities[0]!;
+    const stale = { ...base, id: "opp-5ta1e663", kind: "stale_pr" as const, title: "Revive PR #663: add retry_unless_exception_cause_type", issue: undefined, evidence: [{ ...base.evidence[0]!, kind: "pull_request" as const, locator: "https://github.com/jd/tenacity/pull/663" }] };
+    const report = { ...fixtureReport, opportunities: [...fixtureReport.opportunities, stale] };
+    const { deps } = fakeDeps({ analyze: async () => report });
+    const { client } = await connect(deps);
+    const result = await client.callTool({ name: "get_opportunity", arguments: { repository: "jd/tenacity", issue_number: 663 } });
+    expect(result.isError).toBeFalsy();
+    expect(textOf(result)).toContain("Revive PR #663");
+    const missing = await client.callTool({ name: "get_opportunity", arguments: { repository: "jd/tenacity", issue_number: 99_999 } });
+    expect(textOf(missing)).toContain("opp-5ta1e663 (#663): Revive PR #663");
+  });
+
+  it("says when a ranking is partial because searches were refused", async () => {
+    const { deps } = fakeDeps();
+    deps.openDiscovery = async (onProgress) => ({
+      discover: async () => {
+        onProgress("search: 3 searches");
+        onProgress("warning: search failed: GitHub search rate limit reached");
+        onProgress("warning: search failed: GitHub search rate limit reached");
+        return [sampleResult()];
+      },
+      explain: async () => undefined,
+      close: () => {},
+    });
+    const { client } = await connect(deps);
+    const result = await client.callTool({ name: "discover_repositories", arguments: {} });
+    expect(textOf(result)).toContain("Warnings, so this ranking may be incomplete:\n- search failed: GitHub search rate limit reached");
+    expect((result.structuredContent as { warnings: string[] }).warnings).toEqual(["search failed: GitHub search rate limit reached"]);
+    const clean = await connect(fakeDeps().deps);
+    const quiet = await clean.client.callTool({ name: "discover_repositories", arguments: {} });
+    expect((quiet.structuredContent as { warnings: string[] }).warnings).toEqual([]);
+    expect(textOf(quiet)).not.toContain("Warnings");
+  });
+
   it("re-analyzes when the cached report is missing or stale and lists what exists for a bad id", async () => {
     let clock = 1_000_000;
     const { deps, recorded } = fakeDeps({ now: () => clock });
