@@ -26,6 +26,13 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   the GitHub repository with the same owner and name when given a GitLab or Codeberg one: `explain`
   and `--like` say they read GitHub only, and `analyze` goes without hints. Commands `gitgoblin`
   suggests for such a repository keep its host, so they no longer point at GitHub.
+- `contribute` stops for a person when the agent says its change is not finished, instead of
+  preparing a pull request because the checks passed and the reviewer approved the half-done work.
+- The run's time limit holds: no agent session starts once the run is past it, and an agent
+  session that resumes after a dropped connection, or wraps up after running out of turns, gets
+  what is left of its time rather than starting the clock again.
+- `gitgoblin-engine publish` asks for confirmation with the title publishing sends (the one in
+  `delivery.json`), not the one in `pr-title.txt`, which publishing does not read.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
