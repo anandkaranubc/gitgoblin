@@ -101,7 +101,7 @@ export function cliFlagsInDocs(code: string, commands: string[]): { flag: string
 
 const FLAG_DEFINITIONS = [
   /add_argument\(\s*(?:["'][^"']+["']\s*,\s*)*["']--([a-zA-Z][\w-]*)["']/g, // argparse, any number of short aliases first
-  /(?:click|typer|app|cli|group|command)\.(?:option|argument)\(\s*(?:["'][^"']+["']\s*,\s*)*["']--([a-zA-Z][\w-]*)/g, // click, decorator or assigned, flag on any line
+  /(?:click|typer|app|cli|group|command)\.(?:option|argument)\(\s*(?:["'][^"']+["']\s*,\s*)*["']--([a-zA-Z][\w-]*)(?:[ \t]*\/[ \t]*--([a-zA-Z][\w-]*))?/g, // click, decorator or assigned, flag on any line; "--x/--no-x" defines both
   /\.(?:option|requiredOption)\(\s*["'](?:-\w,\s*)?--([a-zA-Z][\w-]*)/g, // commander
   /\.(?:option|options)\(\s*["']([a-zA-Z][\w-]*)["']/g, // yargs
   /Flags\(\)\.\w+(?:VarP?|P)?\([^,]{0,200},\s*"([a-zA-Z][\w-]*)"/g, // cobra/pflag (name is 2nd arg for Var forms)
@@ -113,7 +113,9 @@ const FLAG_DEFINITIONS = [
 
 export function cliFlagsInCode(text: string): Set<string> {
   const flags = new Set<string>();
-  for (const re of FLAG_DEFINITIONS) for (const m of text.matchAll(re)) flags.add(m[1]!.toLowerCase().replace(/_/g, "-"));
+  for (const re of FLAG_DEFINITIONS) for (const m of text.matchAll(re)) for (const f of m.slice(1)) if (f) flags.add(f.toLowerCase().replace(/_/g, "-"));
+  // argparse's BooleanOptionalAction adds --no-<name> beside --<name>.
+  for (const m of text.matchAll(/add_argument\(\s*(?:["'][^"']+["']\s*,\s*)*["']--([a-zA-Z][\w-]*)["'][^)]{0,300}?BooleanOptionalAction/g)) flags.add(`no-${m[1]!.toLowerCase().replace(/_/g, "-")}`);
   // clap derive: `#[arg(long)]` followed by a field name.
   for (const m of text.matchAll(/#\[(?:arg|clap)\([^)\n]{0,200}\blong\b[^)\n]{0,200}\)\][ \t\r\n]{0,200}(?:pub[ \t]+)?(\w+)[ \t]*:/g)) flags.add(m[1]!.toLowerCase().replace(/_/g, "-"));
   return flags;
@@ -121,7 +123,8 @@ export function cliFlagsInCode(text: string): Set<string> {
 
 /** Package install commands shown in a README (pip, npm, cargo, go and friends), with the package named. */
 export function installCommands(readme: string): { tool: string; name: string; index: number }[] {
-  return [...readme.matchAll(/\b(pip|pip3|uv pip|pipx|uv tool|npm|pnpm|yarn|bun|cargo|go)[ \t]{1,10}(?:install|add|get)[ \t]{1,10}(?:-[-\w]{0,40}[ \t]{1,10}){0,10}([@\w][\w./@-]{0,200})/g)].map((m) => ({ tool: m[1]!, name: m[2]!.replace(/\[.*$/, "").replace(/[@=<>~^].*$/, (s) => (s.startsWith("@") && m[2]!.startsWith("@") ? s : "")) , index: m.index! }));
+  // The value of -r, -c and -e (a requirements file, a constraints file, a path or URL) is not a package name.
+  return [...readme.matchAll(/\b(pip|pip3|uv pip|pipx|uv tool|npm|pnpm|yarn|bun|cargo|go)[ \t]{1,10}(?:install|add|get)[ \t]{1,10}(?:-(?![rce][ \t]|-(?:requirement|constraint|editable)\b)[-\w]{0,40}[ \t]{1,10}){0,10}([@\w][\w./@-]{0,200})/g)].filter((m) => !/\.txt$/i.test(m[2]!)).map((m) => ({ tool: m[1]!, name: m[2]!.replace(/\[.*$/, "").replace(/[@=<>~^].*$/, (s) => (s.startsWith("@") && m[2]!.startsWith("@") ? s : "")) , index: m.index! }));
 }
 
 export const docsDriftAnalyzer: Analyzer = {
