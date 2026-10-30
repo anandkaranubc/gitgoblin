@@ -51,7 +51,7 @@ Ranks repositories for a goal and says why. Goals: `contribute`, `learn`,
 | `--include-archived`, `--include-forks` | Keep archived repositories or forks. |
 | `--exclude-owner <owner>` | Skip an owner. Repeatable. |
 | `--like <repo>` | "More like this": uses the seed's topics, package keywords or description instead of the goal's search slices. |
-| `-n, --limit <n>` | Results to show (default 10, max 100). |
+| `-n, --limit <n>` | Results to show (default 10, max 48). |
 | `--seed <n>` | Random seed; makes `explore` reproducible. The seed used is printed on stderr. |
 | `--json` | JSON instead of text. |
 | `-v, --verbose` | Progress and GitHub rate limits on stderr. |
@@ -216,10 +216,10 @@ TypeScript from `node_modules` and the sibling packages are not published on the
 own. The installed package has no dependencies, so `discover`, `explain` and
 `analyze` work straight after install.
 
-The engine is a separate chunk that loads only for `contribute` and `publish`,
-because it imports the Claude Agent SDK. The SDK is not bundled: its licence does
+The engine is a separate chunk that loads only for `contribute`, `publish` and
+`clean`, because it imports the Claude Agent SDK. The SDK is not bundled: its licence does
 not allow redistribution, and its platform binary is several hundred megabytes. It
-is an optional peer dependency instead. Without it, those two commands print the
+is an optional peer dependency instead. Without it, those three commands print the
 install line:
 
 ```sh

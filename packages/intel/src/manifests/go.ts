@@ -10,9 +10,7 @@ export async function readGoManifest(inventory: FileInventory, read: Reader): Pr
   const module = /^module\s+(\S+)/m.exec(text)?.[1];
   const goVersion = /^go\s+(\d+\.\d+(?:\.\d+)?)/m.exec(text)?.[1];
   const dependencies: Dependency[] = [];
-  const blocks = text.matchAll(/^require\s*\(([^)]*)\)/gms);
-  const lines: string[] = [];
-  for (const block of blocks) lines.push(...block[1]!.split("\n"));
+  const lines = requireBlockLines(text);
   for (const single of text.matchAll(/^require\s+(\S+\s+\S+)/gm)) lines.push(single[1]!);
   for (const raw of lines) {
     const line = raw.trim();
@@ -27,4 +25,28 @@ export async function readGoManifest(inventory: FileInventory, read: Reader): Pr
   const paths = ["go.mod"];
   if (inventory.byPath.has("go.sum")) paths.push("go.sum");
   return { paths, module, goVersion, dependencies, hasMainPackage, tooling };
+}
+
+/**
+ * The lines inside go.mod's `require ( ... )` blocks. Read line by line: a pattern like
+ * `^require\s*\(([^)]*)\)` rescans to the end of the file from every unclosed `require (`.
+ */
+export function requireBlockLines(text: string): string[] {
+  const lines: string[] = [];
+  let start = -1; // where the open block's lines begin in `lines`
+  for (const line of text.split("\n")) {
+    let rest = line;
+    if (start < 0) {
+      const open = /^require\s*\(/.exec(line);
+      if (!open) continue;
+      start = lines.length;
+      rest = line.slice(open[0].length);
+    }
+    const close = rest.indexOf(")");
+    lines.push(close < 0 ? rest : rest.slice(0, close));
+    if (close >= 0) start = -1;
+  }
+  // A block that never closes is dropped, as before: Go rejects that file.
+  if (start >= 0) lines.length = start;
+  return lines;
 }

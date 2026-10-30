@@ -67,6 +67,8 @@ export interface SdkRunnerOptions {
   readRoots?: string[];
   /** Directories outside the workspace the agent's shell may write, such as the run's toolchain prefix. */
   extraWrite?: string[];
+  /** The run's own temp directory, used instead of the shared ones when sandboxed. */
+  tmp?: string;
   onToolUse?: (phase: string, tool: string, summary: string) => void;
   onMessage?: (phase: string, message: SDKMessage) => void;
   /** The SDK's query function; tests substitute a scripted one. */
@@ -92,11 +94,13 @@ const RESUME_PROMPT =
 export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
   const isolation = opts.isolation ?? "sandbox";
   // The agent's shell has no network inside the sandbox; package managers should know it.
-  const env = { ...(opts.env ?? scrubEnv()), ...(isolation === "sandbox" ? OFFLINE_ENV : {}) };
+  const tmp = isolation === "sandbox" && opts.tmp ? { TMPDIR: opts.tmp, TMP: opts.tmp, TEMP: opts.tmp } : {};
+  const env = { ...(opts.env ?? scrubEnv()), ...(isolation === "sandbox" ? OFFLINE_ENV : {}), ...tmp };
   const costs = new SessionCostTracker();
   const run = opts.query ?? query;
 
-  async function runOnce<T>(spec: PhaseSpec<T>, prompt: string, overrides: Partial<Options>): Promise<PhaseResult<T> & { needsWrapUp: boolean; interrupted: boolean }> {
+  /** `endsAt` is the phase's deadline: a resume or a wrap-up continues the phase, it does not get a fresh one. */
+  async function runOnce<T>(spec: PhaseSpec<T>, prompt: string, overrides: Partial<Options>, endsAt?: number): Promise<PhaseResult<T> & { needsWrapUp: boolean; interrupted: boolean }> {
     const denials: PhaseResult<T>["denials"] = [];
     const guard: GuardContext = {
       workspace: opts.workspace,
@@ -108,12 +112,13 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
     const tools = toolsFor(spec.profile);
     const abortController = new AbortController();
     let timedOut = false;
-    const deadline = spec.timeoutMs
-      ? setTimeout(() => {
-          timedOut = true;
-          abortController.abort();
-        }, spec.timeoutMs)
-      : undefined;
+    const deadline =
+      endsAt !== undefined
+        ? setTimeout(() => {
+            timedOut = true;
+            abortController.abort();
+          }, endsAt - Date.now())
+        : undefined;
     const options: Options = {
       abortController,
       cwd: opts.workspace,
@@ -131,7 +136,7 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
       ...(spec.model ?? opts.model ? { model: spec.model ?? opts.model } : {}),
       ...(spec.effort ? { effort: spec.effort } : {}),
       ...(spec.resume ? { resume: spec.resume } : {}),
-      ...(isolation === "sandbox" ? { sandbox: sandboxSettings(opts.workspace, spec.profile, opts.extraWrite ?? []) } : {}),
+      ...(isolation === "sandbox" ? { sandbox: sandboxSettings(opts.workspace, spec.profile, opts.extraWrite ?? [], opts.tmp) } : {}),
       ...overrides,
     };
 
@@ -211,15 +216,17 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
 
   return {
     async run<T>(spec: PhaseSpec<T>): Promise<PhaseResult<T>> {
-      let first = await runOnce(spec, spec.prompt, {});
-      if (!first.ok && first.interrupted && first.sessionId) {
+      const endsAt = spec.timeoutMs ? Date.now() + spec.timeoutMs : undefined;
+      const timeLeft = () => endsAt === undefined || endsAt > Date.now();
+      let first = await runOnce(spec, spec.prompt, {}, endsAt);
+      if (!first.ok && first.interrupted && first.sessionId && timeLeft()) {
         // One resume after a transient failure; a second failure is reported, not retried.
-        const again = await runOnce({ ...spec, resume: first.sessionId }, RESUME_PROMPT, {});
+        const again = await runOnce({ ...spec, resume: first.sessionId }, RESUME_PROMPT, {}, endsAt);
         first = { ...combine(first, again), needsWrapUp: again.needsWrapUp, interrupted: again.interrupted };
       }
-      if (first.ok || !first.needsWrapUp || !first.sessionId) return first;
+      if (first.ok || !first.needsWrapUp || !first.sessionId || !timeLeft()) return first;
       // Out of turns or budget: give the session one tool-free chance to report its state.
-      const wrap = await runOnce({ ...spec, resume: first.sessionId }, WRAP_UP_PROMPT, { allowedTools: [], maxTurns: 2, maxBudgetUsd: 1 });
+      const wrap = await runOnce({ ...spec, resume: first.sessionId }, WRAP_UP_PROMPT, { allowedTools: [], maxTurns: 2, maxBudgetUsd: 1 }, endsAt);
       return combine(first, wrap);
     },
   };

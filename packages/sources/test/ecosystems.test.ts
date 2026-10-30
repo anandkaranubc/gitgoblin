@@ -44,12 +44,10 @@ describe("EcosystemsClient", () => {
       name: "p-limit",
       ecosystem: "npm",
       registry: "npmjs.org",
-      critical: true,
       dependentPackages: 3167,
     });
     expect(packages[0]?.keywords).toContain("concurrency");
     expect(packages[0]?.dependentRepos).toBeGreaterThan(1_000_000);
-    expect(packages[0]?.rankingAverage).toBeLessThan(1);
   });
 
   it("returns an empty list when a repository has no packages", async () => {

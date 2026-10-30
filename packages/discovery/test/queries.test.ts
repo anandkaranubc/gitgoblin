@@ -19,6 +19,11 @@ describe("buildSearchPlans", () => {
     expect(plans.some((p) => p.q.includes("language:Go"))).toBe(true);
   });
 
+  it("searches archived repositories too for revive, where forking an archived project is the point", () => {
+    expect(buildSearchPlans({ goal: "revive" }, context).every((p) => !p.q.includes("archived:"))).toBe(true);
+    expect(buildSearchPlans({ goal: "adopt" }, context).every((p) => p.q.includes("archived:false"))).toBe(true);
+  });
+
   it("lets user star bounds override the goal's defaults", () => {
     const [plan] = buildSearchPlans({ goal: "learn", filters: { minStars: 50, maxStars: 500 } }, context);
     expect(plan?.q).toContain("stars:50..500");

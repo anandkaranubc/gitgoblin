@@ -22,8 +22,15 @@ function send(message: ChildMessage): Promise<void> {
   });
 }
 
-/** Runs in the analysis child: wait for the task, analyze, send progress and the result, exit. */
-export async function runAnalysisChild(): Promise<void> {
+/** Runs in the analysis child: wait for the task, analyze, send progress and the result, exit. `analyze` is for tests. */
+export async function runAnalysisChild(analyze: typeof analyzeRepository = analyzeRepository): Promise<void> {
+  // The server went away without stopping this analysis (killed, or crashed): stop too, and take git along.
+  process.once("disconnect", () => {
+    try {
+      if (process.platform !== "win32") process.kill(-process.pid, "SIGKILL"); // the child leads its own process group
+    } catch {}
+    process.exit(1);
+  });
   // Anything a library prints goes to stderr; the parent forwards it to its own stderr.
   console.log = console.info = console.debug = (...args: unknown[]) => console.error(...args);
   const task = await new Promise<unknown>((resolve) => process.once("message", (message: { task?: unknown }) => resolve(message?.task)));
@@ -32,7 +39,7 @@ export async function runAnalysisChild(): Promise<void> {
     process.exit(1);
   }
   try {
-    const report = await analyzeRepository(task.ref, {
+    const report = await analyze(task.ref, {
       ...task.options,
       cacheDir: task.cacheDir,
       log: (message: string) => void send({ type: "log", message }),

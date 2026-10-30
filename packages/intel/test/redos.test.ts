@@ -6,7 +6,7 @@
  * inputs at GitHub's issue-body limit and fails if any call takes longer than the ceiling.
  */
 import { describe, expect, it } from "vitest";
-import { CEILING_MS, FUNCTIONS, inputs } from "./redos-cases.ts";
+import { CEILING_MS, FILE_CASES, FILE_SIZE, FUNCTIONS, inputs } from "./redos-cases.ts";
 
 describe("text processing on hostile input", () => {
   for (const [name, fn] of FUNCTIONS) {
@@ -28,6 +28,22 @@ describe("text processing on hostile input", () => {
         if (ms > CEILING_MS) slow.push(`${label}: ${Math.round(ms)} ms`);
       }
       expect(slow).toEqual([]);
+    }, 600_000);
+  }
+});
+
+describe("text processing on hostile repository files", () => {
+  for (const [name, fn, unit] of FILE_CASES) {
+    it(`${name} stays under ${CEILING_MS} ms on ${FILE_SIZE / 1024} KB of ${JSON.stringify(unit)}`, () => {
+      const text = unit.repeat(Math.ceil(FILE_SIZE / unit.length)).slice(0, FILE_SIZE);
+      const time = () => {
+        const started = performance.now();
+        fn(text);
+        return performance.now() - started;
+      };
+      let ms = time();
+      if (ms > CEILING_MS) ms = Math.min(ms, time());
+      expect(Math.round(ms)).toBeLessThan(CEILING_MS);
     }, 600_000);
   }
 });

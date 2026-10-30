@@ -17,8 +17,9 @@ class FakeGitHub implements GitHubSource {
   }
   async searchRepositories(q: string, _options?: SearchOptions): Promise<SearchResult> {
     this.searches.push(q);
-    // Every plan returns everything; the engine must dedupe.
-    return { total: this.repos.length, items: this.repos };
+    // Every plan returns everything it qualifies for; the engine must dedupe.
+    const items = q.split(" ").includes("archived:false") ? this.repos.filter((r) => !r.archived) : this.repos;
+    return { total: items.length, items };
   }
   async getRepository(ref: RepoRef): Promise<RepoFacts | undefined> {
     return this.repos.find((r) => repoId(r) === repoId(ref));
@@ -103,6 +104,15 @@ describe("DiscoveryEngine.discover", () => {
     expect(broken?.evidence.contributors).toBeUndefined();
     expect(events.some((e) => e.stage === "warning" && e.message.includes("ecosyste.ms is down"))).toBe(true);
     expect(results.every((r) => r.issues === undefined)).toBe(true);
+  });
+
+  it("returns at most as many results as it enriches, and says so when asked for more", async () => {
+    const many = Array.from({ length: 120 }, (_, i) => facts({ owner: `o${i}`, name: `n${i}`, stars: 1000 + i }));
+    const { engine, events } = makeEngine(new FakeGitHub(many, false));
+    expect(await engine.discover({ goal: "learn", limit: 30 })).toHaveLength(30);
+    expect(events.some((e) => e.stage === "warning")).toBe(false);
+    expect(await engine.discover({ goal: "learn", limit: 60 })).toHaveLength(48);
+    expect(events.filter((e) => e.stage === "warning").map((e) => e.message)).toEqual(["showing 48 results, the most one search returns; 60 were asked for"]);
   });
 
   it("surfaces dormant projects for revive and excludes active ones", async () => {
