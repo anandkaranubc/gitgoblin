@@ -13,6 +13,12 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   a `screen` or `tmux` server keeps the FIFO or socket it takes commands from, or to the one every
   Claude Code session of yours shares (`/tmp/claude-<uid>`). It gets the run's temp directory and a
   short one of its own that is removed when the run ends. This closes the gap 0.1.3 left open.
+- `contribute` checks a change for edited test and build configuration, CI workflows, secret files
+  and binary files by name, and a renamed file or a name with non-ASCII letters slipped past those
+  checks. Moving `tests/helpers.py` to `tests/conftest.py`, or adding `tests/ünï/conftest.py`, let
+  the agent's code run on your machine in the verification step; `.github/workflows/rélease.yml`, a
+  `.env` made by renaming, or an image named `ïmage.png` went through unflagged. Both names of a
+  renamed file are now checked, and every name as it is on disk.
 
 **Other changes**
 
