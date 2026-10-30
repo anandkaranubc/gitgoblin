@@ -42,6 +42,15 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   what is left of its time rather than starting the clock again.
 - `gitgoblin-engine publish` asks for confirmation with the title publishing sends (the one in
   `delivery.json`), not the one in `pr-title.txt`, which publishing does not read.
+- Files the project's install and test commands leave behind that the repository does not ignore,
+  such as Python's `__pycache__`, coverage reports or `.tsbuildinfo`, are no longer added to the
+  change. Before, a Python project without `__pycache__` in its `.gitignore` stopped a correct fix
+  with "adds binary files", and text output could be committed without a word. Checks also run with
+  `PYTHONDONTWRITEBYTECODE=1`.
+- `gitgoblin-engine publish` no longer refuses with "uncommitted changes: ?? node_modules/" in a
+  repository that does not ignore `node_modules`, or over the files above.
+- Cleaning a run whose setup failed after cloning (an empty repository, a failed checkout) now
+  removes the clone.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
