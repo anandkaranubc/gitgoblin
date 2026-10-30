@@ -82,7 +82,7 @@ function describe(name: SignalName, repo: EnrichedRepo, _signals: Signals, evide
       const when = days === undefined ? "unknown" : formatDays(days);
       const prs = evidence.pullRequestsLastYear;
       const extra = prs !== undefined && prs > 0 ? `, ${formatCount(prs)} pull requests in the past year` : "";
-      return inverted ? `last change ${when}${extra}` : `last change ${when}${extra}`;
+      return `last change ${when}${extra}`;
     }
     case "responsiveness": {
       const parts: string[] = [];

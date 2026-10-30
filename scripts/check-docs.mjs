@@ -7,7 +7,8 @@ import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
 const root = resolve(process.argv[2] ?? ".");
-const skipDirs = new Set(["node_modules", "dist", "coverage", ".git", ".remember", ".cache"]);
+// .worktrees holds other branches' checkouts (AGENTS.md), which are checked on their own branches.
+const skipDirs = new Set(["node_modules", "dist", "coverage", ".git", ".remember", ".cache", ".worktrees"]);
 
 function* markdownFiles(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

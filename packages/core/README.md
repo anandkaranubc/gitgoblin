@@ -18,6 +18,7 @@ parseRepoRef("rails/rails");                                  // github.com by d
 parseRepoRef("https://gitlab.com/inkscape/inkscape/-/issues"); // URLs, with or without .git
 parseRepoRef("git@codeberg.org:forgejo/forgejo.git");          // ssh remotes
 parseRepoRef("not a repo");                                    // undefined
+parseRepoRef("https://gitlab.com/group/subgroup/project");     // undefined: one owner per RepoRef
 ```
 
 `host` is always a hostname, never an enum, so self-hosted forges work without

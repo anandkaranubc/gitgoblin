@@ -120,6 +120,26 @@ describe("HttpClient resilience", () => {
     expect(events.filter((e) => e.type === "retry")).toHaveLength(0);
   });
 
+  it("retries a body that breaks off mid-stream and falls back to a stale copy", async () => {
+    const clock = virtualClock();
+    const broken = () =>
+      new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"n":'));
+          controller.error(new TypeError("terminated"));
+        },
+      }), { status: 200 });
+    const { fetch, calls } = fetchStub((_call, i) => (i === 0 ? jsonResponse({ n: 1 }) : broken()));
+    const { client, events } = makeClient(fetch, clock);
+
+    await client.json(URL_A, { ttlMs: 10 });
+    clock.advance(100);
+    expect(await client.json(URL_A, { ttlMs: 10 })).toEqual({ n: 1 });
+    expect(calls).toHaveLength(4);
+    expect(events.filter((e) => e.type === "retry")).toHaveLength(2);
+    expect(events.at(-1)?.type).toBe("stale");
+  });
+
   it("surfaces network failures when nothing is cached", async () => {
     const { fetch } = fetchStub(() => {
       throw new TypeError("fetch failed");
@@ -154,6 +174,42 @@ describe("HttpClient resilience", () => {
     const { client } = makeClient(fetch, virtualClock(), { maxConcurrency: 2 });
     await Promise.all([1, 2, 3, 4, 5].map((i) => client.json(`${URL_A}?i=${i}`)));
     expect(peak).toBe(2);
+  });
+
+  it("hands a freed slot to the waiting request, not to one that arrives later", async () => {
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+    // C starts `hops` microtasks after A finishes; one of these offsets lands between A freeing its
+    // slot and the queued B resuming, which is when a late arrival could jump the queue.
+    for (let hops = 0; hops < 30; hops++) {
+      let active = 0;
+      let peak = 0;
+      const pending: Array<() => void> = [];
+      const { fetch } = fetchStub(() => new Promise<Response>((resolve) => {
+        peak = Math.max(peak, ++active);
+        pending.push(() => {
+          active--;
+          resolve(jsonResponse({}));
+        });
+      }));
+      const { client } = makeClient(fetch, virtualClock(), { maxConcurrency: 1 });
+      const a = client.json(`${URL_A}?a`);
+      await tick();
+      const b = client.json(`${URL_A}?b`);
+      await tick();
+      let c: Promise<unknown> | undefined;
+      const late = (async () => {
+        for (let i = 0; i < hops; i++) await null;
+        c = client.json(`${URL_A}?c`);
+      })();
+      pending.shift()?.();
+      for (let i = 0; i < 5; i++) {
+        await tick();
+        while (pending.length) pending.shift()?.();
+      }
+      await Promise.all([a, b, late]);
+      await c;
+      expect({ hops, peak }).toEqual({ hops, peak: 1 });
+    }
   });
 });
 

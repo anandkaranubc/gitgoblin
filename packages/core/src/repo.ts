@@ -66,6 +66,9 @@ export function toRepoRef(ref: RepoRef): RepoRef {
 }
 
 const SEGMENT = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$|^[A-Za-z0-9]$/;
+// Repository names may also start with "." or "_" (".github", "_site") and end with "_"; never "-"
+// first (git and ssh would read an option), and the last character rules out "." and "..".
+const NAME = /^[A-Za-z0-9._][A-Za-z0-9._-]*[A-Za-z0-9_]$|^[A-Za-z0-9_]$/;
 
 function stripGitSuffix(name: string): string {
   return name.endsWith(".git") ? name.slice(0, -4) : name;
@@ -77,15 +80,24 @@ function stripGitSuffix(name: string): string {
  */
 const LABEL = String.raw`[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?`;
 const HOSTNAME = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})+$`);
+// URLs and the system resolver read a host whose last label is a number as an IPv4 address, in hex
+// and octal too: "0x7f.1" and "017.0.0.1" are 127.0.0.1, "example.123" is no name at all.
+const NUMERIC_LAST_LABEL = /(?:^|\.)(?:\d+|0x[\da-f]*)$/i;
 
 export function isForgeHost(host: string): boolean {
-  return HOSTNAME.test(host) && !/^[\d.]+$/.test(host);
+  return HOSTNAME.test(host) && !NUMERIC_LAST_LABEL.test(host);
+}
+
+/** gitlab.com and self-hosted instances named like gitlab.gnome.org. */
+function isGitLab(host: string): boolean {
+  const clean = normalizeHost(host);
+  return clean === "gitlab.com" || clean.startsWith("gitlab.");
 }
 
 function fromSegments(host: string, owner: string, name: string): RepoRef | undefined {
   const cleanName = stripGitSuffix(name);
   const cleanHost = normalizeHost(host);
-  if (!isForgeHost(cleanHost) || !SEGMENT.test(owner) || !SEGMENT.test(cleanName)) return undefined;
+  if (!isForgeHost(cleanHost) || !SEGMENT.test(owner) || !NAME.test(cleanName)) return undefined;
   return { host: cleanHost, owner, name: cleanName };
 }
 
@@ -115,7 +127,15 @@ export function parseRepoRef(input: string, defaultHost = "github.com"): RepoRef
     // silently from a RepoRef, so such URLs are refused instead of half-understood.
     if (!["http:", "https:", "ssh:", "git:", "git+ssh:"].includes(url.protocol)) return undefined;
     if (url.port || url.password || (url.username && url.protocol !== "ssh:" && url.protocol !== "git+ssh:")) return undefined;
-    const [owner, name] = url.pathname.split("/").filter(Boolean);
+    const segments = url.pathname.split("/").filter(Boolean);
+    // GitLab nests projects in subgroups ("group/sub/project") and puts project pages after "/-/". A
+    // RepoRef has one owner, so a deeper project is refused instead of cut down to its group.
+    // shortcut: only hosts named gitlab.* are known to be GitLab; support subgroups if callers need them.
+    if (isGitLab(url.hostname)) {
+      const dash = segments.indexOf("-");
+      if ((dash === -1 ? segments.length : dash) > 2) return undefined;
+    }
+    const [owner, name] = segments;
     if (!owner || !name) return undefined;
     return fromSegments(url.hostname, owner, name);
   }

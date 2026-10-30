@@ -106,7 +106,7 @@ const discoverInput = z.object({
   goal: goalSchema.optional().describe(`What you want from a repository (default contribute): ${GOAL_TEXT}.`),
   languages: z.array(z.string()).max(3).optional().describe("Programming languages, up to three, for example [\"typescript\", \"rust\"]."),
   topics: z.array(z.string()).optional().describe("GitHub topics every result must carry, for example [\"cli\"]."),
-  keywords: z.array(z.string()).optional().describe("Free-text words to search for in names and descriptions."),
+  keywords: z.array(z.string()).optional().describe("Plain words to search for in names and descriptions. Search syntax such as is: or user: is refused."),
   min_stars: z.number().int().min(0).optional().describe("Minimum stars. The goal picks sensible bounds when omitted."),
   max_stars: z.number().int().min(0).optional().describe("Maximum stars, useful to escape the famous projects."),
   pushed_within_days: z.number().int().min(1).optional().describe("Only repositories pushed to in the last N days."),
@@ -121,12 +121,28 @@ const discoverInput = z.object({
 
 type DiscoverArgs = z.infer<typeof discoverInput>;
 
+/*
+ * Discovery writes these values into GitHub searches that run with the person's token, which can see
+ * their private repositories, and sends every hit's name to ecosyste.ms. A word that is search syntax
+ * (is:private, user:<org>, -term, a quote, a boolean operator) would change what is searched, so it is
+ * refused; values with spaces are safe because discovery quotes them. The license goes in unquoted.
+ */
+const SEARCH_SYNTAX = /[:"]|^-|^(?:AND|OR|NOT)$/;
+const SPDX_ID = /^[a-z0-9][a-z0-9.+-]*$/i;
+
 /** Pure mapping from tool arguments to the discovery query, so it can be tested without a server. */
 export function toQuery(args: DiscoverArgs, hosts: ReadonlySet<string> = new Set(DISCOVERY_HOSTS)): DiscoveryQuery | string {
   const list = (values: string[] | undefined) => {
     const items = (values ?? []).map((v) => v.trim()).filter(Boolean);
     return items.length > 0 ? items : undefined;
   };
+  const words = { languages: list(args.languages), topics: list(args.topics), keywords: list(args.keywords) };
+  for (const [field, values] of Object.entries(words)) {
+    const bad = values?.find((value) => SEARCH_SYNTAX.test(value));
+    if (bad !== undefined) return `${field}: "${bad}" is GitHub search syntax, which this tool does not take. Use plain words, and the tool's own filters for stars, dates, language, topic and license.`;
+  }
+  const license = args.license?.trim() || undefined;
+  if (license && !SPDX_ID.test(license)) return `license: "${license}" is not an SPDX id. Use one such as mit or apache-2.0.`;
   let seed: RepoRef | undefined;
   if (args.like !== undefined) {
     const parsed = parseRepository(args.like, hosts, DISCOVERY_REFUSAL);
@@ -134,14 +150,16 @@ export function toQuery(args: DiscoverArgs, hosts: ReadonlySet<string> = new Set
     seed = parsed;
   }
   const filters: DiscoveryFilters = {
-    languages: list(args.languages),
-    topics: list(args.topics),
-    keywords: list(args.keywords),
+    languages: words.languages,
+    topics: words.topics,
+    // Public repositories only, in the search itself, so nothing private is ever looked up on ecosyste.ms.
+    // Discovery passes a word with no spaces through as it is, which is what makes this a qualifier.
+    keywords: ["is:public", ...(words.keywords ?? [])],
     minStars: args.min_stars,
     maxStars: args.max_stars,
     pushedWithinDays: args.pushed_within_days,
     createdWithinDays: args.created_within_days,
-    licenses: args.license ? [args.license] : undefined,
+    licenses: license ? [license] : undefined,
     includeArchived: args.include_archived,
     includeForks: args.include_forks,
     excludeOwners: list(args.exclude_owners),

@@ -92,11 +92,9 @@ export interface GitHubRepoDetails {
   hasContributing: boolean;
   hasCodeOfConduct: boolean;
   issueTemplates: number;
-  pullRequestTemplates: number;
   hasIssuesEnabled: boolean;
   archived: boolean;
   license?: string | undefined;
-  diskUsageKb: number;
   starterIssues: number;
   starterIssueSamples: IssueCandidate[];
   openIssues: number;
@@ -111,18 +109,17 @@ export interface GitHubRepoDetails {
 
 const DetailsFragment = `
 fragment RepoDetails on Repository {
-  isArchived hasIssuesEnabled diskUsage
+  isArchived hasIssuesEnabled
   licenseInfo { spdxId }
   contributingGuidelines { url }
   codeOfConduct { name }
   issueTemplates { name }
-  pullRequestTemplates { filename }
   starter: issues(states: OPEN, labels: $starterLabels, first: 5, orderBy: { field: CREATED_AT, direction: DESC }) {
     totalCount
     nodes { number title url createdAt labels(first: 10) { nodes { name } } }
   }
   openIssues: issues(states: OPEN) { totalCount }
-  merged: pullRequests(states: MERGED, first: 1, orderBy: { field: UPDATED_AT, direction: DESC }) {
+  merged: pullRequests(states: MERGED, first: 5, orderBy: { field: UPDATED_AT, direction: DESC }) {
     totalCount
     nodes { mergedAt }
   }
@@ -134,12 +131,10 @@ fragment RepoDetails on Repository {
 const DetailsNodeSchema = z.object({
   isArchived: z.boolean(),
   hasIssuesEnabled: z.boolean(),
-  diskUsage: z.number().nullish(),
   licenseInfo: z.object({ spdxId: z.string().nullish() }).nullish(),
   contributingGuidelines: z.object({ url: z.string().nullish() }).nullish(),
   codeOfConduct: z.object({ name: z.string().nullish() }).nullish(),
   issueTemplates: z.array(z.unknown()).nullish(),
-  pullRequestTemplates: z.array(z.unknown()).nullish(),
   starter: z.object({
     totalCount: z.number(),
     nodes: z.array(
@@ -173,11 +168,9 @@ function toDetails(node: z.infer<typeof DetailsNodeSchema>): GitHubRepoDetails {
     hasContributing: Boolean(node.contributingGuidelines?.url),
     hasCodeOfConduct: Boolean(node.codeOfConduct?.name),
     issueTemplates: node.issueTemplates?.length ?? 0,
-    pullRequestTemplates: node.pullRequestTemplates?.length ?? 0,
     hasIssuesEnabled: node.hasIssuesEnabled,
     archived: node.isArchived,
     license: node.licenseInfo?.spdxId ?? undefined,
-    diskUsageKb: node.diskUsage ?? 0,
     starterIssues: node.starter.totalCount,
     starterIssueSamples: node.starter.nodes.map((issue) => ({
       number: issue.number,
@@ -188,7 +181,9 @@ function toDetails(node: z.infer<typeof DetailsNodeSchema>): GitHubRepoDetails {
     })),
     openIssues: node.openIssues.totalCount,
     mergedPullRequests: node.merged.totalCount,
-    lastMergedAt: node.merged.nodes[0]?.mergedAt ?? undefined,
+    // GraphQL cannot order by merge date; a pull request merged long ago and commented on since can
+    // top the UPDATED_AT order, so take the latest merge among the first few.
+    lastMergedAt: node.merged.nodes.map((pr) => pr.mergedAt ?? "").sort().at(-1) || undefined,
     commitCount: history?.totalCount ?? 0,
     lastCommitAt: history?.nodes[0]?.committedDate,
     mentionableUsers: node.mentionableUsers.totalCount,
@@ -217,6 +212,14 @@ function splittable(error: unknown): boolean {
   if (error instanceof HttpError) return error.status >= 500;
   if (error instanceof GraphQLError) return true;
   return !(error instanceof MissingTokenError);
+}
+
+/** Whether GitHub said the repository behind this alias does not exist (or is not visible). */
+function notFound(errors: unknown[], alias: string): boolean {
+  return errors.some((error) => {
+    const { type, path } = (error ?? {}) as { type?: unknown; path?: unknown };
+    return type === "NOT_FOUND" && Array.isArray(path) && path[0] === alias;
+  });
 }
 
 function isRateLimitError(error: unknown): boolean {
@@ -293,9 +296,19 @@ export class GitHubClient {
     variables: Record<string, unknown> = {},
     options: { ttlMs?: number | undefined; retries?: number | undefined } = {},
   ): Promise<T> {
+    return (await this.#graphql<T>(query, variables, options)).data;
+  }
+
+  /** graphql(), plus the errors that came with partial data and a way to drop the cached answer. */
+  async #graphql<T>(
+    query: string,
+    variables: Record<string, unknown>,
+    options: { ttlMs?: number | undefined; retries?: number | undefined },
+  ): Promise<{ data: T; errors: unknown[]; forget: () => void }> {
     if (!this.#token) throw new MissingTokenError("The GitHub GraphQL API");
     const url = `${this.#baseUrl}/graphql`;
     const body = JSON.stringify({ query, variables });
+    const forget = () => this.http.forget("POST", url, body);
     const response = await this.http.json<{ data?: T | null; errors?: unknown[] }>(url, {
       method: "POST",
       headers: this.#headers(),
@@ -304,14 +317,14 @@ export class GitHubClient {
       retries: options.retries,
     });
     if (response.data === undefined || response.data === null) {
-      this.http.forget("POST", url, body);
+      forget();
       const errors = response.errors ?? [];
       if (errors.some(isRateLimitError)) {
         throw new RateLimitError(url, JSON.stringify(errors).slice(0, 500), this.rateLimits()["graphql"]?.resetAt);
       }
       throw new GraphQLError(errors.length ? errors : [{ message: "empty response" }]);
     }
-    return response.data;
+    return { data: response.data, errors: response.errors ?? [], forget };
   }
 
   /** Rate-limit state for this host, keyed by resource ("core", "search", "graphql"). */
@@ -359,8 +372,10 @@ export class GitHubClient {
    * inaccessible repositories are left out of the map, and so are repositories whose details GitHub
    * would not compute: a batch that times out (502) or fails is split in half and asked again, down
    * to single repositories, so one heavy repository costs only its own details. After six failures in
-   * a row it stops and returns what it has. It throws when nothing could be fetched, and at once for
-   * rate limits and authentication errors. Repositories on another forge are left out too.
+   * a row it stops and returns what it has. A repository GitHub leaves out of an answer without
+   * calling it NOT_FOUND is asked for once more on its own, and that answer is not cached. It throws
+   * when nothing could be fetched, and at once for rate limits and authentication errors.
+   * Repositories on another forge are left out too.
    */
   async repoDetails(refs: RepoRef[]): Promise<Map<string, GitHubRepoDetails>> {
     refs = refs.filter((ref) => this.#ownHost(ref));
@@ -374,15 +389,22 @@ export class GitHubClient {
       const batch = pending.shift() ?? [];
       try {
         // Splitting is the retry: repeating the same heavy query would only time out again.
-        const data = await this.#detailsBatch(batch);
+        const { data, errors, forget } = await this.#detailsBatch(batch);
         fetched += 1;
         failuresInARow = 0;
+        const leftOut: RepoRef[] = [];
         batch.forEach((ref, i) => {
-          const node = data[`r${i}`];
-          if (!node) return;
-          const parsed = DetailsNodeSchema.safeParse(node);
+          const parsed = DetailsNodeSchema.safeParse(data[`r${i}`]);
           if (parsed.success) result.set(repoId(ref), toDetails(parsed.data));
+          else if (!notFound(errors, `r${i}`)) leftOut.push(ref);
         });
+        if (leftOut.length > 0) {
+          // GitHub left these out (a null node or field, usually a resource limit) without saying they
+          // do not exist: keeping that answer would hide their details for an hour. Ask once more for
+          // each on its own; a single repository is not asked twice.
+          forget();
+          if (batch.length > 1) pending.push(...leftOut.map((ref) => [ref]));
+        }
       } catch (error) {
         if (!splittable(error)) throw error;
         lastError = error;
@@ -407,7 +429,7 @@ export class GitHubClient {
     return normalizeHost(ref.host) === normalizeHost(this.host);
   }
 
-  #detailsBatch(batch: RepoRef[]): Promise<Record<string, unknown>> {
+  #detailsBatch(batch: RepoRef[]): Promise<{ data: Record<string, unknown>; errors: unknown[]; forget: () => void }> {
     const declarations = batch.map((_, i) => `$o${i}: String!, $n${i}: String!`).join(", ");
     const selections = batch.map((_, i) => `r${i}: repository(owner: $o${i}, name: $n${i}) { ...RepoDetails }`).join("\n");
     const query = `query Details(${declarations}, $starterLabels: [String!]) {\n${selections}\n}\n${DetailsFragment}`;
@@ -416,7 +438,7 @@ export class GitHubClient {
       variables[`o${i}`] = ref.owner;
       variables[`n${i}`] = ref.name;
     });
-    return this.graphql<Record<string, unknown>>(query, variables, { ttlMs: DETAILS_TTL_MS, retries: 0 });
+    return this.#graphql<Record<string, unknown>>(query, variables, { ttlMs: DETAILS_TTL_MS, retries: 0 });
   }
 
   #headers(): Record<string, string> {
