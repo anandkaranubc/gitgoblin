@@ -20,7 +20,7 @@ export interface DiscoveryEngineOptions {
   onProgress?: ((event: ProgressEvent) => void) | undefined;
   /** Results per owner before the rest are pushed down. Default 2. */
   maxPerOwner?: number | undefined;
-  /** Upper bound on candidates enriched with ecosyste.ms and GraphQL data. Default 48. */
+  /** Upper bound on candidates enriched with ecosyste.ms and GraphQL data, and so on results. Default 48. */
   maxEnriched?: number | undefined;
 }
 
@@ -51,7 +51,11 @@ export class DiscoveryEngine implements Discoverer {
 
   async discover(query: DiscoveryQuery): Promise<DiscoveryResult[]> {
     if (!isGoal(query.goal)) throw new Error(`Unknown goal "${String(query.goal)}". Expected one of: ${GOALS.join(", ")}`);
-    const limit = Math.min(MAX_LIMIT, Math.max(1, query.limit ?? DEFAULT_LIMIT));
+    const requested = Math.max(1, query.limit ?? DEFAULT_LIMIT);
+    // Only enriched candidates can be results. Enriching more would multiply ecosyste.ms lookups and
+    // GraphQL batches, which already run close to GitHub's timeout, so the limit gives way instead.
+    const limit = Math.min(MAX_LIMIT, this.#maxEnriched, requested);
+    if (requested > limit) this.#progress({ stage: "warning", message: `showing ${limit} results, the most one search returns; ${requested} were asked for` });
     const now = this.#now();
     const random = seededRandom(query.randomSeed ?? Math.floor(Math.random() * 2 ** 31));
 

@@ -8,7 +8,7 @@
 import { hasPwnRequest, matchCiRules } from "../src/analyzers/ci-rot.ts";
 import { DEPRECATION_RULES } from "../src/analyzers/deprecation-rules.ts";
 import { matchDeprecations, isCompatModule } from "../src/analyzers/deprecations.ts";
-import { cliFlagsInCode, cliFlagsInDocs, codeBlocks, installCommands } from "../src/analyzers/docs-drift.ts";
+import { cliFlagsInCode, cliFlagsInDocs, codeBlocks, installCommands, jsExports, jsNamedImports, pythonDefines } from "../src/analyzers/docs-drift.ts";
 import { looksAnnotated } from "../src/analyzers/hygiene.ts";
 import { permalinks, quotedCodeLines, tracebackFrames } from "../src/analyzers/issue-drift.ts";
 import { asksMaintainersToChoose, issueBody, problemStatement } from "../src/analyzers/issue-text.ts";
@@ -22,11 +22,12 @@ import { pythonApiDocs, tsApiDocs } from "../src/analyzers/api-docs.ts";
 import { referencedIssues } from "../src/forge/common.ts";
 import type { IssueSample } from "../src/github/types.ts";
 import { unquoted } from "../src/github/types.ts";
+import { requireBlockLines } from "../src/manifests/go.ts";
 import { applySetupCfg, applySetupPy, parseRequirements } from "../src/manifests/python.ts";
 import type { PythonManifest } from "../src/manifests/types.ts";
 import { goTargets, jsTargets, pythonTargets, rustTargets } from "../src/profile/imports.ts";
 import { licenseFromText } from "../src/profile/license.ts";
-import { earlyClosedReason, findDeprecationNotice, findRefusal } from "../src/profile/welcomeness.ts";
+import { earlyClosedReason, extractRules, findDeprecationNotice, findRefusal } from "../src/profile/welcomeness.ts";
 import { maskCodeLiterals } from "../src/util/mask.ts";
 import { inline, stripControl } from "../src/util/text.ts";
 import { renderIssue } from "../src/llm/issue-review.ts";
@@ -140,3 +141,27 @@ export const FUNCTIONS: [string, (t: string) => unknown][] = [
   ["inline", (t) => inline(t)],
 ];
 
+/**
+ * Repository files are read whole, up to 512 KB (lockfiles and go.mod up to 8 MB), so a pattern that
+ * restarts a scan at every occurrence of its opener is quadratic in the file and only shows at file
+ * size: 200 ms at 64 KB is 13 s at 512 KB. Each case repeats the opener that made one such pattern
+ * rescan the rest of the file or line.
+ */
+export const FILE_SIZE = Number(process.env.REDOS_FILE_SIZE ?? 512 * 1024);
+export const FILE_CASES: [string, (t: string) => unknown, string][] = [
+  ["parseLockfile go.mod", (t) => parseLockfile("go.mod", t), "require (\n"],
+  ["requireBlockLines", requireBlockLines, "require (\n"],
+  ["pythonDefines blank lines", (t) => pythonDefines(t, "Missing"), "\n"],
+  ["pythonDefines annotations", (t) => pythonDefines(t, "Missing"), "Missing:\n"],
+  ["pythonDefines import", (t) => pythonDefines(t, "Missing"), "import "],
+  ["pythonDefines __all__", (t) => pythonDefines(t, "Missing"), "__all__ "],
+  ["jsExports export {", (t) => jsExports(t, "Foo"), "export {a\n"],
+  ["jsExports module.exports", (t) => jsExports(t, "Foo"), "module.exports={"],
+  ["jsNamedImports import {", (t) => jsNamedImports(t, "pkg"), "import {"],
+  ["jsNamedImports const {", (t) => jsNamedImports(t, "pkg"), "const {"],
+  ["anchorsIn heading <", anchorsIn, "# <"],
+  ["cliFlagsInCode cobra", cliFlagsInCode, "Flags().a("],
+  ["matchCiRules python-version", (t) => matchCiRules(".github/workflows/ci.yml", t), "python-version:"],
+  ["findSkippedTests xfail", (t) => findSkippedTests("test_a.py", `@pytest.mark.skip ${t}`), "xfail("],
+  ["extractRules PR template", (t) => extractRules({ inventory: { files: [], byPath: new Map(), totalCount: 0, truncated: false }, docs: { prTemplate: t }, samples: undefined }), "[ ] "],
+];
