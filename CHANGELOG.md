@@ -148,6 +148,10 @@ test that could not load without an OS sandbox. This is the same release.
   description could reach the search queries and its name ecosyste.ms.
 - The `gitgoblin contribute` command a briefing suggests for a GitLab or Codeberg repository keeps
   its host, so it no longer points at the GitHub repository with the same name.
+- The discover tool searches public repositories only and refuses filter words that are GitHub
+  search syntax (`is:private`, `user:` and the like). Before, a keyword such as `is:private` ran as
+  part of a search made with the person's token, and each private repository it found was looked up
+  on ecosyste.ms by name before the public check left it out of the results.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
