@@ -5,6 +5,18 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
+## gitgoblin 0.1.4 - Unreleased
+
+**Other changes**
+
+- `analyze` drops five kinds of false finding:
+  - `pip install -r requirements.txt` in a README taken for a package with the wrong name.
+  - Click's `--color/--no-color` and argparse's `BooleanOptionalAction` making `--no-color` look
+    undefined.
+  - Python 3.7 flagged in a CI job that pins `ubuntu-22.04`, where it still installs.
+  - Links above the repository root, such as `../../issues`, reported as missing files.
+  - A maintainer's "please provide a PR" read as pushback on the issue.
+
 ## gitgoblin 0.1.3 - 2026-10-29
 
 Upgrade from 0.1.0 and 0.1.1: both let a repository's commands get around the sandbox in the
@@ -116,6 +128,10 @@ test that could not load without an OS sandbox. This is the same release.
 - The discover tool's `like` repository goes through the same public-only check as every other
   repository. Before, discovery read it with the person's token, so a private repository's
   description could reach the search queries and its name ecosyste.ms.
+- The analyze tool drops five kinds of false finding: `pip install -r requirements.txt` as a wrong
+  package name, `--no-color` from Click's `--color/--no-color` as undefined, Python 3.7 in a CI job
+  pinned to ubuntu-22.04, links above the repository root (`../../issues`) as missing files, and
+  "please provide a PR" as maintainer pushback.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 

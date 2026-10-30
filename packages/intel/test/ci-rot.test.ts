@@ -28,6 +28,24 @@ jobs:
     expect(ids.some((i) => i.startsWith("artifact-v3@14"))).toBe(false);
   });
 
+  it("leaves an old Python alone in a job that pins ubuntu-22.04, as the rule's own fix says", () => {
+    const wf = `jobs:
+  legacy:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.7"
+  current:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.7"
+`;
+    expect(matchCiRules("ci.yml", wf).map((m) => `${m.rule.id}@${m.line}`)).toEqual(["python-eol-on-latest@13"]);
+  });
+
   it("does not flag current versions or similar names", () => {
     const wf = `
     runs-on: ubuntu-latest

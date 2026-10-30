@@ -52,6 +52,8 @@ describe("assessIssue", () => {
     const quoted = issue({ lastComments: [comment("> this is working as intended?\n\nNo, I can reproduce it, PRs welcome.", { association: "OWNER" })] });
     expect(assessIssue(quoted, now, true, REPO).skipReason).toBeUndefined();
     expect(assessIssue(issue({ lastComments: [comment("This is working as intended, closing.", { association: "OWNER" })] }), now, true, REPO).skipReason).toMatch(/pushed back/);
+    expect(assessIssue(issue({ lastComments: [comment("Please provide a minimal reproduction.", { association: "OWNER" })] }), now, true, REPO).skipReason).toMatch(/pushed back/);
+    expect(assessIssue(issue({ lastComments: [comment("Good catch, confirmed. Please provide a PR and I'll merge it.", { association: "OWNER" })] }), now, true, REPO).skipReason).toBeUndefined();
     expect(assessIssue(issue({ linkedPrs: [{ number: 9, url: `${REPO}/pull/9`, state: "MERGED", isDraft: false, updatedAt: "2026-09-01T00:00:00Z" }] }), now, true, REPO).skipReason).toMatch(/merged/);
     // An old merge plus open PRs means in flight, not resolved; a merge older than the issue cannot have fixed it.
     const mixed = [{ number: 2, url: `${REPO}/pull/2`, state: "MERGED" as const, isDraft: false, updatedAt: "2025-01-01T00:00:00Z" }, { number: 40, url: `${REPO}/pull/40`, state: "OPEN" as const, isDraft: false, updatedAt: "2026-10-01T00:00:00Z" }];

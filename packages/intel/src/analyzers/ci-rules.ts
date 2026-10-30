@@ -14,6 +14,8 @@ export interface CiRule {
   detail: string;
   fix: string;
   reference: string;
+  /** Not reported when the job holding the line matches: the exception the rule's own fix names. */
+  exceptInJob?: RegExp;
 }
 
 const RETIRED_RUNNERS = "ubuntu-18\\.04|ubuntu-20\\.04|macos-10\\.15|macos-11|macos-12|macos-13(-large|-xlarge)?|windows-2016|windows-2019";
@@ -108,6 +110,7 @@ export const CI_RULES: CiRule[] = [
     detail: "ubuntu-latest is Ubuntu 24.04, and the python-versions manifest has no 3.7 or older builds for it; setup-python fails unless the job pins ubuntu-22.04.",
     fix: "Drop the end-of-life Python versions from the matrix (and from python_requires if still claimed), or pin runs-on to ubuntu-22.04.",
     reference: "https://github.com/actions/setup-python/issues/544",
+    exceptInJob: /^[ \t]*runs-on:[ \t]*["']?ubuntu-(?:18|20|22)\.04\b/m,
   },
   {
     id: "create-release",

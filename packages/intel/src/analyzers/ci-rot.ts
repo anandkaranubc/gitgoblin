@@ -14,11 +14,27 @@ export interface CiMatch {
 export function matchCiRules(path: string, text: string, rules: CiRule[] = CI_RULES): CiMatch[] {
   const matches: CiMatch[] = [];
   const lines = text.split("\n");
+  let jobStart: number[] | undefined;
+  const exempt = new Map<string, boolean>();
+  // A rule with an exception reads the whole job holding the line, once per job.
+  const excepted = (rule: CiRule, i: number): boolean => {
+    if (!rule.exceptInJob) return false;
+    jobStart ??= jobStarts(lines);
+    const start = jobStart[i]!;
+    if (start < 0) return false;
+    const key = `${rule.id}:${start}`;
+    if (!exempt.has(key)) {
+      let end = start + 1;
+      while (end < lines.length && jobStart[end] === start) end++;
+      exempt.set(key, rule.exceptInJob.test(lines.slice(start, end).join("\n")));
+    }
+    return exempt.get(key)!;
+  };
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
     const code = raw.replace(/\s#.*$/, "").trim();
     if (!code || code.startsWith("#")) continue;
-    const hits = rules.filter((rule) => rule.pattern.test(code));
+    const hits = rules.filter((rule) => rule.pattern.test(code) && !excepted(rule, i));
     // A line that is outright broken does not also need a "deprecated" note.
     const broken = hits.some((r) => r.severity === "broken");
     for (const rule of hits) {
@@ -27,6 +43,31 @@ export function matchCiRules(path: string, text: string, rules: CiRule[] = CI_RU
     }
   }
   return matches;
+}
+
+/** For each line, the line of the `jobs:` entry that holds it, or -1 outside any job. */
+function jobStarts(lines: string[]): number[] {
+  const starts: number[] = [];
+  let inJobs = false;
+  let level = -1;
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const indent = line.length - line.trimStart().length;
+      if (indent === 0) {
+        inJobs = /^jobs:\s*$/.test(line);
+        level = -1;
+        start = -1;
+      } else if (inJobs && (level < 0 || indent <= level)) {
+        level = indent;
+        start = i;
+      }
+    }
+    starts.push(start);
+  }
+  return starts;
 }
 
 /** True when a workflow uses pull_request_target and checks out the PR head. */
