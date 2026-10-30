@@ -9,12 +9,23 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 **Safety**
 
+- The agent's own shell no longer writes to the shared temp directories, where
+  a `screen` or `tmux` server keeps the FIFO or socket it takes commands from, or to the one every
+  Claude Code session of yours shares (`/tmp/claude-<uid>`). It gets the run's temp directory and a
+  short one of its own that is removed when the run ends. This closes the gap 0.1.3 left open.
 - `contribute` checks a change for edited test and build configuration, CI workflows, secret files
   and binary files by name, and a renamed file or a name with non-ASCII letters slipped past those
   checks. Moving `tests/helpers.py` to `tests/conftest.py`, or adding `tests/ünï/conftest.py`, let
   the agent's code run on your machine in the verification step; `.github/workflows/rélease.yml`, a
   `.env` made by renaming, or an image named `ïmage.png` went through unflagged. Both names of a
   renamed file are now checked, and every name as it is on disk.
+
+**Other changes**
+
+- `explain`, `--like` and the discovery hints `analyze` and `contribute` use no longer describe
+  the GitHub repository with the same owner and name when given a GitLab or Codeberg one: `explain`
+  and `--like` say they read GitHub only, and `analyze` goes without hints. Commands `gitgoblin`
+  suggests for such a repository keep its host, so they no longer point at GitHub.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -127,6 +138,8 @@ test that could not load without an OS sandbox. This is the same release.
 - The discover tool's `like` repository goes through the same public-only check as every other
   repository. Before, discovery read it with the person's token, so a private repository's
   description could reach the search queries and its name ecosyste.ms.
+- The `gitgoblin contribute` command a briefing suggests for a GitLab or Codeberg repository keeps
+  its host, so it no longer points at the GitHub repository with the same name.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
