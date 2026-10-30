@@ -13,6 +13,12 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   a `screen` or `tmux` server keeps the FIFO or socket it takes commands from, or to the one every
   Claude Code session of yours shares (`/tmp/claude-<uid>`). It gets the run's temp directory and a
   short one of its own that is removed when the run ends. This closes the gap 0.1.3 left open.
+- `contribute` checks a change for edited test and build configuration, CI workflows, secret files
+  and binary files by name, and a renamed file or a name with non-ASCII letters slipped past those
+  checks. Moving `tests/helpers.py` to `tests/conftest.py`, or adding `tests/ünï/conftest.py`, let
+  the agent's code run on your machine in the verification step; `.github/workflows/rélease.yml`, a
+  `.env` made by renaming, or an image named `ïmage.png` went through unflagged. Both names of a
+  renamed file are now checked, and every name as it is on disk.
 
 **Other changes**
 
@@ -20,6 +26,10 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   the GitHub repository with the same owner and name when given a GitLab or Codeberg one: `explain`
   and `--like` say they read GitHub only, and `analyze` goes without hints. Commands `gitgoblin`
   suggests for such a repository keep its host, so they no longer point at GitHub.
+- A connection to GitHub or ecosyste.ms that broke off, or hit the 20-second timeout, while a
+  response was still arriving failed the request at once. It is now retried like any other network
+  failure, and an earlier cached answer is used if the retries fail too. The limit of four requests
+  at a time per host also holds again: a request arriving as another finished could go past the queue.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -117,6 +127,10 @@ test that could not load without an OS sandbox. This is the same release.
 
 ## @gitgoblin/mcp 0.1.8 - Unreleased
 
+- A connection to GitHub or ecosyste.ms that broke off, or hit the 20-second timeout, while a
+  response was still arriving failed the request at once. It is now retried like any other network
+  failure, and an earlier cached answer is used if the retries fail too. The limit of four requests
+  at a time per host also holds again: a request arriving as another finished could go past the queue.
 - The discover tool gets each repository's GitHub details again (starter issues, contributing guide,
   recent merges). GitHub timed out on its requests for 20 repositories at a time with HTTP 502, and
   one failed request dropped the details of every candidate; it now asks for 10 at a time, splits a
