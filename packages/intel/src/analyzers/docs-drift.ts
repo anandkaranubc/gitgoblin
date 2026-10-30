@@ -49,7 +49,7 @@ export function pythonImports(code: string): { module: string; name: string | un
 export function jsNamedImports(code: string, pkg: string): { name: string; line: number }[] {
   const out: { name: string; line: number }[] = [];
   const esc = pkg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`import\\s*\\{([^}]+)\\}\\s*from\\s*["'\`]${esc}(?:/[^"'\`]*)?["'\`]|(?:const|let|var)\\s*\\{([^}]+)\\}\\s*=\\s*require\\(\\s*["'\`]${esc}["'\`]\\s*\\)`, "g");
+  const pattern = new RegExp(`import\\s*\\{([^}]{1,1000})\\}\\s*from\\s*["'\`]${esc}(?:/[^"'\`]*)?["'\`]|(?:const|let|var)\\s*\\{([^}]{1,1000})\\}\\s*=\\s*require\\(\\s*["'\`]${esc}["'\`]\\s*\\)`, "g");
   code.split("\n").forEach((line, i) => {
     for (const m of line.matchAll(pattern)) {
       for (const part of (m[1] ?? m[2] ?? "").split(",")) {
@@ -59,6 +59,28 @@ export function jsNamedImports(code: string, pkg: string): { name: string; line:
     }
   });
   return out;
+}
+
+/**
+ * Whether Python source defines, imports or lists `name` in `__all__`. Each form is anchored at a
+ * line start and spans horizontal whitespace only: `^\s*` crossed blank lines, so a long run of them
+ * was rescanned from every line start, and an unanchored `import`/`__all__` rescanned the rest of
+ * its line from every occurrence.
+ */
+export function pythonDefines(source: string, name: string): boolean {
+  return new RegExp(`^[ \\t]*(?:async[ \\t]+)?(?:def|class)[ \\t]+${name}\\b|^[ \\t]*${name}[ \\t]*(?::[^=\\n]+)?=|^[ \\t]*(?:from[ \\t]+[\\w.]+[ \\t]+)?import[ \\t]+(?:[\\w.]+[ \\t]*,[ \\t]*)*${name}\\b|^[ \\t]*(?:from[ \\t]+[\\w.]+[ \\t]+)?import[ \\t][^\\n]*\\bas[ \\t]+${name}\\b|^[ \\t]*__all__[^\\n]*["']${name}["']`, "m").test(source);
+}
+
+/**
+ * Whether JS/TS source exports `name`. Brace lists (`export { a, b }`, `module.exports = { a }`)
+ * are read in one forward pass: `export\s*\{[^}]*\bname\b` rescanned to the end of the source
+ * from every brace that never closes.
+ */
+export function jsExports(source: string, name: string): boolean {
+  if (new RegExp(`export\\s+(?:default\\s+)?(?:async\\s+)?(?:const|let|var|function\\*?|class|type|interface|enum|abstract class)\\s+${name}\\b|exports\\.${name}\\s*=|\\b${name}\\s*[,}]\\s*(?:=\\s*)?(?:module\\.)?exports|export\\s*\\*\\s*from`).test(source)) return true;
+  const listed = new RegExp(`\\b${name}\\b`);
+  for (const m of source.matchAll(/(?:export|module\.exports\s*=)\s*\{([^}]*)/g)) if (listed.test(m[1]!)) return true;
+  return false;
 }
 
 export function cliFlagsInDocs(code: string, commands: string[]): { flag: string; line: number }[] {
@@ -82,7 +104,7 @@ const FLAG_DEFINITIONS = [
   /(?:click|typer|app|cli|group|command)\.(?:option|argument)\(\s*(?:["'][^"']+["']\s*,\s*)*["']--([a-zA-Z][\w-]*)(?:[ \t]*\/[ \t]*--([a-zA-Z][\w-]*))?/g, // click, decorator or assigned, flag on any line; "--x/--no-x" defines both
   /\.(?:option|requiredOption)\(\s*["'](?:-\w,\s*)?--([a-zA-Z][\w-]*)/g, // commander
   /\.(?:option|options)\(\s*["']([a-zA-Z][\w-]*)["']/g, // yargs
-  /Flags\(\)\.\w+(?:VarP?|P)?\([^,]*,\s*"([a-zA-Z][\w-]*)"/g, // cobra/pflag (name is 2nd arg for Var forms)
+  /Flags\(\)\.\w+(?:VarP?|P)?\([^,]{0,200},\s*"([a-zA-Z][\w-]*)"/g, // cobra/pflag (name is 2nd arg for Var forms)
   /flag\.\w+\(\s*"([a-zA-Z][\w-]*)"/g, // Go flag
   /long\s*=\s*"([a-zA-Z][\w-]*)"/g, // clap explicit
   /\.long\(\s*"([a-zA-Z][\w-]*)"\s*\)/g, // clap builder
@@ -127,8 +149,7 @@ export const docsDriftAnalyzer: Analyzer = {
         for await (const { text } of textFiles(ctx, (p) => python.packageDirs.some((d) => p.startsWith(`${d}/`)) && p.endsWith(".py"), 800)) corpus.push(text);
         const joined = corpus.join("\n");
         const defined = (name: string, module: string): boolean => {
-          const re = new RegExp(`^\\s*(?:async\\s+)?(?:def|class)\\s+${name}\\b|^\\s*${name}\\s*(?::[^=]+)?=|^\\s*(?:from\\s+[\\w.]+\\s+)?import\\s+(?:[\\w.]+\\s*,\\s*)*${name}\\b|\\bimport\\s+[^\\n]*\\bas\\s+${name}\\b|__all__[^\\n]*["']${name}["']|^\\s*${name}\\s*=\\s*`, "m");
-          if (re.test(joined)) return true;
+          if (pythonDefines(joined, name)) return true;
           // A submodule import: `from pkg import sub` where sub is a file or directory.
           const sub = `${module.replace(/\./g, "/")}/${name}`;
           return ctx.inventory.files.some((f) => f.path.endsWith(`${sub}.py`) || f.path.includes(`${sub}/__init__.py`));
@@ -148,8 +169,7 @@ export const docsDriftAnalyzer: Analyzer = {
         for await (const { text } of textFiles(ctx, (p) => /\.[cm]?[jt]sx?$/.test(p) && ctx.inventory.byPath.get(p)?.category === "source" && !/\.d\.ts$/.test(p), 800)) corpus.push(text);
         const joined = corpus.join("\n");
         for (const w of wanted) {
-          const re = new RegExp(`export\\s+(?:default\\s+)?(?:async\\s+)?(?:const|let|var|function\\*?|class|type|interface|enum|abstract class)\\s+${w.name}\\b|export\\s*\\{[^}]*\\b${w.name}\\b|exports\\.${w.name}\\s*=|module\\.exports\\s*=\\s*\\{[^}]*\\b${w.name}\\b|\\b${w.name}\\s*[,}]\\s*(?:=\\s*)?(?:module\\.)?exports|export\\s*\\*\\s*from`);
-          if (re.test(joined)) continue;
+          if (jsExports(joined, w.name)) continue;
           findings.push(driftFinding(ctx, readmePath, w.blockLine + w.line, `import { ${w.name} } from "${node.name}"`, `nothing in the source exports ${w.name}`, "readme-imports", "node", 0.65));
         }
       }

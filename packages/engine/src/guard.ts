@@ -186,6 +186,9 @@ const RUNNER_DENY: Record<string, RegExp> = {
   vitest: /^(-c|--config|-r|--root|--dir|--setupFiles|--globalSetup)(=|$)/,
   jest: /^(-c|--config|--rootDir|--setupFiles|--setupFilesAfterEach|--globalSetup|--globalTeardown|--preset|--testEnvironment|--transform)(=|$)/,
   mocha: /^(-r|--require|-n|--node-option|--config|--file|--package)(=|$)/,
+  // Not runners on their own, but what `npx tsx -e` and the like start.
+  tsx: /^(-e|--eval|-p|--print|-r|--require|--import)(=|$)/,
+  "ts-node": /^(-e|--eval|-p|--print|-r|--require|-i|--interactive)(=|$)/,
 };
 /** `python -m <module>` forms that install or run arbitrary code rather than the project's tests. */
 const PYTHON_MODULE_DENY = /^(pip|pipx|ensurepip|venv|uv|http\.server|code|pdb|idlelib|webbrowser)$/;
@@ -211,13 +214,23 @@ export function isSafeCommand(command: string): boolean {
   const tokens = trimmed.split(/\s+/);
   const first = tokens[0] ?? "";
   if (!KNOWN_RUNNERS.test(first) || bashDenyReason(trimmed) !== null) return false;
-  const runner = path.basename(first);
-  const deny = RUNNER_DENY[runner];
+  // A launcher (npx, pnpm exec, yarn, uv run, poetry run, bundle exec, a wrapper such as c8) starts
+  // another program, whose own dangerous flags still count: from each program named on, its rules apply too.
+  const deny: RegExp[] = [];
+  let python = false;
+  const launch = (program: string) => {
+    const name = path.basename(program);
+    const rule = RUNNER_DENY[name];
+    if (rule && !deny.includes(rule)) deny.push(rule);
+    if (/^python3?$/.test(name)) python = true;
+  };
+  launch(first);
   for (let i = 1; i < tokens.length; i += 1) {
     const token = tokens[i]!.replace(/^["']+|["']+$/g, "");
     if (hasPathOutsideWorkspace(token)) return false;
-    if (deny?.test(token)) return false;
-    if (/^python3?$/.test(runner) && token === "-m" && PYTHON_MODULE_DENY.test(tokens[i + 1] ?? "")) return false;
+    if (deny.some((rule) => rule.test(token))) return false;
+    if (python && token === "-m" && PYTHON_MODULE_DENY.test(tokens[i + 1] ?? "")) return false;
+    launch(token);
   }
   return true;
 }
@@ -364,8 +377,10 @@ const SHELL_HIDDEN_ENV = [
  * Sandbox for the agent's shell: no network, writes only in the workspace (never `.git`) and the
  * temp dir, nothing at all for reviewers, and no credential files or model keys visible to commands.
  */
-export function sandboxSettings(workspace: string, profile: ToolProfile, extraWrite: string[] = []): SandboxSettings {
+export function sandboxSettings(workspace: string, profile: ToolProfile, extraWrite: string[] = [], tmp?: string): SandboxSettings {
   const home = os.homedir();
+  // The run's own temp directory replaces the shared ones, where other programs keep sockets and FIFOs (see SpecOptions.tmp).
+  const temp = tmp ? [tmp] : [os.tmpdir(), ...tempDirs()];
   return {
     enabled: true,
     failIfUnavailable: true,
@@ -373,9 +388,9 @@ export function sandboxSettings(workspace: string, profile: ToolProfile, extraWr
     allowUnsandboxedCommands: false,
     network: { allowedDomains: [], allowLocalBinding: true },
     filesystem: {
-      // The same temp directories (per-user and the shared /tmp, as real paths) and tool caches the
-      // repository's own commands get, so the agent can run the project's commands as documented.
-      allowWrite: profile === "build" ? [...new Set([workspace, os.tmpdir(), ...specFor(workspace, false, { extraWrite }).extraWrite])] : [os.tmpdir(), ...tempDirs()],
+      // The same temp directories (as real paths) and tool caches the repository's own commands get,
+      // so the agent can run the project's commands as documented.
+      allowWrite: profile === "build" ? [...new Set([workspace, ...temp, ...specFor(workspace, false, { extraWrite, ...(tmp ? { tmp } : {}) }).extraWrite])] : temp,
       denyWrite: [path.join(workspace, ".git")],
       // The same credential locations the repository's own commands cannot read, keychains included.
       denyRead: credentialPaths(home),

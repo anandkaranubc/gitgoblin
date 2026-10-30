@@ -1,4 +1,4 @@
-import { closeSync, existsSync, mkdirSync, openSync, readSync, realpathSync, statSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { createSdkRunner, type AgentRunner, type Effort, type PhaseResult, type PhaseSpec } from "./agent.ts";
@@ -49,7 +49,7 @@ import {
   type Verification,
 } from "./types.ts";
 import { checkSpecs, compareWithBaseline, runChecks } from "./verify.ts";
-import { AS_TEXT, binaryChanges, DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, removeWorkspace, showAtBase, unpublishedWork, type Workspace } from "./workspace.ts";
+import { AS_TEXT, binaryChanges, DEFAULT_MAX_PATCH_BYTES, diffPatch, diffStats, git, GitError, prepareWorkspace, recordUntracked, removeWorkspace, showAtBase, unpublishedWork, type Workspace } from "./workspace.ts";
 
 export interface RunInput {
   /** A Task written by hand or exported from an earlier run. */
@@ -77,6 +77,8 @@ export interface RunnerContext {
   env?: Record<string, string>;
   /** Directories outside the workspace the agent's shell may write, such as the run's toolchain prefix. */
   extraWrite?: string[];
+  /** The run's own temp directory, which the agent's shell gets instead of the shared ones. */
+  tmp?: string;
 }
 
 export interface RunOptions {
@@ -256,6 +258,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   let verification: Verification | undefined;
   let review: Review | undefined;
   let delivery: PreparedDelivery | undefined;
+  let agentTmp: string | undefined;
 
   const maxPatchBytes = options.maxPatchBytes ?? DEFAULT_MAX_PATCH_BYTES;
   journal.artifact("task", task);
@@ -282,6 +285,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   };
 
   const phase = async <T>(runner: AgentRunner, spec: PhaseSpec<T>): Promise<PhaseResult<T> & { output: T }> => {
+    decide(spec.name, checkBudget(costUsd, Date.now() - started, limits));
     reporter.phase(spec.name);
     journal.event(spec.name, "start", { resume: spec.resume ?? null });
     // The remaining wall-clock budget bounds the phase itself, not just the gate after it, so a
@@ -338,7 +342,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       hostBox.kind === "none" ? {} : { wrap: (command: string) => hostBox.wrap(command, specFor(workspace!.path, network, { extraWrite: [...toolchain.writeDirs, ...extra], strict, tmp: commandTmp })) };
     const timeout = options.checkTimeoutMs ? { timeoutMs: options.checkTimeoutMs } : {};
     // Checks run with the network cut when sandboxed; say so to the package managers so they fail fast.
-    const checkEnv = hostBox.kind === "none" ? hostEnv : { ...hostEnv, ...OFFLINE_ENV };
+    // Python's bytecode cache would otherwise land beside every module the change adds.
+    const checkEnv = { ...(hostBox.kind === "none" ? hostEnv : { ...hostEnv, ...OFFLINE_ENV }), PYTHONDONTWRITEBYTECODE: "1" };
     const checkOptions = { cwd: workspace.path, env: checkEnv, ...timeout, ...wrapFor(false) };
     // Each check's whole output goes to a file in the run directory; the artifacts keep an excerpt.
     const logChecks = (stage: string) => ({ ...checkOptions, onOutput: (check: Check, output: string) => journal.text(`check-${stage}-${check.name}.txt`, output) });
@@ -425,6 +430,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const baselineChecks = await runChecks(checkSpecs(task.commands), logChecks("baseline"));
     const baseline = compareWithBaseline(baselineChecks, undefined, { files: 0, insertions: 0, deletions: 0, changedFiles: [] });
     journal.artifact("baseline", baseline);
+    // What the install and the checks wrote so far is theirs, not the agent's: keep it out of the change.
+    await recordUntracked(workspace.path, env);
     for (const c of baselineChecks.filter((c) => c.status !== "pass")) reporter.warn(`baseline ${c.name}: ${c.status}`);
     // A browser test suite whose browsers are missing fails before testing anything; say what fixes it.
     if (baselineChecks.some((c) => c.status !== "pass" && /ms-playwright/.test(c.outputTail) && /Executable doesn't exist|browserType\.launch|Please run the following command to download new browsers/.test(c.outputTail))) {
@@ -444,7 +451,12 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
       );
     }
 
-    const runner = (options.runnerFactory ?? defaultRunnerFactory(options, reporter))({ workspace: workspace.path, task, env, extraWrite: toolchain.writeDirs });
+    // The SDK gives the agent's shell a temp directory under CLAUDE_CODE_TMPDIR, by default /tmp/claude-<uid>,
+    // which every Claude Code session of this user shares. This one is the run's alone, and short, because
+    // the SDK falls back to the shared one when the path is too long for the sockets it puts there.
+    agentTmp = (options.isolation ?? "sandbox") === "sandbox" && process.platform !== "win32" ? mkdtempSync("/tmp/gg-") : undefined;
+    const agentEnv = agentTmp ? { ...env, CLAUDE_CODE_TMPDIR: agentTmp } : env;
+    const runner = (options.runnerFactory ?? defaultRunnerFactory(options, reporter))({ workspace: workspace.path, task, env: agentEnv, extraWrite: toolchain.writeDirs, tmp: commandTmp });
     const builderPrompt = builderSystemPrompt(task, workspace.path, guidance);
     const common = { systemPrompt: builderPrompt, profile: "build" as const, ...(options.model ? { model: options.model } : {}), ...(options.effort ? { effort: options.effort } : {}) };
 
@@ -533,6 +545,12 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
         continue;
       }
       decide("verify", afterVerifyDecision);
+      // Passing checks do not make a half-done change whole; the implementer's own word does not go unread.
+      if (!notes.done) {
+        throw new RunAborted("escalated", `the implementer reports the change is not finished (${notes.summary.slice(0, 300)})`, [
+          "Read the implementation notes and the diff. Finish the remaining steps yourself, or run again with a smaller plan.",
+        ]);
+      }
 
       reviewedPatch = await patch(workspace);
       journal.text(`diff-${attempt}.patch`, reviewedPatch);
@@ -585,6 +603,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const message = err instanceof Error ? err.message : String(err);
     journal.event("run", "error", { message });
     return finish("failed", message, []);
+  } finally {
+    if (agentTmp) await rm(agentTmp, { recursive: true, force: true });
   }
 
   function finish(status: RunResult["status"], reason: string, questions: string[]): RunResult {
@@ -629,6 +649,7 @@ function defaultRunnerFactory(options: RunOptions, reporter: Reporter): (ctx: Ru
       task: ctx.task,
       ...(ctx.env ? { env: ctx.env } : {}),
       ...(ctx.extraWrite ? { extraWrite: ctx.extraWrite } : {}),
+      ...(ctx.tmp ? { tmp: ctx.tmp } : {}),
       ...(options.model ? { model: options.model } : {}),
       ...(options.isolation ? { isolation: options.isolation } : {}),
       onToolUse: (phaseName, tool, summary) => reporter.info(`${phaseName} ${tool} ${summary}`),
@@ -722,7 +743,8 @@ export async function cleanRun(runId: string, options: CleanRunOptions = {}): Pr
     await removeWorkspace({ ...workspace, path: wsPath }, env);
     if (existed) removed.push(wsPath);
   }
-  for (const dir of ["toolchain", "egress", "tmp"]) {
+  // Setup can fail after cloning (an empty repository, a failed checkout), before the workspace is recorded.
+  for (const dir of [...(workspace ? [] : ["workspace"]), "toolchain", "egress", "tmp"]) {
     const full = journal.pathFor(dir);
     if (existsSync(full)) {
       await rm(full, { recursive: true, force: true });

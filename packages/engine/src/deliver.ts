@@ -3,7 +3,7 @@ import { execFile } from "./exec.ts";
 import { sanitizeText } from "./intake.ts";
 import type { ChangePlan, ImplementationNotes, Investigation, PreparedDelivery, Review, Task, Verification } from "./types.ts";
 import { describeCounts } from "./verify.ts";
-import { commitAll, git } from "./workspace.ts";
+import { commitAll, git, uncommittedChanges } from "./workspace.ts";
 
 export interface DeliveryInput {
   task: Task;
@@ -20,7 +20,50 @@ export interface DeliveryInput {
 const ISSUE_REF = String.raw`(?:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)?#\d+|https?:\/\/[^\s)]+\/(?:issues|pull)\/\d+`;
 const CLOSING = new RegExp(String.raw`\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)(:?\s+)((?:${ISSUE_REF})(?:(?:\s*,\s*|\s+and\s+|\s+)(?:${ISSUE_REF}))*)`, "gi");
 const REF = new RegExp(ISSUE_REF, "g");
-const MENTION = /(^|[^\w`/.@-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[A-Za-z0-9_.-]+)?)/g;
+const MENTION = /(^|[^\w/.@-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[A-Za-z0-9_.-]+)?)/g;
+
+/**
+ * Splits text into code spans and the rest the way CommonMark reads it: a run of n backticks opens a
+ * span that the next run of exactly n closes, and outside a span a backslash escapes the character
+ * after it. Backticks that close nothing come back escaped, so a code span added later cannot pair
+ * with them.
+ */
+function splitCode(text: string): { code: boolean; text: string }[] {
+  const parts: { code: boolean; text: string }[] = [];
+  let plain = "";
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === "\\" && i + 1 < text.length) {
+      plain += text.slice(i, i + 2);
+      i += 2;
+    } else if (text[i] !== "`") {
+      plain += text[i];
+      i += 1;
+    } else {
+      let end = i;
+      while (text[end] === "`") end += 1;
+      const close = nextRun(text, end, end - i);
+      if (close < 0) {
+        plain += "\\`".repeat(end - i);
+        i = end;
+      } else {
+        parts.push({ code: false, text: plain }, { code: true, text: text.slice(i, close + end - i) });
+        plain = "";
+        i = close + end - i;
+      }
+    }
+  }
+  parts.push({ code: false, text: plain });
+  return parts;
+}
+
+/** Where the next run of exactly `length` backticks at or after `from` starts, or -1. */
+function nextRun(text: string, from: number, length: number): number {
+  const run = /`+/g;
+  run.lastIndex = from;
+  for (let m = run.exec(text); m; m = run.exec(text)) if (m[0].length === length) return m.index;
+  return -1;
+}
 
 /**
  * Makes text that the model or a third party wrote inert on GitHub: an `@name` would notify someone
@@ -31,15 +74,26 @@ const MENTION = /(^|[^\w`/.@-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[A-Za-z0-
  */
 export function neutralizeForGitHub(text: string, ownIssue?: number): string {
   const own = ownIssue === undefined ? undefined : `#${ownIssue}`;
-  return text
-    .split(/(`+[^`]*`+)/)
+  const parts = splitCode(text);
+  return parts
     .map((part, i) => {
-      if (i % 2 === 1) return part; // an existing code span
-      return part
+      if (part.code) return part.text;
+      let out = part.text
         .replace(CLOSING, (_m, keyword: string, sep: string, refs: string) => `${keyword}${sep}${refs.replace(REF, (ref) => (ref === own ? ref : `\`${ref}\``))}`)
-        .replace(MENTION, (_m, lead: string, name: string) => `${lead}\`@${name}\``);
+        // A backslash that escaped the @ would escape the backtick instead; it showed nothing, so it goes.
+        .replace(MENTION, (_m, lead: string, name: string, at: number, all: string) => `${lead === "\\" && oddBackslashesEndingAt(all, at) ? "" : lead}\`@${name}\``);
+      // Backticks added right next to an existing code span would join its run and unpair both.
+      if (i > 0 && out.startsWith("`")) out = ` ${out}`;
+      if (i < parts.length - 1 && /(^|[^\\])`$/.test(out)) out = `${out} `;
+      return out;
     })
     .join("");
+}
+
+function oddBackslashesEndingAt(text: string, index: number): boolean {
+  let start = index;
+  while (start > 0 && text[start - 1] === "\\") start -= 1;
+  return (index - start) % 2 === 0;
 }
 
 /**
@@ -223,7 +277,7 @@ export async function publishPullRequest(opts: PublishOptions): Promise<PublishR
     // Publish exactly what the human read: the prepared commit, with nothing left over in the tree.
     const head = await git(["rev-parse", "HEAD"], wsPath, env);
     if (head !== delivery.commitSha) throw new Error(`workspace HEAD ${head.slice(0, 7)} is not the prepared commit ${delivery.commitSha.slice(0, 7)}; run the engine again`);
-    const dirty = await git(["status", "--porcelain"], wsPath, env);
+    const dirty = await uncommittedChanges(wsPath, env);
     if (dirty) throw new Error(`workspace has uncommitted changes:\n${dirty}`);
   }
   const login = opts.dryRun ? "<login>" : await ghCall(["api", "user", "--jq", ".login"]);

@@ -174,7 +174,9 @@ export function findRefusal(text: string | undefined, path = "CONTRIBUTING.md"):
   return undefined;
 }
 
-const DEPRECATED_HEADING = /^\s{0,3}#{1,6}\s*[^\n]{0,20}\b(deprecated|unmaintained|archived|discontinued|end of life|no longer maintained)\b/im;
+// The keyword has to be the heading's point ("Deprecated", "foo (archived)", "DEPRECATED: use bar", a title "# foo is
+// deprecated"), not an adjective on another noun ("Deprecated options", "Archived releases", "Python end of life policy").
+const DEPRECATED_HEADING = /^ {0,3}(?:#[ \t]+[^\n]{1,40}[ \t](?:is|has been) (?:now )?|#{1,6}[ \t]*(?:[^\n]{0,40}[-–—:(\[|][ \t]*|(?:project|repo(?:sitory)?|package|library|status)[ \t]+)?[^\w\n]{0,10})(deprecated|unmaintained|archived|discontinued|end of life|no longer maintained)(?:[^\w\n]*$|[ \t]*:[^\n]*$|[ \t]+[-–—][^\n]*$|[ \t]+in favou?r of\b[^\n]*$)/im;
 const DEPRECATED_SENTENCE = /\b(this (project|package|library|module|repo(sitory)?|gem|crate|tool|plugin|extension|fork)|the project|it) (is|has been|was) (now )?(officially )?(deprecated|discontinued|abandoned|archived|unmaintained|no longer (maintained|supported|actively developed|being developed)|not (actively )?maintained|end of life|in maintenance mode and will not)|\bno longer (maintained|actively maintained|supported|under development)\b|\b(unmaintained|deprecated) (project|package|library)\b|\bplease use \[?[\w./@-]+\]? instead\b/i;
 
 /** Reason a repository is closed to contributions that needs no API samples, or undefined. */
@@ -229,7 +231,7 @@ export function extractRules(input: Pick<WelcomenessInput, "inventory" | "docs" 
     helpLabels: (input.samples?.labels ?? []).filter((l) => HELP_LABEL.test(l.name)).map((l) => l.name),
     rejectedChanges: rejected,
     dependencyBot: paths.some((p) => /^(\.github\/dependabot\.ya?ml|renovate\.json5?|\.renovaterc(\.json)?|\.github\/renovate\.json5?)$/.test(p)),
-    requiresTests: /\b(include|add|write|with|accompan\w+|require\w*)\b[^.]{0,40}\btests?\b/i.test(texts) || /\[ \][^\n]*\btests?\b/i.test(input.docs.prTemplate ?? ""),
+    requiresTests: /\b(include|add|write|with|accompan\w+|require\w*)\b[^.]{0,40}\btests?\b/i.test(texts) || /\[ \][^\n]{0,300}\btests?\b/i.test(input.docs.prTemplate ?? ""),
     requiresChangelog: /\bchangelog\b|CHANGES\.(md|rst)|news fragment|towncrier|changeset/i.test(texts),
   };
   if (contributingPath) rules.contributingPath = contributingPath;

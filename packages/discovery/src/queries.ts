@@ -1,4 +1,4 @@
-import type { DiscoveryFilters, DiscoveryQuery, RepoFacts } from "@gitgoblin/core";
+import type { DiscoveryFilters, DiscoveryQuery, Goal, RepoFacts } from "@gitgoblin/core";
 import type { SearchOptions } from "@gitgoblin/sources";
 import { DAY_MS } from "./math.ts";
 
@@ -35,14 +35,15 @@ function quote(term: string): string {
 }
 
 /** Qualifiers every plan shares, derived from the user's filters. */
-function baseQualifiers(filters: DiscoveryFilters, now: number): string[] {
+function baseQualifiers(filters: DiscoveryFilters, goal: Goal, now: number): string[] {
   const parts: string[] = [];
   for (const topic of filters.topics ?? []) parts.push(`topic:${quote(topic.toLowerCase())}`);
   for (const keyword of filters.keywords ?? []) parts.push(quote(keyword));
   if (filters.pushedWithinDays) parts.push(`pushed:>${dateAgo(now, filters.pushedWithinDays)}`);
   if (filters.createdWithinDays) parts.push(`created:>${dateAgo(now, filters.createdWithinDays)}`);
   if (filters.licenses?.[0]) parts.push(`license:${filters.licenses[0].toLowerCase()}`);
-  if (!filters.includeArchived) parts.push("archived:false");
+  // Revive keeps archived projects, as prefilter does: forking one is a way to revive it.
+  if (!filters.includeArchived && goal !== "revive") parts.push("archived:false");
   if (!filters.includeForks) parts.push("fork:false");
   return parts;
 }
@@ -130,7 +131,7 @@ function seedVariants(seed: RepoFacts, seedKeywords: string[]): Variant[] {
 /** Builds the GitHub searches for a query. Each language multiplies the plans. */
 export function buildSearchPlans(query: DiscoveryQuery, context: PlanContext): SearchPlan[] {
   const filters = query.filters ?? {};
-  const base = baseQualifiers(filters, context.now);
+  const base = baseQualifiers(filters, query.goal, context.now);
   const hasUserDateFilter = Boolean(filters.pushedWithinDays || filters.createdWithinDays);
   const variants = context.seedFacts ? seedVariants(context.seedFacts, context.seedKeywords ?? []) : goalVariants(query, context.now, hasUserDateFilter);
   const languages = (filters.languages ?? []).slice(0, MAX_LANGUAGES);

@@ -1,9 +1,9 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { commitMessage, neutralizeForGitHub, publishPullRequest, pullRequestBody, pullRequestTitle, type DeliveryInput } from "../src/deliver.ts";
-import { git } from "../src/workspace.ts";
+import { git, recordUntracked } from "../src/workspace.ts";
 import { branchNameFor, subjectFor, usesConventionalCommits } from "../src/naming.ts";
 import { TaskSchema, type Task } from "../src/types.ts";
 
@@ -144,6 +144,21 @@ describe("publishPullRequest", () => {
     writeFileSync(path.join(repo, "a"), "2");
     await expect(publishPullRequest({ task: base, delivery: { ...delivery, commitSha: head }, wsPath: repo, bodyFile: "pr.md", env })).rejects.toThrow(/uncommitted changes/);
   });
+  it("publishes when the only leftovers are install output and what the baseline checks left", async () => {
+    const env = { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@x", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@x" };
+    const repo = mkdtempSync(path.join(os.tmpdir(), "gg-pub-"));
+    await git(["init", "-q", "-b", "main"], repo, env);
+    writeFileSync(path.join(repo, "a"), "1");
+    await git(["add", "."], repo, env);
+    await git(["commit", "-q", "-m", "one"], repo, env);
+    mkdirSync(path.join(repo, "node_modules", "left-pad"), { recursive: true });
+    writeFileSync(path.join(repo, "node_modules", "left-pad", "index.js"), "x\n");
+    writeFileSync(path.join(repo, "coverage.txt"), "x\n");
+    await recordUntracked(repo, env);
+    const delivery = { branch: "gitgoblin/fix-42", commitSha: await git(["rev-parse", "HEAD"], repo, env), commitMessage: "m", prTitle: "T", prBody: "B" };
+    const runner = { gh: async (args: string[]) => (args[0] === "api" && args[1] === "user" ? "octo" : args[0] === "repo" ? "WRITE" : args[0] === "pr" ? "https://github.com/acme/widgets/pull/1" : ""), push: async () => "" };
+    expect((await publishPullRequest({ task: base, delivery, wsPath: repo, bodyFile: "pr.md", env, runner })).url).toBe("https://github.com/acme/widgets/pull/1");
+  });
   it("refuses hosts other than GitHub", async () => {
     const task = { ...base, repo: { ...base.repo, host: "gitlab.com" } };
     await expect(publishPullRequest({ task, delivery: { branch: "b", commitSha: "", commitMessage: "", prTitle: "", prBody: "" }, wsPath: process.cwd(), bodyFile: "x", env: {}, dryRun: true })).rejects.toThrow(/gitlab.com/);
@@ -161,6 +176,20 @@ describe("neutralizeForGitHub", () => {
     expect(neutralizeForGitHub("resolves acme/other#3")).toBe("resolves `acme/other#3`");
     expect(neutralizeForGitHub("fixed: https://github.com/acme/widgets/issues/9")).toBe("fixed: `https://github.com/acme/widgets/issues/9`");
     expect(neutralizeForGitHub("see #12 for context")).toBe("see #12 for context");
+  });
+  it("keeps mentions inert next to backticks that pair with nothing", () => {
+    // Under CommonMark the stray backtick would pair with the one the neutralizing added, leaving @alice live.
+    expect(neutralizeForGitHub("the ` key, thanks @alice")).toBe("the \\` key, thanks `@alice`");
+    expect(neutralizeForGitHub("a ` stray then Closes #12")).toBe("a \\` stray then Closes `#12`");
+    expect(neutralizeForGitHub("stray `@alice")).toBe("stray \\``@alice`");
+    // Runs of different lengths do not make a code span, so what sits between them is not code.
+    expect(neutralizeForGitHub("``a @alice`")).toBe("\\`\\`a `@alice`\\`");
+    expect(neutralizeForGitHub("an escaped \\`x` @alice")).toBe("an escaped \\`x\\` `@alice`");
+    expect(neutralizeForGitHub("cc \\@alice")).toBe("cc `@alice`");
+  });
+  it("keeps real code spans as written and does not let a new one run into them", () => {
+    expect(neutralizeForGitHub("``a ` @b`` and `@c`")).toBe("``a ` @b`` and `@c`");
+    expect(neutralizeForGitHub("``x``@alice and @bob``y``")).toBe("``x`` `@alice` and `@bob` ``y``");
   });
   it("leaves ordinary prose alone", () => {
     expect(neutralizeForGitHub("Changed `<` to `<=` in the slice bound.")).toBe("Changed `<` to `<=` in the slice bound.");

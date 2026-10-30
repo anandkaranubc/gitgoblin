@@ -44,6 +44,8 @@ describe("anchors and relative links", () => {
     expect(slugify("Getting Started: Install & Run!")).toBe("getting-started-install--run");
     expect(slugify("allow_redirects")).toBe("allow_redirects");
     expect(slugify("_Emphasis_ and **bold**")).toBe("emphasis-and-bold");
+    // A stray < is text; only the tag after it is dropped.
+    expect(slugify("x < y <em>z</em>")).toBe("x--y-z");
     const anchors = anchorsIn("# Intro\n## Intro\n<a name=\"custom\"></a>\n### `code` heading\n<h3 name=\"complete\">Shell completions</h3>\n## css.lightningcss\n#### `format.preview` {: #format_preview }\n");
     expect([...anchors]).toEqual(["intro", "intro-1", "custom", "code-heading", "complete", "csslightningcss", "css-lightningcss", "formatpreview", "format-preview", "format_preview"]);
   });

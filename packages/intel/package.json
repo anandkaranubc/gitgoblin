@@ -1,6 +1,7 @@
 {
   "name": "@gitgoblin/intel",
   "version": "0.1.0",
+  "private": true,
   "description": "Repository understanding and contribution-opportunity discovery for gitgoblin",
   "license": "MIT",
   "type": "module",

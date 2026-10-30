@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseLockfile } from "../src/analyzers/lockfiles.ts";
 import { detectManifests } from "../src/manifests/index.ts";
 import { classifierVersions, parseRequirement, parseRequirements } from "../src/manifests/python.ts";
 import { inventoryOf, reader } from "./helpers/inventory.ts";
@@ -76,5 +77,12 @@ describe("node, go and rust manifests", () => {
     ]);
     expect(m.rust).toMatchObject({ name: "tool", edition: "2021", hasBin: true, hasLib: true });
     expect(m.rust?.dependencies.map((d) => d.name)).toEqual(["serde", "anyhow"]);
+  });
+
+  it("reads every require block and single require in go.mod, and skips a block that never closes", async () => {
+    const goMod = "module m\n\nrequire (\n\ta.com/x v1.0.0\n)\n\nrequire b.com/y v2.0.0\n\nrequire (\n\tc.com/z v3.0.0 // indirect\n)\n\nrequire (\n\td.com/w v4.0.0\n";
+    const m = await detectManifests(inventoryOf(["go.mod"]), reader({ "go.mod": goMod }));
+    expect(m.go?.dependencies.map((d) => d.name)).toEqual(["a.com/x", "c.com/z", "b.com/y"]);
+    expect(parseLockfile("go.mod", goMod).map((p) => p.name)).toEqual(["a.com/x", "c.com/z", "b.com/y"]);
   });
 });

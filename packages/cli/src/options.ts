@@ -1,5 +1,10 @@
-import type { DiscoveryFilters, DiscoveryQuery, Goal } from "@gitgoblin/core";
-import { GOALS, isGoal, parseRepoRef } from "@gitgoblin/core";
+import type { DiscoveryFilters, DiscoveryQuery, Goal, RepoRef } from "@gitgoblin/core";
+import { GOALS, isGoal, normalizeHost, parseRepoRef } from "@gitgoblin/core";
+
+/** Discovery reads GitHub by owner and name; for another forge it would describe a different repository. */
+export function onGitHub(ref: RepoRef): boolean {
+  return normalizeHost(ref.host) === "github.com";
+}
 
 /** Raw option values as commander hands them over. */
 export interface DiscoverOptions {
@@ -54,6 +59,7 @@ export function toQuery(goal: Goal, options: DiscoverOptions): DiscoveryQuery {
   };
   const seed = options.like === undefined ? undefined : parseRepoRef(options.like);
   if (options.like !== undefined && !seed) throw new Error(`--like expects owner/name or a repository URL, got "${options.like}"`);
+  if (seed && !onGitHub(seed)) throw new Error(`--like reads repositories on GitHub only, got "${options.like}"`);
   return {
     goal,
     filters,
