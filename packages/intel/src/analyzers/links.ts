@@ -84,7 +84,7 @@ export function slugify(heading: string): string {
   return heading
     .trim()
     .toLowerCase()
-    .replace(/<[^>]+>/g, "")
+    .replace(/<[^<>]+>/g, "")
     .replace(/[`*~]/g, "")
     // Underscores are emphasis only at word boundaries; intraword ones (allow_redirects) stay in the anchor.
     .replace(/(^|\s)_{1,3}|_{1,3}(?=\s|$)/g, "$1")
@@ -97,7 +97,7 @@ export function siteSlugify(heading: string): string {
   return heading
     .trim()
     .toLowerCase()
-    .replace(/<[^>]+>/g, "")
+    .replace(/<[^<>]+>/g, "")
     .replace(/[`*~]/g, "")
     .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-+/, "")

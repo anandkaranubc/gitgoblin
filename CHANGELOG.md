@@ -5,6 +5,15 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
+## gitgoblin 0.1.4 - Unreleased
+
+**Other changes**
+
+- `analyze` no longer stalls on repository files shaped to slow down its text matching: a go.mod
+  of unclosed `require (` lines, Python source with long runs of blank lines, a Markdown heading
+  full of `<` and a few similar shapes took seconds to minutes per file, growing with the square of
+  its size. Each file is now read in time proportional to its size.
+
 ## gitgoblin 0.1.3 - 2026-10-29
 
 Upgrade from 0.1.0 and 0.1.1: both let a repository's commands get around the sandbox in the
@@ -116,6 +125,9 @@ test that could not load without an OS sandbox. This is the same release.
 - The discover tool's `like` repository goes through the same public-only check as every other
   repository. Before, discovery read it with the person's token, so a private repository's
   description could reach the search queries and its name ecosyste.ms.
+- The analyze tool no longer stalls on repository files shaped to slow down its text matching (a
+  go.mod of unclosed `require (` lines, long runs of blank lines in Python source, a Markdown
+  heading full of `<`); one such file could hold the server for minutes.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
