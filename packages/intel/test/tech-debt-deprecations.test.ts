@@ -14,6 +14,11 @@ def todo_list(): pass
 `;
     const markers = findDebtMarkers("a.py", src);
     expect(markers.map((m) => [m.marker, m.issues])).toEqual([["TODO", [42]], ["FIXME", [7]], ["HACK", [99]]]);
+    const repo = { owner: "o", name: "r" };
+    const refs = (line: string) => findDebtMarkers("a.go", `// TODO: ${line}\n`, repo)[0]?.issues;
+    expect(refs("drop when https://github.com/nodejs/node/issues/4242 ships in LTS")).toEqual([]);
+    expect(refs("remove after golang/go#61234 is fixed")).toEqual([]);
+    expect(refs("see #12, o/r#13 and https://github.com/o/r/issues/14")).toEqual([12, 13, 14]);
     expect(findDebtMarkers("rule.rs", "/// ## Example\n/// ```python\n/// # TODO(charlie): fix this (#123)\n/// ```\n// TODO: real debt here\n")).toHaveLength(1);
     expect(markers[0]?.text).toBe("remove once the parser handles this");
   });

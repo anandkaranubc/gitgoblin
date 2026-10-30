@@ -147,6 +147,26 @@ describe("forges that hide comments without a token", () => {
     expect(samples.openPrs[0]?.lastComments.map((c) => c.body)).toEqual(["please rebase"]);
     expect(fetchImpl.calls.find((u) => u.includes("issues/comments"))).toMatch(/page=1&limit=50/);
   });
+
+  it("counts a Gitea thread as read only when every comment was", async () => {
+    const issue = (n: number, comments: number) => ({ number: n, title: `Crash ${n}`, body: "x", state: "open", created_at: "2026-06-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z", closed_at: null, labels: [], assignees: null, user: { login: "reporter" }, comments, is_locked: false, html_url: `h${n}` });
+    // Only the reporter's latest bump on #20 falls in the 90-day window; its four older replies were not read.
+    const fetchImpl = fakeFetch({
+      "/repos/o/r/issues?state=open": [...Array.from({ length: 15 }, (_, k) => issue(k + 1, 0)), issue(20, 5)],
+      "/repos/o/r/pulls?state=open": [{ number: 8, title: "PR", body: "", state: "open", draft: false, merged: false, merged_at: null, closed_at: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-02T00:00:00Z", mergeable: true, user: { login: "ext" }, merged_by: null, head: { ref: "b" }, labels: [], comments: 2, html_url: "p8" }],
+      "/repos/o/r/issues/comments?since": [
+        { issue_url: "https://codeberg.org/api/v1/repos/o/r/issues/20", user: { login: "reporter" }, body: "any news?", created_at: "2026-10-01T00:00:00Z" },
+        { issue_url: "", pull_request_url: "https://codeberg.org/o/r/pulls/8", user: { login: "owner" }, body: "please rebase", created_at: "2026-01-02T00:00:00Z" },
+      ],
+      // Gitea counts a review with a body as a comment on the pull request.
+      "/repos/o/r/pulls/8/reviews": [{ state: "APPROVED", submitted_at: "2026-01-03T00:00:00Z", user: { login: "owner" } }],
+      "/repos/o/r": { description: "", stars_count: 0, forks_count: 0, archived: false, has_issues: true, open_issues_count: 16, open_pr_counter: 1, default_branch: "main", created_at: "2020-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", fork: false, template: false, mirror: false, owner: { login: "owner" }, html_url: "h" },
+    });
+    const { samples } = await fetchGitea("codeberg.org", "o", "r", { fetchImpl, counter: { requests: 0 } });
+    expect(samples.openIssues.find((i) => i.number === 20)).toMatchObject({ commentCount: 5, commentsFetched: false });
+    expect(samples.openIssues.find((i) => i.number === 1)?.commentsFetched).toBe(true);
+    expect(samples.openPrs[0]?.commentsFetched).toBe(true);
+  });
 });
 
 describe("unread comments in profile statistics and triage", () => {

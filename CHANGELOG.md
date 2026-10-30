@@ -90,6 +90,18 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   life policy"); only a heading that says the project itself is deprecated counts. A library whose
   description mentions learning, examples or samples ("reinforcement learning algorithms", "audio
   samples") is no longer taken for a tutorial, which skipped most of the analysis.
+- `analyze` gets several facts in its findings right:
+  - Response times stop at a merge or a close. Five outside pull requests merged two hours after
+    they were opened read as "outside PRs wait over a month".
+  - A vulnerable dependency is told the fix on its own release line, and the highest one any of its
+    advisories needs: django 4.2.5 gets 4.2.15, not 4.2.9 or 5.0.8.
+  - Go modules marked `// indirect` are no longer called development-only.
+  - A TODO that cites another project's issue (`golang/go#61234`, a link to nodejs/node) is no
+    longer looked up in this repository's issues.
+  - A "needs info" issue offered for triage says how many people replied instead of "nobody has
+    replied".
+  - On Gitea and Forgejo, an issue whose comments were only partly read is no longer treated as
+    fully read.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -241,6 +253,11 @@ test that could not load without an OS sandbox. This is the same release.
 - The analyze tool no longer treats a project as deprecated because a README heading mentions
   deprecated or archived things ("Deprecated options"), and no longer takes a library whose
   description mentions learning or samples for a tutorial; both skipped most of the analysis.
+- The analyze tool's facts are more accurate: response times stop at a merge or close, a vulnerable
+  dependency is told the fix on its own release line, Go `// indirect` modules are not called
+  development-only, TODOs citing other projects' issues are not checked against this repository, a
+  needs-info triage item says how many people replied, and partly read Gitea threads are not taken
+  as fully read.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 
