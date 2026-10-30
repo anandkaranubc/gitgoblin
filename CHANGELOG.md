@@ -14,6 +14,20 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   and `--like` say they read GitHub only, and `analyze` goes without hints. Commands `gitgoblin`
   suggests for such a repository keep its host, so they no longer point at GitHub.
 
+## gitgoblin 0.1.4 - Unreleased
+
+**Other changes**
+
+- Files the project's install and test commands leave behind that the repository does not ignore,
+  such as Python's `__pycache__`, coverage reports or `.tsbuildinfo`, are no longer added to the
+  change. Before, a Python project without `__pycache__` in its `.gitignore` stopped a correct fix
+  with "adds binary files", and text output could be committed without a word. Checks also run with
+  `PYTHONDONTWRITEBYTECODE=1`.
+- `gitgoblin-engine publish` no longer refuses with "uncommitted changes: ?? node_modules/" in a
+  repository that does not ignore `node_modules`, or over the files above.
+- Cleaning a run whose setup failed after cloning (an empty repository, a failed checkout) now
+  removes the clone.
+
 ## gitgoblin 0.1.3 - 2026-10-29
 
 Upgrade from 0.1.0 and 0.1.1: both let a repository's commands get around the sandbox in the

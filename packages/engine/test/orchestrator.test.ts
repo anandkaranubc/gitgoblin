@@ -516,6 +516,18 @@ describe("runContribution", () => {
     expect(readFileSync(path.join(result.runDir, "report.md"), "utf8")).toMatch(/install rewrote package-lock\.json; restored/);
   });
 
+  it("leaves what the baseline checks wrote out of the change, and tells Python not to write bytecode", async () => {
+    const repo = await createFixtureRepo();
+    // Output the repository does not ignore, as coverage tools and Python's bytecode cache leave.
+    const task = { ...fixtureTask(repo), commands: { test: "npm test && echo \"bytecode=${PYTHONDONTWRITEBYTECODE:-on}\" > check-output.txt" } };
+    const result = await runContribution({ task }, { workdir: workdir(), env, reporter: silentReporter, runnerFactory: (ctx) => scriptedRunner(ctx.workspace, happyPath) });
+    expect(result.status).toBe("awaiting_approval");
+    expect(readFileSync(path.join(result.workspace!, "check-output.txt"), "utf8")).toBe("bytecode=1\n");
+    const verification = JSON.parse(readFileSync(path.join(result.runDir, "verification-1.json"), "utf8"));
+    expect(verification.diff.changedFiles).toEqual(["src/paginate.js", "test/paginate.test.js"]);
+    expect(await git(["show", "--name-only", "--format=", "HEAD"], result.workspace!, env)).not.toContain("check-output.txt");
+  });
+
   it("says when the tests need Playwright's browsers", async () => {
     const repo = await createFixtureRepo();
     const fail = "node -e \"console.error('browserType.launch: Executable doesn\\'t exist at /Users/x/Library/Caches/ms-playwright/firefox-1482/firefox'); process.exit(1)\"";
