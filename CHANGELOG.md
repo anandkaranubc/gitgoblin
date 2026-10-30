@@ -19,6 +19,13 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   the agent's code run on your machine in the verification step; `.github/workflows/rélease.yml`, a
   `.env` made by renaming, or an image named `ïmage.png` went through unflagged. Both names of a
   renamed file are now checked, and every name as it is on disk.
+- A check command the agent suggests runs on your machine only as a plain run of a known tool. A
+  launcher no longer gets around that: `npx node -e …`, `pnpm exec node -e …`, `yarn node -e …`,
+  `uv run python -c …`, `poetry run python -c …`, `bundle exec ruby -e …` and `npx mocha -r …` were
+  accepted, and ran code the model wrote. The rules for the program a launcher starts now apply too.
+- An `@name` or "Closes #12" in text the model wrote stays inert in the pull request when the text
+  also holds a backtick that pairs with nothing. Before, one stray backtick paired with the code
+  span that wraps the mention, and the person was notified.
 
 **Other changes**
 
@@ -26,6 +33,8 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   the GitHub repository with the same owner and name when given a GitLab or Codeberg one: `explain`
   and `--like` say they read GitHub only, and `analyze` goes without hints. Commands `gitgoblin`
   suggests for such a repository keep its host, so they no longer point at GitHub.
+- Non-ASCII text in a command's output (the diff, a test summary) no longer turns into `��` when
+  the bytes of one character arrive in two pieces.
 - A connection to GitHub or ecosyste.ms that broke off, or hit the 20-second timeout, while a
   response was still arriving failed the request at once. It is now retried like any other network
   failure, and an earlier cached answer is used if the retries fail too. The limit of four requests

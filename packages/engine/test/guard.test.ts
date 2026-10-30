@@ -178,6 +178,11 @@ describe("isSafeCommand", () => {
     "mvn -q test",
     "./gradlew test",
     "ruff check .",
+    "uv run pytest -x tests/",
+    "poetry run pytest",
+    "bundle exec rspec spec/models",
+    "pnpm exec vitest run",
+    "npx tsx --test test/",
   ])("accepts the plain tool invocation %s", (cmd) => expect(isSafeCommand(cmd)).toBe(true));
 
   it.each([
@@ -225,6 +230,21 @@ describe("isSafeCommand", () => {
     "uv tool run evil",
     "uv run --with evil pytest",
     "pipx run evil",
+    // A launcher runs another program, whose own dangerous flags still count.
+    "npx node -e process.exit(0)",
+    "pnpm exec node -e process.exit(0)",
+    "yarn node -e process.exit(0)",
+    "pnpm node -e 1",
+    "uv run python -c print(1)",
+    "poetry run python -c print(1)",
+    "poetry run python -m http.server",
+    "bundle exec ruby -e exit",
+    "npx mocha -r ./x.js",
+    "npx jest --setupFiles ./x.js",
+    "npx vitest --config evil.ts",
+    "npx c8 node -e 1",
+    "npx tsx -e 1",
+    "npx ts-node --eval 1",
   ])("rejects %s", (cmd) => expect(isSafeCommand(cmd)).toBe(false));
 });
 
