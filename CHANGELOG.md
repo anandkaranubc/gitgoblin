@@ -30,6 +30,39 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   response was still arriving failed the request at once. It is now retried like any other network
   failure, and an earlier cached answer is used if the retries fail too. The limit of four requests
   at a time per host also holds again: a request arriving as another finished could go past the queue.
+- When GitHub's answer for a batch of repositories left some out (it does this when a query hits
+  its resource limits), discovery dropped their starter issues and other details for an hour,
+  because the incomplete answer stayed cached. It now asks for each missing repository on its own
+  once and does not cache the incomplete answer. A repository's last merge is also the latest
+  merge now, not the merge of the pull request someone commented on most recently.
+- `contribute` stops for a person when the agent says its change is not finished, instead of
+  preparing a pull request because the checks passed and the reviewer approved the half-done work.
+- The run's time limit holds: no agent session starts once the run is past it, and an agent
+  session that resumes after a dropped connection, or wraps up after running out of turns, gets
+  what is left of its time rather than starting the clock again.
+- `gitgoblin-engine publish` asks for confirmation with the title publishing sends (the one in
+  `delivery.json`), not the one in `pr-title.txt`, which publishing does not read.
+- Files the project's install and test commands leave behind that the repository does not ignore,
+  such as Python's `__pycache__`, coverage reports or `.tsbuildinfo`, are no longer added to the
+  change. Before, a Python project without `__pycache__` in its `.gitignore` stopped a correct fix
+  with "adds binary files", and text output could be committed without a word. Checks also run with
+  `PYTHONDONTWRITEBYTECODE=1`.
+- `gitgoblin-engine publish` no longer refuses with "uncommitted changes: ?? node_modules/" in a
+  repository that does not ignore `node_modules`, or over the files above.
+- Cleaning a run whose setup failed after cloning (an empty repository, a failed checkout) now
+  removes the clone.
+- Repository names that start with a dot or an underscore, or end with an underscore (such as
+  `microsoft/.github` or `octo/_site`), are accepted. A GitLab project in a subgroup
+  (`gitlab.com/group/subgroup/project`) is refused with a clear error. Before, its URL was read as
+  the project named after the subgroup, a different repository or none.
+- Hosts written as numbers in hex or octal (`0x7f.1`, which is 127.0.0.1) are refused like any
+  other IP address, so `analyze` and `contribute` cannot be pointed at your own machine or network
+  that way.
+- Discovery for the `revive` goal finds archived projects again. Its searches asked GitHub for
+  unarchived repositories only, so archived projects, which revive means to suggest for forking,
+  never came back.
+- `discover --limit` above 48 shows 48 results and says so. Before, it showed 48 without a word,
+  although the help said up to 100. Only the 48 most promising candidates get the full lookups.
 - `analyze` gives the token advice when GitHub's rate limit stops it, as `discover` does. Before,
   it printed "GitHub rate limit reached" with no hint to set `GITHUB_TOKEN` or run `gh auth login`.
 - A bad value for `discover --limit`, `--min-stars`, `--max-stars`, `--pushed-within`,
@@ -140,6 +173,19 @@ test that could not load without an OS sandbox. This is the same release.
   response was still arriving failed the request at once. It is now retried like any other network
   failure, and an earlier cached answer is used if the retries fail too. The limit of four requests
   at a time per host also holds again: a request arriving as another finished could go past the queue.
+- When GitHub's answer for a batch of repositories left some out (it does this when a query hits
+  its resource limits), discovery dropped their starter issues and other details for an hour,
+  because the incomplete answer stayed cached. It now asks for each missing repository on its own
+  once and does not cache the incomplete answer. A repository's last merge is also the latest
+  merge now, not the merge of the pull request someone commented on most recently.
+- Repository names that start with a dot or an underscore, or end with an underscore (such as
+  `microsoft/.github` or `octo/_site`), are accepted. A GitLab project in a subgroup
+  (`gitlab.com/group/subgroup/project`) is refused with a clear error. Before, its URL was read as
+  the project named after the subgroup, a different repository or none.
+- Discovery for the `revive` goal finds archived projects again. Its searches asked GitHub for
+  unarchived repositories only, so archived projects, which revive means to suggest for forking,
+  never came back.
+
 - The discover tool gets each repository's GitHub details again (starter issues, contributing guide,
   recent merges). GitHub timed out on its requests for 20 repositories at a time with HTTP 502, and
   one failed request dropped the details of every candidate; it now asks for 10 at a time, splits a
@@ -155,8 +201,23 @@ test that could not load without an OS sandbox. This is the same release.
 - The discover tool's `like` repository goes through the same public-only check as every other
   repository. Before, discovery read it with the person's token, so a private repository's
   description could reach the search queries and its name ecosyste.ms.
+- A running analysis stops when the server stops. Before, when the client closed the server or
+  it was terminated, an analysis still in progress kept running on its own, with its git, and a
+  stuck one kept a CPU core busy until killed by hand.
+- Two analyses of the same repository at once, from one server or two, no longer clone into the
+  same directory; the second waits for the first. Before, one of them failed with git's "File
+  exists" or "destination path already exists" error.
+- The discover tool says when its ranking may be partial: refused searches and failed lookups are
+  listed after the results and in a `warnings` field. Before, they went only to the server's log.
+- The briefing tool finds a stale pull request by its number (`issue_number: 663` for "Revive PR
+  #663"). Before, only issue numbers matched.
+
 - The `gitgoblin contribute` command a briefing suggests for a GitLab or Codeberg repository keeps
   its host, so it no longer points at the GitHub repository with the same name.
+- The discover tool searches public repositories only and refuses filter words that are GitHub
+  search syntax (`is:private`, `user:` and the like). Before, a keyword such as `is:private` ran as
+  part of a search made with the person's token, and each private repository it found was looked up
+  on ecosyste.ms by name before the public check left it out of the results.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 

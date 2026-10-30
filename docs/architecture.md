@@ -25,10 +25,11 @@ gitgoblin is a set of small TypeScript packages that hand each other plain data.
 | `@gitgoblin/core` | Repository identity, discovery goals and signals | `RepoRef`, `parseRepoRef`, `Goal`, `DiscoveryQuery`, `DiscoveryResult`, `Discoverer` |
 | `@gitgoblin/sources` | Talking to GitHub (REST and GraphQL) and the [ecosyste.ms](https://ecosyste.ms) open APIs, with a local SQLite cache and token discovery | HTTP clients |
 | `@gitgoblin/discovery` | Ranking repositories for a goal: candidate strategies, signals, scoring with human-readable reasons | `Discoverer` implementation |
-| `gitgoblin` (`packages/cli`) | The command line: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish` | |
+| `gitgoblin` (`packages/cli`) | The command line: `discover`, `explain`, `goals`, `cache`, `analyze`, `contribute`, `runs`, `show`, `publish`, `clean` | |
 | `@gitgoblin/intel` | Profiling a repository and finding opportunities | `RepositoryProfile`, `ContributionOpportunity`, `AnalysisReport` |
 | `@gitgoblin/engine` | Turning one opportunity into a reviewable pull request | `Task`, `runContribution`, `publishRun` |
 | `@gitgoblin/mcp` | gitgoblin as an MCP server: discovery and intel for any AI coding agent | `createServer`, the tools `discover_repositories`, `explain_repository`, `analyze_repository`, `get_opportunity` |
+| `@gitgoblin/eval` (private) | Backtests: how well discovery and intel rankings predicted real contribution outcomes on past dates | |
 
 Each package is independently testable and has its own `package.json`, `tsconfig.json`, tests, and README. Root scripts (`npm test`, `npm run typecheck`) fan out to every package. Only two packages are published to npm, `gitgoblin` and `@gitgoblin/mcp`, and each bundles the packages it uses when it is packed ([docs/releasing.md](releasing.md)). The packages with non-trivial internal design each have a design note: [intel](../packages/intel/docs/design.md), [engine](../packages/engine/docs/design.md) and [mcp](../packages/mcp/docs/design.md).
 

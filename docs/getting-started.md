@@ -196,4 +196,4 @@ npx gitgoblin publish <runId>            # asks you to type publish, then pushes
 npx gitgoblin clean --finished           # frees the clones finished runs keep (reports and diffs stay)
 ```
 
-[packages/cli/README.md](../packages/cli/README.md) documents every option. The engine's own command, `gitgoblin-engine`, can drive the same runs directly when given the same directory (`--workdir ~/.gitgoblin`); [packages/engine/README.md](../packages/engine/README.md) covers that and the design behind the pipeline.
+[packages/cli/README.md](../packages/cli/README.md) documents every option. In a clone of this repository, the engine's own command (`node packages/engine/src/cli.ts`, which the npm package does not include) can drive the same runs directly when given the same directory (`--workdir ~/.gitgoblin`); [packages/engine/README.md](../packages/engine/README.md) covers that and the design behind the pipeline.

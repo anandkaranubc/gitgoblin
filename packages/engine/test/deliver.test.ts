@@ -1,9 +1,9 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { commitMessage, neutralizeForGitHub, publishPullRequest, pullRequestBody, pullRequestTitle, type DeliveryInput } from "../src/deliver.ts";
-import { git } from "../src/workspace.ts";
+import { git, recordUntracked } from "../src/workspace.ts";
 import { branchNameFor, subjectFor, usesConventionalCommits } from "../src/naming.ts";
 import { TaskSchema, type Task } from "../src/types.ts";
 
@@ -143,6 +143,21 @@ describe("publishPullRequest", () => {
     const head = await git(["rev-parse", "HEAD"], repo, env);
     writeFileSync(path.join(repo, "a"), "2");
     await expect(publishPullRequest({ task: base, delivery: { ...delivery, commitSha: head }, wsPath: repo, bodyFile: "pr.md", env })).rejects.toThrow(/uncommitted changes/);
+  });
+  it("publishes when the only leftovers are install output and what the baseline checks left", async () => {
+    const env = { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@x", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@x" };
+    const repo = mkdtempSync(path.join(os.tmpdir(), "gg-pub-"));
+    await git(["init", "-q", "-b", "main"], repo, env);
+    writeFileSync(path.join(repo, "a"), "1");
+    await git(["add", "."], repo, env);
+    await git(["commit", "-q", "-m", "one"], repo, env);
+    mkdirSync(path.join(repo, "node_modules", "left-pad"), { recursive: true });
+    writeFileSync(path.join(repo, "node_modules", "left-pad", "index.js"), "x\n");
+    writeFileSync(path.join(repo, "coverage.txt"), "x\n");
+    await recordUntracked(repo, env);
+    const delivery = { branch: "gitgoblin/fix-42", commitSha: await git(["rev-parse", "HEAD"], repo, env), commitMessage: "m", prTitle: "T", prBody: "B" };
+    const runner = { gh: async (args: string[]) => (args[0] === "api" && args[1] === "user" ? "octo" : args[0] === "repo" ? "WRITE" : args[0] === "pr" ? "https://github.com/acme/widgets/pull/1" : ""), push: async () => "" };
+    expect((await publishPullRequest({ task: base, delivery, wsPath: repo, bodyFile: "pr.md", env, runner })).url).toBe("https://github.com/acme/widgets/pull/1");
   });
   it("refuses hosts other than GitHub", async () => {
     const task = { ...base, repo: { ...base.repo, host: "gitlab.com" } };

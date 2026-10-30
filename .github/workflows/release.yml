@@ -105,12 +105,21 @@ jobs:
           cat release-notes.md
 
       - run: npm ci
+      # As in CI: without bwrap the engine's Linux sandbox tests skip, so a release could ship a sandbox
+      # those tests would have caught. The last line fails the job if bwrap still cannot sandbox.
+      - name: Install bubblewrap for the engine's sandbox tests
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --unshare-all --die-with-parent --ro-bind / / true
       - run: npm run typecheck
       - run: npm test
       - run: npm run docs:check
       - name: No high-severity advisories in runtime dependencies
         # Runtime dependencies of the workspace packages end up inside the published bundles. Build-only
-        # tools are left out on purpose; docs/releasing.md lists their known advisories.
+        # tools are left out on purpose; docs/releasing.md lists their known advisories. Packages the
+        # bundles inline but declare as devDependencies are checked after packing.
         run: npm audit --omit=dev --audit-level=high
 
       - name: Pack
@@ -122,6 +131,14 @@ jobs:
           npm pack -w "$NAME" --pack-destination out
           tarball=$(cd out && ls -- *.tgz)
           echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+
+      - name: No high-severity advisories in what the bundle inlines
+        env:
+          NAME: ${{ steps.which.outputs.name }}
+        run: |
+          case "$NAME" in gitgoblin) dir=packages/cli ;; *) dir=packages/mcp ;; esac
+          npm audit --json > "$RUNNER_TEMP/audit.json" || true
+          node scripts/check-bundle-advisories.mjs "$dir/dist/THIRD_PARTY_NOTICES.md" "$RUNNER_TEMP/audit.json"
 
       - name: Build the MCPB bundle
         if: steps.which.outputs.name == '@gitgoblin/mcp'

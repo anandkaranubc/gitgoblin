@@ -1,6 +1,7 @@
 {
   "name": "@gitgoblin/sources",
   "version": "0.1.0",
+  "private": true,
   "description": "Data sources for gitgoblin: GitHub and ecosyste.ms clients with a shared SQLite cache and rate-limit handling",
   "type": "module",
   "license": "MIT",

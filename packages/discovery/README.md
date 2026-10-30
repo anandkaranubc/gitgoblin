@@ -37,8 +37,8 @@ not yet passed its test on held-out dates (`packages/eval/docs/design.md`).
 ## Pipeline
 
 1. **Search.** Several GitHub searches per goal, each a deliberately different slice (for `contribute`: repositories with starter issues, with help-wanted issues, and small active ones). Languages multiply the plans; topics, keywords, star bounds and dates narrow them. `seed` ("more like this") replaces the goal slices with the seed's topics, else its package keywords, else description words.
-2. **Prefilter.** Archived repositories, forks, excluded owners and anything outside the user's bounds are dropped before any enrichment.
-3. **Rank cheaply.** Facts-only signals pick the top 3× limit candidates.
+2. **Prefilter.** Archived repositories (except for `revive`, where forking one is a way to revive it), forks, excluded owners and anything outside the user's bounds are dropped before any enrichment.
+3. **Rank cheaply.** Facts-only signals pick the top 3× limit candidates, at most `maxEnriched` (48). That is also the most results one search returns; a larger `limit` is lowered to it with a warning.
 4. **Enrich.** ecosyste.ms repository data for everyone; package and issue statistics only for goals that weigh them; one batched GitHub GraphQL call when a token is available.
 5. **Rank fully.** Weighted signals plus explained bonuses. Repositories the goal profile excludes (for example "no pushes in 6 months" for `contribute`) are removed.
 6. **Diversify.** At most two results per owner near the top; the rest move down rather than disappearing.
