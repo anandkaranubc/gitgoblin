@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, openSync, readFileSync, readSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "./exec.ts";
@@ -157,26 +157,67 @@ export async function removeWorkspace(ws: Workspace, env: Record<string, string>
  */
 const STRAY_CACHES = [":(glob)**/node_modules/**", ":(glob)**/.pnpm-store/**", ":(glob)**/.yarn-cache/**"];
 
+const NOT_STRAY = STRAY_CACHES.map((p) => p.replace(":(glob)", ":(exclude,glob)"));
+
+/** Kept in the workspace's own git directory, which neither the agent nor the repository's commands may write. */
+async function untrackedRecord(wsPath: string, env: Record<string, string>): Promise<string> {
+  return path.resolve(wsPath, await git(["rev-parse", "--git-path", "gitgoblin-untracked"], wsPath, env));
+}
+
+/**
+ * Records the untracked files the install and the baseline checks left that the repository does not
+ * ignore (`__pycache__`, coverage reports, `.tsbuildinfo`). Called before the agent starts; what it
+ * records is never staged, so the change carries only the agent's work. A whole new folder is one
+ * entry, as `git status` shows it.
+ */
+export async function recordUntracked(wsPath: string, env: Record<string, string>): Promise<void> {
+  const files = await git(["ls-files", "-o", "--exclude-standard", "--directory", "--no-empty-directory", "-z"], wsPath, env, 5 * 60_000, DEFAULT_MAX_PATCH_BYTES);
+  writeFileSync(await untrackedRecord(wsPath, env), files);
+}
+
+/** The record's path, or undefined when there is none or it is empty: `git reset` given no paths would reset everything. */
+async function recordedUntracked(wsPath: string, env: Record<string, string>): Promise<string | undefined> {
+  const file = await untrackedRecord(wsPath, env);
+  return (statSync(file, { throwIfNoEntry: false })?.size ?? 0) > 0 ? file : undefined;
+}
+
 /**
  * Stages every change, including new files, so diffs and commits see the same content. Stray tool
- * caches are reset to how they were at the base commit, which also undoes an agent's own
- * `git add -A` or commit of them.
+ * caches and the untracked output recorded before the agent ran are reset to how they were at the
+ * base commit, which also undoes an agent's own `git add -A` or commit of them.
  */
 export async function stageAll(wsPath: string, env: Record<string, string>, baseSha?: string): Promise<void> {
-  await git(["add", "-A", "--", ".", ...STRAY_CACHES.map((p) => p.replace(":(glob)", ":(exclude,glob)"))], wsPath, env);
-  if (baseSha) await git(["reset", "-q", baseSha, "--", ...STRAY_CACHES], wsPath, env).catch(() => undefined);
+  await git(["add", "-A", "--", ".", ...NOT_STRAY], wsPath, env);
+  if (!baseSha) return;
+  await git(["reset", "-q", baseSha, "--", ...STRAY_CACHES], wsPath, env).catch(() => undefined);
+  const recorded = await recordedUntracked(wsPath, env);
+  if (recorded) await git(["reset", "-q", baseSha, `--pathspec-from-file=${recorded}`, "--pathspec-file-nul"], wsPath, { ...env, GIT_LITERAL_PATHSPECS: "1" });
+}
+
+/**
+ * `git status --porcelain` lines for what the workspace holds beyond HEAD, leaving out install output
+ * in STRAY_CACHES and the untracked output recorded before the agent ran; empty when nothing.
+ */
+export async function uncommittedChanges(wsPath: string, env: Record<string, string>): Promise<string> {
+  const status = await git(["status", "--porcelain", "-z", "--", ".", ...NOT_STRAY], wsPath, env);
+  const file = await recordedUntracked(wsPath, env);
+  const recorded = new Set(file ? readFileSync(file, "utf8").split("\0") : []);
+  return status
+    .split("\0")
+    .filter((entry) => entry && !(entry.startsWith("?? ") && recorded.has(entry.slice(3))))
+    .join("\n");
 }
 
 /**
  * What a published run's workspace holds beyond the published commit, in words, or undefined when
- * nothing: changes not committed (install output in STRAY_CACHES aside), and commits after it on HEAD
+ * nothing: changes not committed (install and baseline output aside), and commits after it on HEAD
  * or the run's branch. A workspace git cannot read counts as holding work, so nothing is deleted blind.
  */
 export async function unpublishedWork(wsPath: string, commitSha: unknown, branch: string, env: Record<string, string>): Promise<string | undefined> {
   let status: string;
   let ahead = 0;
   try {
-    status = await git(["status", "--porcelain", "--", ".", ...STRAY_CACHES.map((p) => p.replace(":(glob)", ":(exclude,glob)"))], wsPath, env);
+    status = await uncommittedChanges(wsPath, env);
     if (typeof commitSha === "string") ahead = Number(await git(["rev-list", "--count", "HEAD", branch, `^${commitSha}`], wsPath, env));
   } catch (error) {
     return `a state git could not read (${error instanceof Error ? error.message.split("\n")[0] : String(error)})`;
@@ -204,12 +245,13 @@ async function numstat(wsPath: string, baseSha: string, env: Record<string, stri
 }
 
 /**
- * Untracked files the repository ignores, outside the stray caches, that `keep` picks, each with a hash
- * of its content. Staging leaves ignored files out, so a file the agent adds together with a .gitignore
- * line for it (or under a path already ignored) never reaches the diff, while the checks still load it.
+ * Untracked files outside the stray caches that `keep` picks, ignored ones included, each with a hash of
+ * its content. Staging leaves out what git ignores and what was untracked before the agent ran, so a file
+ * the agent adds together with a .gitignore line for it, or edits there, never reaches the diff, while
+ * the checks still load it.
  */
-export async function ignoredFiles(wsPath: string, env: Record<string, string>, keep: (file: string) => boolean): Promise<Map<string, string>> {
-  const listing = await git(["ls-files", "-o", "-i", "--exclude-standard", "-z", "--", ".", ...STRAY_CACHES.map((p) => p.replace(":(glob)", ":(exclude,glob)"))], wsPath, env, 5 * 60_000, DEFAULT_MAX_PATCH_BYTES);
+export async function untrackedFiles(wsPath: string, env: Record<string, string>, keep: (file: string) => boolean): Promise<Map<string, string>> {
+  const listing = await git(["ls-files", "-o", "-z", "--", ".", ...NOT_STRAY], wsPath, env, 5 * 60_000, DEFAULT_MAX_PATCH_BYTES);
   const files = new Map<string, string>();
   for (const file of listing.split("\0").filter((f) => f && keep(f))) {
     let hash = "unreadable";

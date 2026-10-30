@@ -46,6 +46,15 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   what is left of its time rather than starting the clock again.
 - `gitgoblin-engine publish` asks for confirmation with the title publishing sends (the one in
   `delivery.json`), not the one in `pr-title.txt`, which publishing does not read.
+- Files the project's install and test commands leave behind that the repository does not ignore,
+  such as Python's `__pycache__`, coverage reports or `.tsbuildinfo`, are no longer added to the
+  change. Before, a Python project without `__pycache__` in its `.gitignore` stopped a correct fix
+  with "adds binary files", and text output could be committed without a word. Checks also run with
+  `PYTHONDONTWRITEBYTECODE=1`.
+- `gitgoblin-engine publish` no longer refuses with "uncommitted changes: ?? node_modules/" in a
+  repository that does not ignore `node_modules`, or over the files above.
+- Cleaning a run whose setup failed after cloning (an empty repository, a failed checkout) now
+  removes the clone.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -168,6 +177,12 @@ test that could not load without an OS sandbox. This is the same release.
 - The discover tool's `like` repository goes through the same public-only check as every other
   repository. Before, discovery read it with the person's token, so a private repository's
   description could reach the search queries and its name ecosyste.ms.
+- A running analysis stops when the server stops. Before, when the client closed the server or
+  it was terminated, an analysis still in progress kept running on its own, with its git, and a
+  stuck one kept a CPU core busy until killed by hand.
+- Two analyses of the same repository at once, from one server or two, no longer clone into the
+  same directory; the second waits for the first. Before, one of them failed with git's "File
+  exists" or "destination path already exists" error.
 - The `gitgoblin contribute` command a briefing suggests for a GitLab or Codeberg repository keeps
   its host, so it no longer points at the GitHub repository with the same name.
 - The discover tool searches public repositories only and refuses filter words that are GitHub

@@ -1,4 +1,5 @@
 import { type ChildProcess, fork, spawnSync } from "node:child_process";
+import { constants } from "node:os";
 import type { Writable } from "node:stream";
 
 /*
@@ -46,6 +47,21 @@ export function killTree(child: ChildProcess): void {
   }
 }
 
+/** Children still running. Each leads its own process group, so nothing stops them when the server goes. */
+const live = new Set<ChildProcess>();
+let hooked = false;
+
+/** Kills every running child, with what it started, when this process exits, is interrupted or terminated. */
+function killChildrenOnExit(): void {
+  if (hooked) return;
+  hooked = true;
+  process.on("exit", () => {
+    for (const child of live) killTree(child);
+  });
+  // A signal's default action skips "exit" handlers, so exit through them, with the status the signal would give.
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.once(signal, () => process.exit(128 + constants.signals[signal]));
+}
+
 /** Starts `entry` as a child process, sends it `task`, and resolves with the result it sends back. */
 export function runInChild<T>(entry: string, task: unknown, options: IsolatedOptions): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -61,6 +77,8 @@ export function runInChild<T>(entry: string, task: unknown, options: IsolatedOpt
       execArgv: options.maxOldSpaceMb ? [`--max-old-space-size=${options.maxOldSpaceMb}`] : [],
       serialization: "advanced",
     });
+    live.add(child);
+    killChildrenOnExit();
     const sink = options.outputSink ?? process.stderr;
     child.stdout?.pipe(sink, { end: false });
     child.stderr?.pipe(sink, { end: false });
@@ -71,6 +89,7 @@ export function runInChild<T>(entry: string, task: unknown, options: IsolatedOpt
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", onAbort);
       killTree(child);
+      live.delete(child);
       outcome();
     };
     const timer = setTimeout(() => {
