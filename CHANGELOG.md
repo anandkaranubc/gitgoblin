@@ -5,6 +5,17 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
+## gitgoblin 0.1.4 - Unreleased
+
+**Safety**
+
+- `contribute` checks a change for edited test and build configuration, CI workflows, secret files
+  and binary files by name, and a renamed file or a name with non-ASCII letters slipped past those
+  checks. Moving `tests/helpers.py` to `tests/conftest.py`, or adding `tests/ünï/conftest.py`, let
+  the agent's code run on your machine in the verification step; `.github/workflows/rélease.yml`, a
+  `.env` made by renaming, or an image named `ïmage.png` went through unflagged. Both names of a
+  renamed file are now checked, and every name as it is on disk.
+
 ## gitgoblin 0.1.3 - 2026-10-29
 
 Upgrade from 0.1.0 and 0.1.1: both let a repository's commands get around the sandbox in the
