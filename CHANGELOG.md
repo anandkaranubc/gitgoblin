@@ -30,6 +30,11 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   response was still arriving failed the request at once. It is now retried like any other network
   failure, and an earlier cached answer is used if the retries fail too. The limit of four requests
   at a time per host also holds again: a request arriving as another finished could go past the queue.
+- When GitHub's answer for a batch of repositories left some out (it does this when a query hits
+  its resource limits), discovery dropped their starter issues and other details for an hour,
+  because the incomplete answer stayed cached. It now asks for each missing repository on its own
+  once and does not cache the incomplete answer. A repository's last merge is also the latest
+  merge now, not the merge of the pull request someone commented on most recently.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -131,6 +136,12 @@ test that could not load without an OS sandbox. This is the same release.
   response was still arriving failed the request at once. It is now retried like any other network
   failure, and an earlier cached answer is used if the retries fail too. The limit of four requests
   at a time per host also holds again: a request arriving as another finished could go past the queue.
+- When GitHub's answer for a batch of repositories left some out (it does this when a query hits
+  its resource limits), discovery dropped their starter issues and other details for an hour,
+  because the incomplete answer stayed cached. It now asks for each missing repository on its own
+  once and does not cache the incomplete answer. A repository's last merge is also the latest
+  merge now, not the merge of the pull request someone commented on most recently.
+
 - The discover tool gets each repository's GitHub details again (starter issues, contributing guide,
   recent merges). GitHub timed out on its requests for 20 repositories at a time with HTTP 502, and
   one failed request dropped the details of every candidate; it now asks for 10 at a time, splits a
