@@ -364,8 +364,10 @@ const SHELL_HIDDEN_ENV = [
  * Sandbox for the agent's shell: no network, writes only in the workspace (never `.git`) and the
  * temp dir, nothing at all for reviewers, and no credential files or model keys visible to commands.
  */
-export function sandboxSettings(workspace: string, profile: ToolProfile, extraWrite: string[] = []): SandboxSettings {
+export function sandboxSettings(workspace: string, profile: ToolProfile, extraWrite: string[] = [], tmp?: string): SandboxSettings {
   const home = os.homedir();
+  // The run's own temp directory replaces the shared ones, where other programs keep sockets and FIFOs (see SpecOptions.tmp).
+  const temp = tmp ? [tmp] : [os.tmpdir(), ...tempDirs()];
   return {
     enabled: true,
     failIfUnavailable: true,
@@ -373,9 +375,9 @@ export function sandboxSettings(workspace: string, profile: ToolProfile, extraWr
     allowUnsandboxedCommands: false,
     network: { allowedDomains: [], allowLocalBinding: true },
     filesystem: {
-      // The same temp directories (per-user and the shared /tmp, as real paths) and tool caches the
-      // repository's own commands get, so the agent can run the project's commands as documented.
-      allowWrite: profile === "build" ? [...new Set([workspace, os.tmpdir(), ...specFor(workspace, false, { extraWrite }).extraWrite])] : [os.tmpdir(), ...tempDirs()],
+      // The same temp directories (as real paths) and tool caches the repository's own commands get,
+      // so the agent can run the project's commands as documented.
+      allowWrite: profile === "build" ? [...new Set([workspace, ...temp, ...specFor(workspace, false, { extraWrite, ...(tmp ? { tmp } : {}) }).extraWrite])] : temp,
       denyWrite: [path.join(workspace, ".git")],
       // The same credential locations the repository's own commands cannot read, keychains included.
       denyRead: credentialPaths(home),
