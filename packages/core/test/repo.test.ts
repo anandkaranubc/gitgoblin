@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeHost, parseRepoRef, repoId, repoUrl, sameRepo, toRepoRef } from "../src/index.ts";
+import { isForgeHost } from "../src/repo.ts";
 
 describe("parseRepoRef", () => {
   it("parses owner/name with the default host", () => {
@@ -47,6 +48,25 @@ describe("parseRepoRef", () => {
     expect(parseRepoRef("owner/name with spaces")).toBeUndefined();
     expect(parseRepoRef("../../etc/passwd")).toBeUndefined();
   });
+
+  it("accepts names forges allow with a leading dot or underscore or a trailing underscore", () => {
+    expect(parseRepoRef("microsoft/.github")).toEqual({ host: "github.com", owner: "microsoft", name: ".github" });
+    expect(parseRepoRef("https://github.com/github/.github")).toEqual({ host: "github.com", owner: "github", name: ".github" });
+    expect(parseRepoRef("octo/_site")?.name).toBe("_site");
+    expect(parseRepoRef("octo/repo_")?.name).toBe("repo_");
+    for (const name of [".", "..", "-x", "a\u0000b", "a\nb"]) expect(parseRepoRef(`octo/${name}`)).toBeUndefined();
+    expect(parseRepoRef("https://github.com/octo/..")).toBeUndefined();
+  });
+
+  it("refuses a GitLab project in a subgroup instead of cutting it down to its group", () => {
+    expect(parseRepoRef("https://gitlab.com/gitlab-org/security-products/analyzers/semgrep")).toBeUndefined();
+    expect(parseRepoRef("https://gitlab.com/gitlab-org/security-products/analyzers/semgrep/-/issues/7")).toBeUndefined();
+    expect(parseRepoRef("https://gitlab.gnome.org/World/Rust/gtk-rs")).toBeUndefined();
+    expect(parseRepoRef("https://gitlab.com/inkscape/inkscape/-/merge_requests/1")).toEqual({ host: "gitlab.com", owner: "inkscape", name: "inkscape" });
+    // Elsewhere, paths past owner/name are pages of the repository.
+    expect(parseRepoRef("https://github.com/o/n/tree/main/-/x")).toEqual({ host: "github.com", owner: "o", name: "n" });
+    expect(parseRepoRef("https://codeberg.org/o/n/src/branch/main")).toEqual({ host: "codeberg.org", owner: "o", name: "n" });
+  });
 });
 
 describe("identity helpers", () => {
@@ -63,6 +83,13 @@ describe("identity helpers", () => {
     expect(parseRepoRef("https://git.example.org:8443/o/n")).toBeUndefined();
     expect(parseRepoRef("https://user:pass@github.com/o/n")).toBeUndefined();
     expect(parseRepoRef("localhost/o/n")).toBeUndefined();
+    // Numeric forms URLs and the system resolver read as IPv4 addresses: 127.0.0.1 and 169.254.169.254.
+    for (const input of ["0x7f.1/o/n", "0xa9.254.169.254/o/n", "git@0x7f.0.0.1:o/n.git", "017.0.0.1/o/n", "127.1/o/n", "example.123/o/n", "a.0x/o/n"]) {
+      expect(parseRepoRef(input)).toBeUndefined();
+    }
+    expect(isForgeHost("0x7f.1")).toBe(false);
+    expect(isForgeHost("0x7f.example.org")).toBe(true);
+    expect(isForgeHost("1.2.3.example")).toBe(true);
     // Ordinary forms still work, including self-hosted forges and http.
     expect(parseRepoRef("http://git.example.org/o/n")).toEqual({ host: "git.example.org", owner: "o", name: "n" });
     expect(parseRepoRef("ssh://git@codeberg.org/forgejo/forgejo.git")).toEqual({ host: "codeberg.org", owner: "forgejo", name: "forgejo" });

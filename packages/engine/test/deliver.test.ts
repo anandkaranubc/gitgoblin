@@ -177,6 +177,20 @@ describe("neutralizeForGitHub", () => {
     expect(neutralizeForGitHub("fixed: https://github.com/acme/widgets/issues/9")).toBe("fixed: `https://github.com/acme/widgets/issues/9`");
     expect(neutralizeForGitHub("see #12 for context")).toBe("see #12 for context");
   });
+  it("keeps mentions inert next to backticks that pair with nothing", () => {
+    // Under CommonMark the stray backtick would pair with the one the neutralizing added, leaving @alice live.
+    expect(neutralizeForGitHub("the ` key, thanks @alice")).toBe("the \\` key, thanks `@alice`");
+    expect(neutralizeForGitHub("a ` stray then Closes #12")).toBe("a \\` stray then Closes `#12`");
+    expect(neutralizeForGitHub("stray `@alice")).toBe("stray \\``@alice`");
+    // Runs of different lengths do not make a code span, so what sits between them is not code.
+    expect(neutralizeForGitHub("``a @alice`")).toBe("\\`\\`a `@alice`\\`");
+    expect(neutralizeForGitHub("an escaped \\`x` @alice")).toBe("an escaped \\`x\\` `@alice`");
+    expect(neutralizeForGitHub("cc \\@alice")).toBe("cc `@alice`");
+  });
+  it("keeps real code spans as written and does not let a new one run into them", () => {
+    expect(neutralizeForGitHub("``a ` @b`` and `@c`")).toBe("``a ` @b`` and `@c`");
+    expect(neutralizeForGitHub("``x``@alice and @bob``y``")).toBe("``x`` `@alice` and `@bob` ``y``");
+  });
   it("leaves ordinary prose alone", () => {
     expect(neutralizeForGitHub("Changed `<` to `<=` in the slice bound.")).toBe("Changed `<` to `<=` in the slice bound.");
   });

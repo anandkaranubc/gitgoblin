@@ -1,5 +1,6 @@
 import { parse as parseToml } from "smol-toml";
 import { parse as parseYaml } from "yaml";
+import { requireBlockLines } from "../manifests/go.ts";
 
 export type OsvEcosystem = "npm" | "PyPI" | "Go" | "crates.io" | "RubyGems" | "Packagist";
 
@@ -144,12 +145,12 @@ function parseComposerLock(text: string): LockedPackage[] {
 
 function parseGoMod(text: string): LockedPackage[] {
   const out: LockedPackage[] = [];
-  const lines: string[] = [];
-  for (const block of text.matchAll(/^require\s*\(([^)]*)\)/gms)) lines.push(...block[1]!.split("\n"));
+  const lines = requireBlockLines(text);
   for (const single of text.matchAll(/^require\s+(\S+\s+\S+.*)$/gm)) lines.push(single[1]!);
   for (const raw of lines) {
     const m = /^\s*(\S+)\s+v(\S+)/.exec(raw);
-    if (m) out.push({ ecosystem: "Go", name: m[1]!, version: m[2]!, dev: /\/\/\s*indirect/.test(raw) });
+    // `// indirect` means transitive, not development-only; Go has no development dependencies.
+    if (m) out.push({ ecosystem: "Go", name: m[1]!, version: m[2]!, dev: false });
   }
   return out;
 }

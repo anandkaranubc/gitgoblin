@@ -128,7 +128,7 @@ export function findSkippedTests(path: string, text: string): SkippedTest[] {
     const reason = /reason[ \t]{0,5}=[ \t]{0,5}["'`]([^"'`\n]{1,300})["'`]/.exec(window)?.[1] ?? /skip(?:If|Unless|f)?\([^"'`\n]{0,200}["'`]([^"'`\n]{1,300})["'`]/.exec(window)?.[1] ?? /\.skip\([ \t]{0,5}["'`]([^"'`\n]{1,300})["'`]/.exec(window)?.[1] ?? /\bt\.Skip(?:f|Now)?\([ \t]{0,5}"([^"\n]{1,300})"/.exec(line)?.[1];
     // Conditional skips (if ...: skip / if testing.Short() { t.Skip }) are deliberate, not forgotten.
     const previous = lines[i - 1] ?? "";
-    const conditional = /skipif|skipIf|skipUnless|\.skipIf\(|skip_if|xfail\(.*condition|\bif\b/.test(line) || (/^\s*if\b.*[{:]\s*$/.test(previous));
+    const conditional = /skipif|skipIf|skipUnless|\.skipIf\(|skip_if|xfail\(.{0,300}condition|\bif\b/.test(line) || (/^\s*if\b.*[{:]\s*$/.test(previous));
     if (conditional && !/TODO|FIXME|flaky|broken/i.test(window)) continue;
     if (reason && INTENTIONAL.test(reason) && !/TODO|FIXME|flaky|broken|fails|temporar|until|#\d+/i.test(reason)) continue;
     out.push({ path, line: i + 1, text: line.trim(), reason });

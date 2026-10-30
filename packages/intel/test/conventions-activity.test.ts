@@ -52,4 +52,20 @@ describe("activity helpers", () => {
     expect(firstResponseHours("2026-10-01T00:00:00Z", "author", [], now)).toBe(21 * 24);
     expect(firstResponseHours("2026-10-21T00:00:00Z", "author", [], now)).toBeUndefined();
   });
+
+  it("ends the wait at a merge, which answers, or at a close, which only stops the clock", () => {
+    const now = new Date("2026-10-22T00:00:00Z");
+    expect(firstResponseHours("2026-09-01T00:00:00Z", "author", [], now, "2026-09-01T02:00:00Z", "2026-09-01T02:00:00Z")).toBe(2);
+    expect(firstResponseHours("2026-09-01T00:00:00Z", "author", [{ createdAt: "2026-09-01T05:00:00Z", author: { login: "maint", isBot: false } }], now, "2026-09-01T02:00:00Z", "2026-09-01T02:00:00Z")).toBe(2);
+    expect(firstResponseHours("2026-09-01T00:00:00Z", "author", [], now, "2026-09-11T00:00:00Z")).toBe(240);
+    // Closed a day later with no reply: maybe by its author, so no evidence either way.
+    expect(firstResponseHours("2026-09-01T00:00:00Z", "author", [], now, "2026-09-02T00:00:00Z")).toBeUndefined();
+  });
+
+  it("does not report outside PRs merged within hours as waiting a month", () => {
+    const now = new Date("2026-10-29T00:00:00Z");
+    const pr = (n: number) => ({ number: n, title: `fix ${n}`, url: `u${n}`, state: "MERGED", isDraft: false, merged: true, mergedAt: `2026-09-0${n}T02:00:00Z`, closedAt: `2026-09-0${n}T02:00:00Z`, createdAt: `2026-09-0${n}T00:00:00Z`, updatedAt: `2026-09-0${n}T02:00:00Z`, mergeable: "UNKNOWN", author: { login: `c${n}`, isBot: false }, association: "CONTRIBUTOR", additions: 1, deletions: 1, changedFiles: 1, headRefName: "x", labels: [], closingIssues: [], firstComments: [], lastComments: [], reviews: [] });
+    const samples = { isMirror: false, openIssueCount: 0, openPrCount: 0, labels: [], openIssues: [], closedIssues: [], openPrs: [], closedPrs: [1, 2, 3, 4, 5].map(pr) };
+    expect(computeActivity({ commits: [], samples: samples as never, releases: [], pushedAt: undefined, openIssues: 0, openPrs: 0, now }).medianPrResponseHours).toBe(2);
+  });
 });

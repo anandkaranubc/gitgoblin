@@ -61,6 +61,16 @@ export function explainFailure(error: unknown, env: NodeJS.ProcessEnv = process.
   return error instanceof Error ? error.message : String(error);
 }
 
+/** How deps.ts labels discovery's warning events in progress messages. */
+const WARNING = "warning: ";
+
+/** The issue or pull request number an opportunity is about. Stale pull requests have no issue; their evidence links the pull request. */
+function subjectNumber(o: ContributionOpportunity): number | undefined {
+  if (o.issue) return o.issue.number;
+  const pr = o.kind === "stale_pr" ? o.evidence.find((e) => e.kind === "pull_request")?.locator.match(/\/(?:pull|pulls|merge_requests)\/(\d+)(?:$|[/?#])/) : undefined;
+  return pr ? Number(pr[1]) : undefined;
+}
+
 const DISCOVERY_REFUSAL = "Discovery and explain_repository look repositories up through GitHub's API; analyze_repository and get_opportunity also read gitlab.com and codeberg.org.";
 const ANALYSIS_REFUSAL = "Other hosts are refused so the server is never pointed at a private network.";
 
@@ -175,8 +185,13 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
   const reports = new Map<string, CachedReport>();
   const server = new McpServer({ name: "gitgoblin", version: VERSION }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS });
 
-  async function withDiscovery<T>(ctx: ServerContext, fn: (session: Awaited<ReturnType<ServerDeps["openDiscovery"]>>) => Promise<T>): Promise<T> {
-    const session = await deps.openDiscovery(progressReporter(ctx));
+  /** Runs `fn` on a discovery session. Warnings (a refused search, failed lookups) also go into `warnings`. */
+  async function withDiscovery<T>(ctx: ServerContext, fn: (session: Awaited<ReturnType<ServerDeps["openDiscovery"]>>) => Promise<T>, warnings: string[] = []): Promise<T> {
+    const report = progressReporter(ctx);
+    const session = await deps.openDiscovery((message) => {
+      if (message.startsWith(WARNING)) warnings.push(message.slice(WARNING.length));
+      report(message);
+    });
     try {
       return await fn(session);
     } finally {
@@ -244,13 +259,17 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
         if (refusal) return failure(`like: ${refusal}`);
       }
       try {
-        const found = await withDiscovery(ctx, (session) => session.discover(query));
+        const collected: string[] = [];
+        const found = await withDiscovery(ctx, (session) => session.discover(query), collected);
         // A token can see private repositories in search results; only confirmed-public ones are shown.
         const checks = await mapLimit(found, 4, (result) => deps.isPublic(result.repo));
         const results = found.filter((_, index) => checks[index]?.public === true);
         const omitted = found.length - results.length;
         const note = omitted > 0 ? `\n\n${omitted} result${omitted === 1 ? " was" : "s were"} left out because gitgoblin could not confirm ${omitted === 1 ? "it is" : "they are"} public.` : "";
-        return text(`${formatDiscovery(results, query.goal)}${note}`, { goal: query.goal, count: results.length, omitted, results: results.map(compactResult) });
+        // A refused search or failed lookup means a partial ranking; say so, as the command line does.
+        const warnings = [...new Set(collected)];
+        const warned = warnings.length > 0 ? `\n\nWarnings, so this ranking may be incomplete:\n${warnings.map((w) => `- ${w}`).join("\n")}` : "";
+        return text(`${formatDiscovery(results, query.goal)}${note}${warned}`, { goal: query.goal, count: results.length, omitted, warnings, results: results.map(compactResult) });
       } catch (error) {
         return failure(explainFailure(error));
       }
@@ -261,7 +280,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
     "explain_repository",
     {
       title: "Explain a repository's ranking",
-      description: "Show every discovery signal for one GitHub repository under a goal: activity, responsiveness, bus factor, newcomer friendliness, docs, maturity, popularity, usage, momentum and license, each with its value, its weight for the goal and the evidence behind it. Use it to understand or compare specific repositories. Takes a few seconds.",
+      description: "Show every discovery signal for one GitHub repository under a goal: activity, responsiveness, acceptance (the share of pull requests it merges), bus factor, newcomer friendliness, docs, maturity, popularity, usage, momentum and license, each with its value, its weight for the goal and the evidence behind it. Use it to understand or compare specific repositories. Takes a few seconds.",
       inputSchema: z.object({
         repository: repositorySchema,
         goal: goalSchema.optional().describe(`Goal to weigh the signals for (default contribute): ${GOAL_TEXT}.`),
@@ -336,7 +355,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
       if (typeof ref === "string") return failure(ref);
       if (args.opportunity_id === undefined && args.issue_number === undefined) return failure("Give opportunity_id or issue_number.");
       const find = (report: AnalysisReport): ContributionOpportunity | undefined =>
-        report.opportunities.find((o) => (args.opportunity_id !== undefined && o.id === args.opportunity_id) || (args.issue_number !== undefined && o.issue?.number === args.issue_number));
+        report.opportunities.find((o) => (args.opportunity_id !== undefined && o.id === args.opportunity_id) || (args.issue_number !== undefined && subjectNumber(o) === args.issue_number));
       try {
         const refusal = await refusePrivate(ref);
         if (refusal) return failure(refusal);
@@ -344,8 +363,8 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
         const report = cachedReport(ref) ?? (await analyze(ref, ctx, { maxOpportunities: 15, checkLinks: false, dependencyChecks: true, goal: "contribute" }));
         const opportunity = find(report);
         if (!opportunity) {
-          const available = report.opportunities.map((o) => `${o.id}${o.issue ? ` (#${o.issue.number})` : ""}: ${o.title}`).slice(0, 15);
-          return failure(`No opportunity ${args.opportunity_id ?? `for issue #${args.issue_number}`} in ${ref.owner}/${ref.name}.${available.length ? ` Available:\n${available.join("\n")}` : " The analysis found no opportunities."}`);
+          const available = report.opportunities.map((o) => `${o.id}${subjectNumber(o) !== undefined ? ` (#${subjectNumber(o)})` : ""}: ${o.title}`).slice(0, 15);
+          return failure(`No opportunity ${args.opportunity_id ?? `for #${args.issue_number}`} in ${ref.owner}/${ref.name}.${available.length ? ` Available:\n${available.join("\n")}` : " The analysis found no opportunities."}`);
         }
         return text(formatOpportunity(report, opportunity), { repository: `${ref.owner}/${ref.name}`, opportunity });
       } catch (error) {

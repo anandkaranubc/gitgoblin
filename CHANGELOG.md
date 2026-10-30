@@ -19,6 +19,13 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   the agent's code run on your machine in the verification step; `.github/workflows/rélease.yml`, a
   `.env` made by renaming, or an image named `ïmage.png` went through unflagged. Both names of a
   renamed file are now checked, and every name as it is on disk.
+- A check command the agent suggests runs on your machine only as a plain run of a known tool. A
+  launcher no longer gets around that: `npx node -e …`, `pnpm exec node -e …`, `yarn node -e …`,
+  `uv run python -c …`, `poetry run python -c …`, `bundle exec ruby -e …` and `npx mocha -r …` were
+  accepted, and ran code the model wrote. The rules for the program a launcher starts now apply too.
+- An `@name` or "Closes #12" in text the model wrote stays inert in the pull request when the text
+  also holds a backtick that pairs with nothing. Before, one stray backtick paired with the code
+  span that wraps the mention, and the person was notified.
 - That check also covers files git ignores, which never appear in the diff: a `conftest.py` the
   agent added together with a `.gitignore` line for it was loaded by the tests unseen. And when the
   first look at the issue turned up lint, build or typecheck commands, they ran on whatever that
@@ -30,6 +37,8 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   the GitHub repository with the same owner and name when given a GitLab or Codeberg one: `explain`
   and `--like` say they read GitHub only, and `analyze` goes without hints. Commands `gitgoblin`
   suggests for such a repository keep its host, so they no longer point at GitHub.
+- Non-ASCII text in a command's output (the diff, a test summary) no longer turns into `��` when
+  the bytes of one character arrive in two pieces.
 - A connection to GitHub or ecosyste.ms that broke off, or hit the 20-second timeout, while a
   response was still arriving failed the request at once. It is now retried like any other network
   failure, and an earlier cached answer is used if the retries fail too. The limit of four requests
@@ -55,6 +64,48 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
   repository that does not ignore `node_modules`, or over the files above.
 - Cleaning a run whose setup failed after cloning (an empty repository, a failed checkout) now
   removes the clone.
+- Repository names that start with a dot or an underscore, or end with an underscore (such as
+  `microsoft/.github` or `octo/_site`), are accepted. A GitLab project in a subgroup
+  (`gitlab.com/group/subgroup/project`) is refused with a clear error. Before, its URL was read as
+  the project named after the subgroup, a different repository or none.
+- Hosts written as numbers in hex or octal (`0x7f.1`, which is 127.0.0.1) are refused like any
+  other IP address, so `analyze` and `contribute` cannot be pointed at your own machine or network
+  that way.
+- Discovery for the `revive` goal finds archived projects again. Its searches asked GitHub for
+  unarchived repositories only, so archived projects, which revive means to suggest for forking,
+  never came back.
+- `discover --limit` above 48 shows 48 results and says so. Before, it showed 48 without a word,
+  although the help said up to 100. Only the 48 most promising candidates get the full lookups.
+- `analyze` gives the token advice when GitHub's rate limit stops it, as `discover` does. Before,
+  it printed "GitHub rate limit reached" with no hint to set `GITHUB_TOKEN` or run `gh auth login`.
+- A bad value for `discover --limit`, `--min-stars`, `--max-stars`, `--pushed-within`,
+  `--created-within`, `--seed` or `--like` is a usage error with exit code 2, as the README says,
+  instead of exit code 1.
+- `contribute --max-cost` takes only a finite positive number of dollars. Before, `Infinity` or
+  `1e400` were accepted, and the question asked about "spending up to $Infinity".
+- Without the Claude Agent SDK, `clean` says it needs the SDK too. Before, the install hint named
+  only `contribute` and `publish`, right after `runs` suggested `clean --finished`.
+- `analyze` no longer stalls on repository files shaped to slow down its text matching: a go.mod
+  of unclosed `require (` lines, Python source with long runs of blank lines, a Markdown heading
+  full of `<` and a few similar shapes took seconds to minutes per file, growing with the square of
+  its size. Each file is now read in time proportional to its size.
+- `analyze` no longer skips a whole project as deprecated because a README heading near the top
+  mentions deprecated or archived things ("Deprecated options", "Archived releases", "Python end of
+  life policy"); only a heading that says the project itself is deprecated counts. A library whose
+  description mentions learning, examples or samples ("reinforcement learning algorithms", "audio
+  samples") is no longer taken for a tutorial, which skipped most of the analysis.
+- `analyze` gets several facts in its findings right:
+  - Response times stop at a merge or a close. Five outside pull requests merged two hours after
+    they were opened read as "outside PRs wait over a month".
+  - A vulnerable dependency is told the fix on its own release line, and the highest one any of its
+    advisories needs: django 4.2.5 gets 4.2.15, not 4.2.9 or 5.0.8.
+  - Go modules marked `// indirect` are no longer called development-only.
+  - A TODO that cites another project's issue (`golang/go#61234`, a link to nodejs/node) is no
+    longer looked up in this repository's issues.
+  - A "needs info" issue offered for triage says how many people replied instead of "nobody has
+    replied".
+  - On Gitea and Forgejo, an issue whose comments were only partly read is no longer treated as
+    fully read.
 
 ## gitgoblin 0.1.3 - 2026-10-29
 
@@ -161,6 +212,13 @@ test that could not load without an OS sandbox. This is the same release.
   because the incomplete answer stayed cached. It now asks for each missing repository on its own
   once and does not cache the incomplete answer. A repository's last merge is also the latest
   merge now, not the merge of the pull request someone commented on most recently.
+- Repository names that start with a dot or an underscore, or end with an underscore (such as
+  `microsoft/.github` or `octo/_site`), are accepted. A GitLab project in a subgroup
+  (`gitlab.com/group/subgroup/project`) is refused with a clear error. Before, its URL was read as
+  the project named after the subgroup, a different repository or none.
+- Discovery for the `revive` goal finds archived projects again. Its searches asked GitHub for
+  unarchived repositories only, so archived projects, which revive means to suggest for forking,
+  never came back.
 
 - The discover tool gets each repository's GitHub details again (starter issues, contributing guide,
   recent merges). GitHub timed out on its requests for 20 repositories at a time with HTTP 502, and
@@ -183,12 +241,27 @@ test that could not load without an OS sandbox. This is the same release.
 - Two analyses of the same repository at once, from one server or two, no longer clone into the
   same directory; the second waits for the first. Before, one of them failed with git's "File
   exists" or "destination path already exists" error.
+- The discover tool says when its ranking may be partial: refused searches and failed lookups are
+  listed after the results and in a `warnings` field. Before, they went only to the server's log.
+- The briefing tool finds a stale pull request by its number (`issue_number: 663` for "Revive PR
+  #663"). Before, only issue numbers matched.
 - The `gitgoblin contribute` command a briefing suggests for a GitLab or Codeberg repository keeps
   its host, so it no longer points at the GitHub repository with the same name.
 - The discover tool searches public repositories only and refuses filter words that are GitHub
   search syntax (`is:private`, `user:` and the like). Before, a keyword such as `is:private` ran as
   part of a search made with the person's token, and each private repository it found was looked up
   on ecosyste.ms by name before the public check left it out of the results.
+- The analyze tool no longer stalls on repository files shaped to slow down its text matching (a
+  go.mod of unclosed `require (` lines, long runs of blank lines in Python source, a Markdown
+  heading full of `<`); one such file could hold the server for minutes.
+- The analyze tool no longer treats a project as deprecated because a README heading mentions
+  deprecated or archived things ("Deprecated options"), and no longer takes a library whose
+  description mentions learning or samples for a tutorial; both skipped most of the analysis.
+- The analyze tool's facts are more accurate: response times stop at a merge or close, a vulnerable
+  dependency is told the fix on its own release line, Go `// indirect` modules are not called
+  development-only, TODOs citing other projects' issues are not checked against this repository, a
+  needs-info triage item says how many people replied, and partly read Gitea threads are not taken
+  as fully read.
 
 ## gitgoblin 0.1.0 - 2026-10-24
 

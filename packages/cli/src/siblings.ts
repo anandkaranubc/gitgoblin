@@ -30,7 +30,7 @@ export function isNotInstalled(error: unknown, name: string): boolean {
  */
 export const AGENT_SDK = "@anthropic-ai/claude-agent-sdk";
 
-export const AGENT_SDK_HINT = `contribute and publish need the Claude Agent SDK, which is installed separately: npm install -g gitgoblin ${AGENT_SDK}`;
+export const AGENT_SDK_HINT = `contribute, publish and clean need the Claude Agent SDK, which is installed separately: npm install -g gitgoblin ${AGENT_SDK}`;
 
 /**
  * Imports the sibling `name` through `load`. Undefined when the package is not installed; the

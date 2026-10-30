@@ -21,7 +21,8 @@ const MARKER = /(?:^|[#/*;%!<-]\s*|\s)(TODO|FIXME|HACK|XXX|BUG)\b(?:\s*\([^)]*\)
 const COMMENT_TOKEN = /(^|\s)(#|\/\/|\/\*|\*|--|<!--|;;|%|!)/;
 const SOURCE_EXT = /\.(py|pyi|js|mjs|cjs|jsx|ts|tsx|go|rs|java|kt|rb|php|cs|c|h|cc|cpp|hpp|swift|dart|ex|exs|scala|lua|sh|m|hs|ml|clj|r|jl)$/i;
 
-export function findDebtMarkers(path: string, text: string): DebtMarker[] {
+/** `repo` filters out issue references to other repositories (`golang/go#12`, a link to nodejs/node's issues). */
+export function findDebtMarkers(path: string, text: string, repo?: { owner: string; name: string }): DebtMarker[] {
   const out: DebtMarker[] = [];
   const lines = text.split("\n");
   // Strings are blanked (an error message saying "TODO" is not debt) while comments, where markers live, are kept.
@@ -33,7 +34,12 @@ export function findDebtMarkers(path: string, text: string): DebtMarker[] {
     // Rust `///` and `//!` doc comments and Sphinx `#:` lines are documentation; a TODO quoted there is an example, not debt.
     if (/^\s*(\/\/[\/!]|#:)/.test(line)) continue;
     const after = line.slice(m.index + m[0].length).replace(/\*\/\s*$|-->\s*$/, "").trim();
-    const issues = [...line.matchAll(/(?:#|GH-|issues\/|issue\s)(\d{1,6})\b/gi)].map((x) => Number(x[1])).slice(0, 3);
+    const elsewhere = new Set<number>();
+    if (repo) {
+      const self = `${repo.owner}/${repo.name}`.toLowerCase();
+      for (const q of line.matchAll(/([\w.-]{1,100})\/([\w.-]{1,100})(?:#|\/(?:-\/)?issues\/)\d{1,6}\b/g)) if (`${q[1]}/${q[2]}`.toLowerCase() !== self) elsewhere.add(q.index + q[0].length);
+    }
+    const issues = [...line.matchAll(/(?:#|GH-|issues\/|issue\s)(\d{1,6})\b/gi)].filter((x) => !elsewhere.has(x.index + x[0].length)).map((x) => Number(x[1])).slice(0, 3);
     out.push({ path, line: i + 1, marker: m[1]!.toUpperCase(), text: after, raw: lines[i]!.trim(), issues });
   }
   return out;
@@ -66,7 +72,7 @@ export const techDebtAnalyzer: Analyzer = {
     if (["awesome_list", "docs", "config", "tutorial", "data", "template"].includes(profile.nature)) return [];
     const markers: DebtMarker[] = [];
     for await (const { path, text } of textFiles(ctx, (p) => SOURCE_EXT.test(p) && ctx.inventory.byPath.get(p)?.category === "source", 1500)) {
-      markers.push(...findDebtMarkers(path, text));
+      markers.push(...findDebtMarkers(path, text, ctx.ref));
       if (markers.length > 600) {
         ctx.budget.cut("stopped collecting TODO markers after 600");
         break;

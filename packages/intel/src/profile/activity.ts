@@ -36,11 +36,11 @@ export function computeActivity(input: ActivityInput): Activity {
   const externalIssues = [...(samples?.openIssues ?? []), ...(samples?.closedIssues ?? [])].filter((i) => isExternal(i) && !i.author?.isBot);
   const prResponses = (mostlyUnread(externalPrsAll(samples)) ? [] : [...(samples?.closedPrs ?? []), ...(samples?.openPrs ?? [])])
     .filter((p) => isExternal(p) && !p.author?.isBot && p.commentsFetched !== false)
-    .map((p) => firstResponseHours(p.createdAt, p.author?.login, [...p.firstComments, ...p.reviews], now))
+    .map((p) => firstResponseHours(p.createdAt, p.author?.login, [...p.firstComments, ...p.reviews], now, p.closedAt, p.mergedAt))
     .filter((h): h is number => h !== undefined);
   const issueResponses = (mostlyUnread(externalIssues) ? [] : [...(samples?.openIssues ?? []), ...(samples?.closedIssues ?? [])])
     .filter((i) => isExternal(i) && !i.author?.isBot && i.commentsFetched !== false && fetched(i.commentCount, i.firstComments))
-    .map((i) => firstResponseHours(i.createdAt, i.author?.login, i.firstComments, now))
+    .map((i) => firstResponseHours(i.createdAt, i.author?.login, i.firstComments, now, i.closedAt))
     .filter((h): h is number => h !== undefined);
 
   const published = releases.filter((r) => !r.prerelease).map((r) => r.publishedAt).sort().reverse();
@@ -78,23 +78,27 @@ export function isExternal(item: Pick<IssueSample, "association">): boolean {
 }
 
 /**
- * Hours until someone other than the author replied. Open items with no reply
- * count as "at least this long" so silence is not invisible in the median.
+ * Hours until someone other than the author replied or merged it. Items with no reply count as
+ * "at least this long", up to now or to when they were closed, so silence is not invisible in the median.
  */
 export function firstResponseHours(
   createdAt: string,
   authorLogin: string | undefined,
   responses: { createdAt: string; author: { login: string; isBot: boolean } | undefined }[],
   now: Date,
+  closedAt?: string,
+  mergedAt?: string,
 ): number | undefined {
   const replies = responses
     .filter((r) => r.author && !r.author.isBot && r.author.login !== authorLogin)
     .map((r) => hoursBetween(createdAt, r.createdAt))
     .filter((h) => h >= 0);
+  // A merge answers an outside author, who cannot merge their own work. Who closed an unmerged item is not sampled.
+  if (mergedAt) replies.push(hoursBetween(createdAt, mergedAt));
   if (replies.length > 0) return Math.min(...replies);
-  const age = hoursBetween(createdAt, now);
+  const waited = hoursBetween(createdAt, closedAt ?? now);
   // Fresh items without a reply are not evidence of slowness yet.
-  return age > 72 ? age : undefined;
+  return waited > 72 ? waited : undefined;
 }
 
 /** Smallest number of authors who made at least half of the commits. */

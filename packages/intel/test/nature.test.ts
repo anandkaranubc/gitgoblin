@@ -35,6 +35,22 @@ describe("classifyNature", () => {
     expect(classifyNature({ meta: meta(), inventory: inventoryOf(["go.mod", "main.go"]), manifests: go, readme: "" }).nature).toBe("cli");
   });
 
+  it("keeps a library a library when its description says learning, examples or samples", () => {
+    const inventory = inventoryOf(["pyproject.toml", ...Array.from({ length: 120 }, (_, i) => `stable_baselines3/m${i}.py`)]);
+    const python: Manifests = { others: [], python: { paths: ["pyproject.toml"], name: "stable-baselines3", requiresPython: ">=3.9", classifierVersions: [], dependencies: [], scripts: [], packageManager: "pip", tooling: [], packageDirs: ["stable_baselines3"], hasPyTyped: false, extras: [], dependencyGroups: [] } };
+    for (const description of ["PyTorch version of Stable Baselines, reliable implementations of reinforcement learning algorithms.", "A python library for self-supervised learning on images.", "Fast resampling of audio samples", "Config parsing, with examples"]) {
+      expect(classifyNature({ meta: meta({ name: "stable-baselines3", description }), inventory, manifests: python, readme: "" }).nature, description).toBe("library");
+    }
+  });
+
+  it("still calls tutorials and example repositories tutorials", () => {
+    const go: Manifests = { others: [], go: { paths: ["go.mod"], module: "golang.org/x/example", goVersion: "1.22", dependencies: [], hasMainPackage: true, tooling: [] } };
+    expect(classifyNature({ meta: meta({ name: "example", description: "Go example projects" }), inventory: inventoryOf(["go.mod", "hello/hello.go"]), manifests: go, readme: "" }).nature).toBe("tutorial");
+    expect(classifyNature({ meta: meta({ name: "functions-quickstart", description: "Sample code for a serverless function" }), inventory: inventoryOf(["index.js", "README.md"]), manifests: none, readme: "" }).nature).toBe("tutorial");
+    const privateApp: Manifests = { others: [], node: { paths: ["package.json"], name: "shop-demo", private: true, hasBin: false, hasMainOrExports: false, engines: undefined, scripts: {}, dependencies: [], packageManager: "npm", tooling: [], workspaces: false, workspaceTests: [] } };
+    expect(classifyNature({ meta: meta({ name: "shop-demo", description: "Workshop: build a web shop step by step" }), inventory: inventoryOf(["package.json", "src/app.js"]), manifests: privateApp, readme: "" }).nature).toBe("tutorial");
+  });
+
   it("falls back to unknown with a reason", () => {
     const r = classifyNature({ meta: meta(), inventory: inventoryOf(["foo.c", "bar.c", "baz.h"]), manifests: none, readme: "" });
     expect(r.nature).toBe("unknown");
