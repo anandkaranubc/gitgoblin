@@ -93,7 +93,7 @@ Or in JSON: `"env": { "GITHUB_TOKEN": "ghp_..." }`. If you are logged in with th
 
 ### Claude Desktop
 
-Download [`gitgoblin.mcpb`](https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.7/gitgoblin.mcpb) from the release and open it; Claude Desktop shows the install dialog (or use Settings → Extensions → Advanced settings → Install Extension). The bundle asks for an optional GitHub token and declares Node.js 24 or newer. Alternatively, Settings → Developer → Edit Config opens `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude\` on Windows); paste the standard block and restart. The Anthropic directory distributes local servers as Claude Code plugins, which is why gitgoblin ships one.
+Download [`gitgoblin.mcpb`](https://github.com/anandkaranubc/gitgoblin/releases/download/mcp-v0.1.8/gitgoblin.mcpb) from the release and open it; Claude Desktop shows the install dialog (or use Settings → Extensions → Advanced settings → Install Extension). The bundle asks for an optional GitHub token and declares Node.js 24 or newer. Alternatively, Settings → Developer → Edit Config opens `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude\` on Windows); paste the standard block and restart. The Anthropic directory distributes local servers as Claude Code plugins, which is why gitgoblin ships one.
 
 ### Codex
 
@@ -200,6 +200,6 @@ Checked on macOS on 22 and 23 October 2026. "Release" means the tarball or bundl
 | MCPB bundle | `mcpb validate`, `mcpb pack`, unpack and run the launcher | Initializes and lists the tools; not installed in Claude Desktop itself |
 | Cursor and VS Code one-click links | Encoded and decoded | Run `npx -y @gitgoblin/mcp`; not opened in Cursor or VS Code |
 | MCP Registry | `mcp-publisher publish` from the repository's GitHub Actions workflow, which fails unless the registry then lists the version | `io.github.anandkaranubc/gitgoblin` listed as active, pointing at the newest release's `.mcpb`; superseded versions marked deprecated |
-| Release builds | `.github/workflows/release.yml` on the `mcp-v0.1.4` to `mcp-v0.1.7` tags, `gh attestation verify` | Built, checked, attested and drafted by the workflow; draft files matched `SHA256SUMS`; the 0.1.5 and 0.1.6 tarballs ran a real analysis in its worker thread; 0.1.7 published to npm with provenance, and the tarball npm serves matches `SHA256SUMS` |
+| Release builds | `.github/workflows/release.yml` on the `mcp-v0.1.4` to `mcp-v0.1.8` tags, `gh attestation verify` | Built, checked, attested and drafted by the workflow; draft files matched `SHA256SUMS`; the 0.1.5 and 0.1.6 tarballs ran a real analysis in its worker thread; 0.1.7 and 0.1.8 published to npm with provenance, and the tarballs npm serves match `SHA256SUMS` |
 
 Anything not in this table has not been tried here.
