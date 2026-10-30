@@ -87,10 +87,57 @@ describe("GitHubClient.repoDetails", () => {
     expect(details.get("github.com/igtoth/tracedraw")?.starterIssues).toBe(0);
   });
 
-  it("skips repositories the API returned as null", async () => {
-    const { github } = makeGitHub(() => jsonResponse({ data: { r0: null }, errors: [{ type: "NOT_FOUND" }] }), "t0k");
-    const details = await github.repoDetails([{ host: "github.com", owner: "gone", name: "repo" }]);
-    expect(details.size).toBe(0);
+  it("skips repositories GitHub says do not exist, and remembers that", async () => {
+    const { github, calls } = makeGitHub(() => jsonResponse({ data: { r0: null }, errors: [{ type: "NOT_FOUND", path: ["r0"] }] }), "t0k");
+    const refs = [{ host: "github.com", owner: "gone", name: "repo" }];
+    expect((await github.repoDetails(refs)).size).toBe(0);
+    expect((await github.repoDetails(refs)).size).toBe(0);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("dates the last merge by the latest of the recently updated merged pull requests", async () => {
+    const response = fixture<{ data: Record<string, Record<string, unknown>> }>("github-graphql-details.json");
+    const r0 = response.data["r0"] ?? {};
+    r0["merged"] = { totalCount: 3, nodes: [{ mergedAt: "2026-01-01T00:00:00Z" }, { mergedAt: "2026-08-04T13:46:54Z" }, { mergedAt: null }] };
+    const { github, calls } = makeGitHub(() => jsonResponse({ data: { r0 } }), "t0k");
+    const details = await github.repoDetails([{ host: "github.com", owner: "BurntSushi", name: "ripgrep" }]);
+    expect(details.get("github.com/burntsushi/ripgrep")?.lastMergedAt).toBe("2026-08-04T13:46:54Z");
+    expect(calls[0]?.body).toContain("pullRequests(states: MERGED, first: 5");
+  });
+});
+
+describe("GitHubClient.repoDetails when GitHub leaves repositories out of an answer", () => {
+  const node = fixture<{ data: Record<string, unknown> }>("github-graphql-details.json").data["r0"] as Record<string, unknown>;
+  const refs = ["a", "b", "c"].map((name) => ({ host: "github.com", owner: "o", name }));
+  const names = (body: string | undefined) => {
+    const variables = (JSON.parse(body ?? "{}") as { variables: Record<string, unknown> }).variables;
+    return Object.keys(variables).filter((k) => /^n\d+$/.test(k)).map((k) => String(variables[k]));
+  };
+  // GitHub's partial answer when one repository's fields hit a resource limit: a node with a null field
+  // (b) and a null node (c), each with an error that is not NOT_FOUND.
+  const partial = () => jsonResponse({
+    data: { r0: node, r1: { ...node, starter: null }, r2: null },
+    errors: [{ type: "RESOURCE_LIMITS_EXCEEDED", path: ["r1", "starter"] }, { type: "RESOURCE_LIMITS_EXCEEDED", path: ["r2"] }],
+  });
+  const limited = () => jsonResponse({ data: { r0: null }, errors: [{ type: "RESOURCE_LIMITS_EXCEEDED", path: ["r0"] }] });
+
+  it("asks for each left-out repository on its own, once", async () => {
+    const { github, calls } = makeGitHub((call) => {
+      const asked = names(call.body);
+      if (asked.length > 1) return partial();
+      return asked[0] === "c" ? limited() : jsonResponse({ data: { r0: node } });
+    }, "t0k");
+    const details = await github.repoDetails(refs);
+    expect([...details.keys()]).toEqual(["github.com/o/a", "github.com/o/b"]);
+    expect(calls.map((c) => names(c.body))).toEqual([["a", "b", "c"], ["b"], ["c"]]);
+  });
+
+  it("does not keep an answer with left-out repositories in the cache", async () => {
+    const { github, calls } = makeGitHub(() => partial(), "t0k");
+    await github.repoDetails(refs);
+    const first = calls.length;
+    await github.repoDetails(refs);
+    expect(calls[first] && names(calls[first]?.body)).toEqual(["a", "b", "c"]);
   });
 });
 
