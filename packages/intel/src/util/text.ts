@@ -61,7 +61,8 @@ export function trimEnd(text: string, chars: string): string {
 export function sentences(text: string): string[] {
   return text
     .replace(/\r/g, "")
-    .split(/(?<=[.!?])\s+|\n{2,}|\n(?=[-*#])/)
+    // "e.g." and "i.e." end no sentence.
+    .split(/(?<=[.!?])(?<!\b(?:e\.g|i\.e)\.)\s+|\n{2,}|\n(?=[-*#])/i)
     .map((s) => s.replace(/\s+/g, " ").trim())
     .filter((s) => s.length > 0);
 }

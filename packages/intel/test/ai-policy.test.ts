@@ -43,6 +43,7 @@ describe("findAiPolicy", () => {
     const ghostty = policy("- **Any use of AI must be disclosed.** Say which tool you used and how much of the work it did.");
     expect(ghostty.stance).toBe("disclose");
     expect(ghostty.statements[0]?.text).toContain("Any use of AI must be disclosed.");
+    expect(policy("All AI use must be disclosed: name the tool (e.g. an assistant or an agent) you used.").statements[0]?.text).toContain("(e.g. an assistant or an agent) you used.");
     const nixpkgs = policy("Commits made with LLM-based tools must carry an `Assisted-by:` trailer naming the tool and the model.");
     expect(nixpkgs).toMatchObject({ stance: "disclose", trailer: "Assisted-by" });
     // The same trailer in a list of trailers for people's help is not an AI rule.

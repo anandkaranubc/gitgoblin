@@ -7,6 +7,9 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.2.0 - Unreleased
 
+- `analyze` reports what a project says about AI-generated contributions: that it declines them,
+  that AI use must be disclosed (and the commit trailer it asks for), or that no policy was found,
+  which does not mean they are welcome. The sentences it rests on are quoted with their file.
 - Projects whose maintainers opted out ([docs/excluded-projects.md](docs/excluded-projects.md)) are
   left alone: `discover` leaves them out and says so (in `warnings` with `--json`), `explain`
   scores them 0 with the reason, and `analyze`, `contribute` and `publish` refuse them before
