@@ -5,7 +5,13 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
-## gitgoblin 0.2.0 - Unreleased
+## gitgoblin 0.2.0 - 2026-11-03
+
+Upgrade from 0.1.4 so gitgoblin keeps two of its promises to the projects you contribute to: it
+leaves alone projects whose maintainers opted out, and it follows a project's policy on
+AI-generated contributions, including one that declines them. Two things behave differently:
+`contribute` can now stop before a run for one of those reasons, and the pull requests it prepares
+end with a plain AI disclosure that names the model.
 
 - `contribute` follows a project's policy on AI-generated contributions: it shows the policy before
   you approve a run, and the engine stops at intake, before any model spend, when the project
