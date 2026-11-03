@@ -69,7 +69,17 @@ external merge rate over 50%, median first response under 3 days,
 CONTRIBUTING with a working dev setup, PR template, recent merges from
 first-time contributors.
 Rules (not penalties, but etiquette): issue-first policy, CLA or DCO,
-tests or changelog required, kinds of change the maintainers reject.
+tests or changelog required, kinds of change the maintainers reject, and the
+policy on AI-generated contributions (`rules.aiPolicy`). That policy is read
+from CONTRIBUTING, the README, the pull request template, the code of conduct,
+agent instruction files and files named like `AI_POLICY.md`, sentence by
+sentence: `forbidden` when the project declines AI-generated contributions,
+`disclose` when it asks for AI use to be disclosed (with the commit trailer it
+names, such as `Assisted-by`), `mentioned` when it says something a person
+should read, and `not_found` otherwise, which is not permission. A ban scoped
+to issues, media or a condition ("if you cannot explain it") is not a refusal;
+a ban on AI for good first issues sets `starterIssuesExcluded`. The quoted
+sentences come with it, refusals first.
 
 Levels: `closed` (0), `dormant` (< 0.25), `selective` (< 0.5),
 `open` (< 0.8), `eager`. Two guards keep the levels honest: a project that

@@ -3,7 +3,8 @@ import type { FileInventory } from "../fs/scan.ts";
 import type { GitHubSamples, RepoMeta } from "../github/types.ts";
 import { isMaintainer } from "../github/types.ts";
 import { daysAgo } from "../util/time.ts";
-import { stableId, truncate } from "../util/text.ts";
+import { sentences, stableId, truncate } from "../util/text.ts";
+import { findAiPolicy, type PolicyText } from "./ai-policy.ts";
 import { isExternal } from "./activity.ts";
 
 export interface WelcomenessInput {
@@ -13,6 +14,8 @@ export interface WelcomenessInput {
   inventory: FileInventory;
   /** Text of CONTRIBUTING, README (first part), and PR template, when present. */
   docs: { contributing?: string | undefined; readme?: string | undefined; prTemplate?: string | undefined };
+  /** Every document that may state a policy on AI-generated contributions, with its path. */
+  policyTexts?: PolicyText[] | undefined;
   now: Date;
 }
 
@@ -208,7 +211,7 @@ export function findDeprecationNotice(readme: string | undefined, description: s
 const REJECT_CUE = /\b(?:do not|don't|won't|will not|not accept|not be accepted|not merge|be closed|please avoid|avoid|discourage|no longer accept|unwelcome|not welcome|reject)\b/i;
 const REJECT_KIND = /\b(typos?|spelling|grammar|whitespace|formatting|cosmetic|style[- ]only|refactor\w*|rewrite|drive-by|trivial|dependency (?:bumps?|updates?)|version bumps?|badges?|hacktoberfest|large (?:prs?|pull requests?)|unsolicited|new features?|feature requests?|breaking changes?|translations?)\b/i;
 
-export function extractRules(input: Pick<WelcomenessInput, "inventory" | "docs" | "samples">): ContributionRules {
+export function extractRules(input: Pick<WelcomenessInput, "inventory" | "docs" | "samples" | "policyTexts">): ContributionRules {
   const paths = input.inventory.files.map((f) => f.path);
   const find = (re: RegExp) => paths.find((p) => re.test(p));
   const contributingPath = find(/^(\.github\/|docs?\/)?contributing(\.\w+)?$/i);
@@ -233,19 +236,12 @@ export function extractRules(input: Pick<WelcomenessInput, "inventory" | "docs" 
     dependencyBot: paths.some((p) => /^(\.github\/dependabot\.ya?ml|renovate\.json5?|\.renovaterc(\.json)?|\.github\/renovate\.json5?)$/.test(p)),
     requiresTests: /\b(include|add|write|with|accompan\w+|require\w*)\b[^.]{0,40}\btests?\b/i.test(texts) || /\[ \][^\n]{0,300}\btests?\b/i.test(input.docs.prTemplate ?? ""),
     requiresChangelog: /\bchangelog\b|CHANGES\.(md|rst)|news fragment|towncrier|changeset/i.test(texts),
+    aiPolicy: findAiPolicy(input.policyTexts ?? []),
   };
   if (contributingPath) rules.contributingPath = contributingPath;
   if (codeOfConductPath) rules.codeOfConductPath = codeOfConductPath;
   if (prTemplatePath) rules.pullRequestTemplatePath = prTemplatePath;
   return rules;
-}
-
-function sentences(text: string): string[] {
-  return text
-    .replace(/\r/g, "")
-    .split(/(?<=[.!?])\s+|\n{2,}|\n(?=[-*#])/)
-    .map((s) => s.replace(/\s+/g, " ").trim())
-    .filter((s) => s.length > 0);
 }
 
 export { isMaintainer };

@@ -6,6 +6,7 @@ import { describeEcosystems } from "./ecosystems.ts";
 import { centralFiles } from "./imports.ts";
 import { LICENSE_FILE, licenseFromText } from "./license.ts";
 import { classifyNature } from "./nature.ts";
+import { AI_POLICY_FILE, type PolicyText } from "./ai-policy.ts";
 import { assessWelcomeness } from "./welcomeness.ts";
 
 const INSTRUCTION_FILES = /^(CLAUDE\.md|AGENTS\.md|\.cursorrules|\.cursor\/rules\/.*|\.github\/copilot-instructions\.md|GEMINI\.md|\.windsurfrules|\.clinerules)$/;
@@ -18,6 +19,7 @@ export async function buildProfile(ctx: AnalysisContext): Promise<RepositoryProf
   const contributing = contributingPath ? await ctx.read(contributingPath) : undefined;
   const prTemplatePath = inventory.files.find((f) => /pull_request_template(\.\w+)?$/i.test(f.path))?.path;
   const prTemplate = prTemplatePath ? await ctx.read(prTemplatePath) : undefined;
+  const policyTexts = await readPolicyTexts(ctx, { [readmePath ?? ""]: readme, [contributingPath ?? ""]: contributing, [prTemplatePath ?? ""]: prTemplate });
 
   const workflows = inventory.files.filter((f) => f.path.startsWith(".github/workflows/") && /\.ya?ml$/.test(f.path)).map((f) => f.path);
   const ciRunLines: string[] = [];
@@ -41,7 +43,7 @@ export async function buildProfile(ctx: AnalysisContext): Promise<RepositoryProf
     openPrs: ctx.samples?.openPrCount ?? 0,
     now: ctx.now,
   });
-  const welcomeness = assessWelcomeness({ meta, samples: ctx.samples, activity, inventory, docs: { contributing, readme, prTemplate }, now: ctx.now });
+  const welcomeness = assessWelcomeness({ meta, samples: ctx.samples, activity, inventory, docs: { contributing, readme, prTemplate }, policyTexts, now: ctx.now });
   const conventions = inferConventions(ctx.commits, ctx.samples, ecosystems);
 
   const totalBytes = Object.values(ctx.languages).reduce((a, b) => a + b, 0);
@@ -95,6 +97,21 @@ export async function buildProfile(ctx: AnalysisContext): Promise<RepositoryProf
   const license = meta.license ?? (await licenseFromFiles(ctx));
   if (license) profile.license = license;
   return profile;
+}
+
+const CODE_OF_CONDUCT = /^(\.github\/|docs?\/)?code[-_]of[-_]conduct(\.\w+)?$/i;
+const MAX_POLICY_FILES = 8;
+const MAX_POLICY_BYTES = 64 * 1024;
+
+/** The documents a project would state an AI policy in: the guides already read, the code of conduct, agent instruction files and AI policy files. */
+async function readPolicyTexts(ctx: AnalysisContext, known: Record<string, string | undefined>): Promise<PolicyText[]> {
+  const texts: PolicyText[] = Object.entries(known).flatMap(([path, text]) => (path && text ? [{ path, text }] : []));
+  const more = ctx.inventory.files.filter((f) => !(f.path in known) && (CODE_OF_CONDUCT.test(f.path) || INSTRUCTION_FILES.test(f.path) || AI_POLICY_FILE.test(f.path)));
+  for (const file of more.slice(0, MAX_POLICY_FILES)) {
+    const text = await ctx.read(file.path, MAX_POLICY_BYTES);
+    if (text) texts.push({ path: file.path, text });
+  }
+  return texts;
 }
 
 /** Read the license file when no API said what the license is (other forges, or GitHub's detector giving up). */

@@ -56,3 +56,13 @@ export function trimEnd(text: string, chars: string): string {
   while (end > 0 && chars.includes(text[end - 1]!)) end--;
   return text.slice(0, end);
 }
+
+/** Splits prose into sentences and list items, whitespace collapsed. */
+export function sentences(text: string): string[] {
+  return text
+    .replace(/\r/g, "")
+    // "e.g." and "i.e." end no sentence.
+    .split(/(?<=[.!?])(?<!\b(?:e\.g|i\.e)\.)\s+|\n{2,}|\n(?=[-*#])/i)
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter((s) => s.length > 0);
+}
