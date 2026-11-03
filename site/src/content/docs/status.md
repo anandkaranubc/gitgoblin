@@ -24,7 +24,6 @@ Last updated 2026-10-29.
 ## Being built now
 
 - Calibrating the scores behind `analyze`, so rankings across repositories mean the same thing, and cutting the false positives that audits and backtests find.
-- Detecting a project's policy on AI-generated contributions. Until then, the person approving a contribution checks it by hand.
 - Real examples. The walkthrough on the front page is scripted; a recording of a real run will replace it.
 
 ## Deliberately later

@@ -163,6 +163,7 @@ function profileLines(p: RepositoryProfile): string[] {
   for (const s of [...w.signals].sort((x, y) => Math.abs(y.weight) - Math.abs(x.weight)).slice(0, 4)) lines.push(`  ${s.weight >= 0 ? "+" : "−"} ${s.signal}: ${s.evidence.note ?? s.evidence.locator}`);
   if (ruleBits.length > 0) lines.push(`rules: ${ruleBits.join(", ")}`);
   for (const r of rules.rejectedChanges.slice(0, 3)) lines.push(`  maintainers do not want: "${truncate(r, 140)}"`);
+  lines.push(...aiPolicyLines(rules.aiPolicy, ""));
   for (const e of p.ecosystems) {
     const cmds = Object.entries(e.commands).map(([k, v]) => `${k}: ${v}`).join(" · ");
     lines.push(`${e.name}${e.packageManager ? ` (${e.packageManager})` : ""}${e.runtime ? `, ${e.runtime}` : ""}: ${cmds || "no commands detected"}`);
@@ -202,7 +203,15 @@ export type CompactReport = {
   welcomeness: { level: string; score: number };
   activity: { commits_90d: number; authors_90d: number; bus_factor: number; last_push_at?: string | undefined };
   commands: Record<string, string>;
-  rules: { issue_first: boolean; cla: boolean; dco: boolean; tests_required: boolean; changelog_required: boolean; rejected_changes: string[] };
+  rules: {
+    issue_first: boolean;
+    cla: boolean;
+    dco: boolean;
+    tests_required: boolean;
+    changelog_required: boolean;
+    rejected_changes: string[];
+    ai_policy: { stance: AiPolicy["stance"]; starter_issues_excluded: boolean; trailer: string | undefined; statements: AiPolicy["statements"] };
+  };
   opportunities: {
     id: string;
     kind: string;
@@ -239,6 +248,7 @@ export function compactReport(report: AnalysisReport, max: number): CompactRepor
       tests_required: rules.requiresTests,
       changelog_required: rules.requiresChangelog,
       rejected_changes: rules.rejectedChanges.slice(0, 10),
+      ai_policy: { stance: rules.aiPolicy.stance, starter_issues_excluded: rules.aiPolicy.starterIssuesExcluded, trailer: rules.aiPolicy.trailer, statements: rules.aiPolicy.statements.slice(0, 5) },
     },
     opportunities: report.opportunities.slice(0, max).map((o) => ({
       id: o.id,
@@ -328,10 +338,30 @@ export function formatOpportunity(report: AnalysisReport, o: ContributionOpportu
   ].filter((x): x is string => typeof x === "string");
   if (ruleBits.length) lines.push(`  rules: ${ruleBits.join("; ")}`);
   for (const r of rules.rejectedChanges.slice(0, 3)) lines.push(`  maintainers do not want: "${truncate(r, 140)}"`);
+  lines.push(...aiPolicyLines(rules.aiPolicy, "  "));
   lines.push(
     "",
     "Before acting: check the issue for new comments or linked PRs, follow the project's contributing guide, disclose AI assistance in the pull request description, and let the person decide whether anything gets published.",
     `With the gitgoblin command line installed, \`gitgoblin contribute ${p.repo.host === "github.com" ? "" : `${p.repo.host}/`}${p.repo.owner}/${p.repo.name} --opportunity ${o.id}\` drafts this change with a person approving each step.`,
   );
   return lines.join("\n");
+}
+
+type AiPolicy = AnalysisReport["profile"]["welcomeness"]["rules"]["aiPolicy"];
+
+const AI_STANCE: Record<AiPolicy["stance"], string> = {
+  forbidden: "the project DECLINES AI-generated contributions; do not prepare one, and tell the person",
+  disclose: "AI-assisted contributions are accepted when disclosed; the pull request must say an AI tool was used, which one, and how much it did",
+  mentioned: "the project says something about AI-generated contributions; read it before acting",
+  not_found: "none found in the project's guides, which is not permission; check the contributing guide",
+};
+
+/** The project's AI policy, quoted, for an agent deciding whether and how to help with a change. */
+function aiPolicyLines(ai: AiPolicy, indent: string): string[] {
+  return [
+    `${indent}AI policy: ${AI_STANCE[ai.stance]}`,
+    ...(ai.starterIssuesExcluded ? [`${indent}  good first issues are kept for people: do not prepare AI-written changes for them`] : []),
+    ...(ai.trailer ? [`${indent}  AI-assisted commits carry an "${ai.trailer}:" trailer naming the tool and model`] : []),
+    ...ai.statements.slice(0, 2).map((s) => `${indent}  ${s.path}: "${truncate(s.text, 200)}"`),
+  ];
 }

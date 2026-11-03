@@ -4,7 +4,7 @@ gitgoblin explores public repositories and helps people contribute to them. The 
 
 It is written for three readers: maintainers who have received a gitgoblin-assisted contribution, people using gitgoblin, and people building it.
 
-> **Where this stands (November 2026).** gitgoblin is in preview. The contribution engine enforces the first commitment in code: it publishes nothing until a person confirms at a terminal, and it runs the model in a sandbox without network access. It reads a project's contributing guide and templates and quotes them to the model, and it skips an issue someone is already working on (an assignee, an open pull request, or a comment claiming it). Projects on the [excluded list](excluded-projects.md) are refused in code too: discovery leaves them out, and analysis, the MCP server and the engine refuse them. One thing is not built yet: detecting a project's policy on AI-generated contributions ([#79](https://github.com/anandkaranubc/gitgoblin/issues/79)). Until it is, the person approving a contribution checks it by hand.
+> **Where this stands (November 2026).** gitgoblin is in preview. The contribution engine enforces the first commitment in code: it publishes nothing until a person confirms at a terminal, and it runs the model in a sandbox without network access. It reads a project's contributing guide and templates and quotes them to the model, and it skips an issue someone is already working on (an assignee, an open pull request, or a comment claiming it). Projects on the [excluded list](excluded-projects.md) are refused in code too: discovery leaves them out, and analysis, the MCP server and the engine refuse them. It reads a project's policy on AI-generated contributions from its guides and refuses to prepare a change when the project declines them, or for a good first issue the project keeps for people; its pull requests say an AI agent wrote them, with the commit trailer a project asks for. When no policy is found it says so, and that is not permission: the person approving a contribution still checks.
 
 ## Commitments
 
@@ -33,7 +33,7 @@ Before you approve anything for publishing:
 
 ## If you maintain a project
 
-A contribution prepared with gitgoblin arrives from an ordinary GitHub account, under that person's name. The pull request description has a summary linking the issue, the list of changes, a table of your project's own checks with pass or fail results compared against the base commit, notes for reviewers including known gaps, your pull request checklist when you have a template, and a footer saying gitgoblin prepared it and a person approved it.
+A contribution prepared with gitgoblin arrives from an ordinary GitHub account, under that person's name. The pull request description has a summary linking the issue, the list of changes, a table of your project's own checks with pass or fail results compared against the base commit, notes for reviewers including known gaps, your pull request checklist when you have a template, and a footer saying an AI agent wrote it with gitgoblin, naming the model, and that a person reviewed it and approved opening it.
 
 You can:
 

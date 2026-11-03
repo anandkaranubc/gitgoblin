@@ -7,6 +7,11 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## gitgoblin 0.2.0 - Unreleased
 
+- `contribute` follows a project's policy on AI-generated contributions: it shows the policy before
+  you approve a run, and the engine stops at intake, before any model spend, when the project
+  declines AI-generated contributions or keeps the issue's "good first issue" for people. The pull
+  request footer now says plainly that an AI agent wrote the change and names the model, and a
+  project that asks for an `Assisted-by:` trailer gets one in the commit.
 - `analyze` reports what a project says about AI-generated contributions: that it declines them,
   that AI use must be disclosed (and the commit trailer it asks for), or that no policy was found,
   which does not mean they are welcome. The sentences it rests on are quoted with their file.
@@ -18,6 +23,9 @@ follow [Semantic Versioning](https://semver.org); before 1.0, a minor version ma
 
 ## @gitgoblin/mcp 0.2.0 - Unreleased
 
+- `analyze_repository` and `get_opportunity` state the project's policy on AI-generated
+  contributions, quoting it (also as `rules.ai_policy`), and tell the agent not to prepare a change
+  for a project that declines them or for a good first issue the project keeps for people.
 - Projects whose maintainers opted out ([docs/excluded-projects.md](docs/excluded-projects.md)) are
   left out of `discover_repositories` (named in `warnings`), and `explain_repository`,
   `analyze_repository` and `get_opportunity` refuse them before any work.

@@ -65,6 +65,13 @@ describe("taskFromIntel", () => {
     expect(task.conventions.recentCommitSubjects).toEqual([]);
   });
 
+  it("carries the project's AI policy, treating what it cannot read as something to read, never as permission", () => {
+    const withPolicy = (aiPolicy: unknown) => taskFromIntel({ repo: { owner: "a", name: "b" }, welcomeness: { rules: { aiPolicy } } }, { id: "x", title: "t" }).rules.aiPolicy;
+    expect(withPolicy({ stance: "disclose", trailer: "Assisted-by", statements: [{ path: "AI_POLICY.md", text: "Disclose AI use.\u202e" }] })).toEqual({ stance: "disclose", starterIssuesExcluded: false, trailer: "Assisted-by", statements: [{ path: "AI_POLICY.md", text: "Disclose AI use." }] });
+    expect(withPolicy({ stance: "something-new", trailer: "Signed-off-by" })).toEqual({ stance: "mentioned", starterIssuesExcluded: false, statements: [] });
+    expect(withPolicy(undefined)).toEqual({ stance: "not_found", starterIssuesExcluded: false, statements: [] });
+  });
+
   it("rejects input without an owner", () => {
     expect(() => taskFromIntel({ repo: { name: "b" } }, { id: "x", title: "t" })).toThrow();
   });

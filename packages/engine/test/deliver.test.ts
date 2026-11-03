@@ -63,8 +63,17 @@ describe("pull request text", () => {
     expect(body).toContain("Reviewer note (nit): Consider a named constant");
     expect(body).toContain("- [ ] Tests added");
     expect(body).toContain("- [ ] Docs updated");
-    expect(body).toContain("a human reviewed this change");
+    expect(body).toContain("AI disclosure: an AI agent (gitgoblin with the Claude Agent SDK) investigated, wrote and tested this change.");
+    expect(body).toContain("a human reviewed it and approved opening the pull request");
     expect(pullRequestTitle(input(base))).toBe("Include the final item in the last page");
+  });
+  it("discloses AI use as the project asks: the model, the rule's file and the commit trailer", () => {
+    const rules = { ...base.rules, aiPolicy: { stance: "disclose" as const, starterIssuesExcluded: false, trailer: "Assisted-by" as const, statements: [{ path: "AI_POLICY.md", text: "All AI use must be disclosed." }] } };
+    const asked = input({ ...base, rules });
+    const withModel = { ...asked, model: "model-x" };
+    expect(pullRequestBody(withModel)).toContain("AI disclosure, as AI_POLICY.md asks: an AI agent (gitgoblin with the Claude Agent SDK, model model-x) investigated");
+    expect(commitMessage(withModel).trimEnd().split("\n").at(-1)).toBe("Assisted-by: gitgoblin with the Claude Agent SDK, model model-x");
+    expect(commitMessage(input(base))).not.toContain("Assisted-by");
   });
   it("uses Refs instead of Fixes for non-fix kinds", () => {
     expect(pullRequestBody(input({ ...base, kind: "docs_drift" }))).toContain("Refs #42");

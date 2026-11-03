@@ -156,6 +156,15 @@ describe("atIntake", () => {
     expect(atIntake({ ...task, kind: "hygiene", files: [] }).action).toBe("escalate");
     expect(atIntake({ ...task, kind: "hygiene", files: [".editorconfig"] })).toEqual({ action: "continue" });
   });
+  it("stops when the project declines AI contributions, or keeps this good first issue for people", () => {
+    const rules = (aiPolicy: Partial<Task["rules"]["aiPolicy"]>) => ({ ...task.rules, aiPolicy: { stance: "not_found" as const, starterIssuesExcluded: false, statements: [], ...aiPolicy } });
+    const declined = atIntake({ ...task, rules: rules({ stance: "forbidden", statements: [{ path: "CONTRIBUTING.md", text: "We do not accept AI-generated patches." }] }) });
+    expect(declined).toEqual({ action: "stop", reason: 'the project declines AI-generated contributions (CONTRIBUTING.md: "We do not accept AI-generated patches.")' });
+    const llvm = rules({ stance: "disclose", starterIssuesExcluded: true, statements: [{ path: "a.md", text: "Disclose it." }, { path: "a.md", text: "No AI on good first issues." }] });
+    expect(atIntake({ ...task, rules: llvm, issue: { number: 3, labels: ["good first issue"], inFlight: false } })).toMatchObject({ action: "stop", reason: expect.stringContaining('"No AI on good first issues."') });
+    expect(atIntake({ ...task, rules: llvm, issue: { number: 3, labels: ["bug"], inFlight: false } })).toEqual({ action: "continue" });
+    expect(atIntake({ ...task, rules: rules({ stance: "disclose" }) })).toEqual({ action: "continue" });
+  });
   it("stops for a project on the excluded list, a whole owner or one repository, before anything else", () => {
     const owner = `${task.repo.host}/${task.repo.owner}`.toUpperCase();
     expect(atIntake({ ...task, kind: "triage" }, [owner])).toMatchObject({ action: "stop", reason: expect.stringContaining("asked gitgoblin to leave the project alone") });

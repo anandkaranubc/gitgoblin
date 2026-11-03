@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { checksLine, missingToolchains, onPath, toolchainWarning, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "../src/contribute.ts";
+import { aiPolicyLines, checksLine, missingToolchains, onPath, toolchainWarning, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, recommendedRank, selectOpportunity } from "../src/contribute.ts";
 import { sampleOpportunity, sampleReport } from "./fixtures.ts";
 
 const plain = { color: false };
@@ -34,6 +34,25 @@ describe("formatOpportunities", () => {
 
   it("says when nothing was found", () => {
     expect(formatOpportunities(sampleReport([]), plain)).toMatch(/No contribution opportunities/);
+  });
+});
+
+describe("the project's AI policy", () => {
+  const ai = (policy: Partial<NonNullable<Parameters<typeof aiPolicyLines>[0]>>) => ({ stance: "not_found" as const, starterIssuesExcluded: false, statements: [], ...policy });
+
+  it("makes the engine refuse a project that declines AI contributions, or a good first issue it keeps for people", () => {
+    expect(engineWillRefuse(sampleOpportunity(), ai({ stance: "forbidden" }))).toBe("the project declines AI-generated contributions");
+    const starter = sampleOpportunity({ issue: { ...sampleOpportunity().issue!, labels: ["good first issue"] } });
+    expect(engineWillRefuse(starter, ai({ stance: "disclose", starterIssuesExcluded: true }))).toMatch(/good first issues for people/);
+    expect(engineWillRefuse(starter, ai({ stance: "disclose" }))).toBeUndefined();
+  });
+
+  it("is shown before the run, quoting the project, and says when none was found", () => {
+    expect(aiPolicyLines(ai({ stance: "disclose", statements: [{ path: "AI_POLICY.md", text: "Disclose \u001b[31mall AI use." }] }))).toEqual([
+      "AI policy: the project takes them when AI use is disclosed; the pull request will say an AI agent wrote it.",
+      '  AI_POLICY.md: "Disclose all AI use."',
+    ]);
+    expect(aiPolicyLines(ai({}))[0]).toBe("AI policy: none found in the project's guides, which does not mean AI-generated contributions are welcome.");
   });
 });
 
