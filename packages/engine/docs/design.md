@@ -48,7 +48,9 @@ the point of a second reader.
 `policy.ts` is a pure, unit-tested function set. It is the only place that decides whether to
 continue, retry, escalate (needs a human) or stop:
 
-- intake: an issue already in flight or a triage (reply-only) task -> stop; a stale pull request to
+- intake: a project on the excluded list (docs/excluded-projects.md), a project whose AI policy
+  declines AI-generated contributions, or a good first issue in a project that keeps those for
+  people -> stop; an issue already in flight or a triage (reply-only) task -> stop; a stale pull request to
   revive, or a hygiene item naming no files -> escalate, because those start with a conversation; a
   dependency bump -> escalate, because the lockfile needs regenerating with network access the
   agent does not have, and verification would otherwise pass against the old packages.

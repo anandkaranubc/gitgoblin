@@ -52,6 +52,15 @@ const ProfileProjection = z
             rejectedChanges: z.array(z.string()).optional(),
             cla: z.boolean().optional(),
             dco: z.boolean().optional(),
+            aiPolicy: z
+              .object({
+                stance: z.string().optional(),
+                starterIssuesExcluded: z.boolean().optional(),
+                trailer: z.string().optional(),
+                statements: z.array(z.object({ path: z.string(), text: z.string() }).loose()).optional(),
+              })
+              .loose()
+              .optional(),
           })
           .loose()
           .optional(),
@@ -98,6 +107,21 @@ export function sanitizeText(text: string): string {
 
 function sanitizeAll(values: string[] | undefined): string[] {
   return (values ?? []).map(sanitizeText);
+}
+
+const AI_STANCES = ["forbidden", "disclose", "mentioned", "not_found"] as const;
+const AI_TRAILERS = ["Assisted-by", "Generated-by"] as const;
+
+/** Intel's reading of the project's AI policy. A stance this engine does not know is treated as something to read, never as permission. */
+function aiPolicyFrom(policy: { stance?: string | undefined; starterIssuesExcluded?: boolean | undefined; trailer?: string | undefined; statements?: { path: string; text: string }[] | undefined } | undefined): Task["rules"]["aiPolicy"] {
+  const stance = policy?.stance === undefined ? "not_found" : (AI_STANCES.find((s) => s === policy.stance) ?? "mentioned");
+  const trailer = AI_TRAILERS.find((t) => t === policy?.trailer);
+  return {
+    stance,
+    starterIssuesExcluded: policy?.starterIssuesExcluded === true,
+    ...(trailer ? { trailer } : {}),
+    statements: (policy?.statements ?? []).slice(0, 5).map((s) => ({ path: sanitizeText(s.path).slice(0, 200), text: sanitizeText(s.text).slice(0, 400) })),
+  };
 }
 
 function hostName(host: string | undefined): string {
@@ -158,6 +182,7 @@ export function taskFromIntel(profileInput: unknown, opportunityInput: unknown):
       ...(rules.requiresChangelog !== undefined ? { requiresChangelog: rules.requiresChangelog } : {}),
       ...(rules.cla !== undefined ? { cla: rules.cla } : {}),
       ...(rules.dco !== undefined ? { dco: rules.dco } : {}),
+      aiPolicy: aiPolicyFrom(rules.aiPolicy),
     },
     kind: opp.kind ?? "issue",
     title: sanitizeText(opp.title),

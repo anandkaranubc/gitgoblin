@@ -2,7 +2,7 @@ import { accessSync, constants, statSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { styleText } from "node:util";
 import type { ChangePlan, RunResult } from "@gitgoblin/engine";
-import type { AnalysisReport, ContributionOpportunity, RepositoryProfile } from "@gitgoblin/intel";
+import type { AiPolicy, AnalysisReport, ContributionOpportunity, RepositoryProfile } from "@gitgoblin/intel";
 import type { Style } from "./format.ts";
 import { plain } from "./text.ts";
 
@@ -16,7 +16,9 @@ export interface Choice {
  * Why the engine would stop at intake, in words a person can act on. Mirrors the engine's intake
  * gate (`atIntake` in packages/engine/src/policy.ts) so nobody pays for a run that cannot start.
  */
-export function engineWillRefuse(o: ContributionOpportunity): string | undefined {
+export function engineWillRefuse(o: ContributionOpportunity, ai?: AiPolicy): string | undefined {
+  if (ai?.stance === "forbidden") return "the project declines AI-generated contributions";
+  if (ai?.starterIssuesExcluded && o.issue?.labels.some((label) => STARTER_LABEL.test(label))) return "the project keeps its good first issues for people, without AI tools";
   if (o.issue?.inFlight) return `someone is already working on #${o.issue.number} (an assignee or an open pull request)`;
   if (o.kind === "triage") return "needs a reply on the issue, not a patch";
   if (o.kind === "stale_pr") return "continuing someone's pull request needs the original author's consent first; ask on the pull request before running the engine";
@@ -24,6 +26,22 @@ export function engineWillRefuse(o: ContributionOpportunity): string | undefined
   // The agent works offline, so it cannot regenerate a lockfile; checks would run against the old one.
   if (o.kind === "dependency") return "updating a locked dependency needs the lockfile regenerated with network access, which the agent does not have; the repository's dependency bot or a maintainer can run the update";
   return undefined;
+}
+
+// The engine's own test for a starter issue (policy.ts); kept the same so the two agree.
+const STARTER_LABEL = /good[- _]?first[- _]?issue|beginner|first[- _]?timers?|starter/i;
+
+const AI_STANCE: Record<AiPolicy["stance"], string> = {
+  forbidden: "the project declines AI-generated contributions",
+  disclose: "the project takes them when AI use is disclosed; the pull request will say an AI agent wrote it",
+  mentioned: "the project says something about AI-generated contributions; read it before you approve",
+  not_found: "none found in the project's guides, which does not mean AI-generated contributions are welcome",
+};
+
+/** What the person should know about the project's AI policy before an agent writes anything. */
+export function aiPolicyLines(ai: AiPolicy | undefined): string[] {
+  if (!ai) return [];
+  return [`AI policy: ${AI_STANCE[ai.stance]}.`, ...ai.statements.slice(0, 2).map((s) => `  ${plain(s.path)}: "${oneLine(s.text, 200)}"`)];
 }
 
 /**
@@ -42,7 +60,7 @@ export function doubtAbout(o: ContributionOpportunity): string | undefined {
 /** The first opportunity the engine would accept and intel does not doubt, then the first it would accept, else the first. 1-based, for the prompt. */
 export function recommendedRank(report: AnalysisReport): number {
   const all = report.opportunities;
-  const accepted = (o: ContributionOpportunity) => engineWillRefuse(o) === undefined;
+  const accepted = (o: ContributionOpportunity) => engineWillRefuse(o, report.profile.welcomeness.rules.aiPolicy) === undefined;
   let index = all.findIndex((o) => accepted(o) && doubtAbout(o) === undefined);
   if (index === -1) index = all.findIndex(accepted);
   return index === -1 ? 1 : index + 1;
@@ -61,7 +79,7 @@ export function formatOpportunities(report: AnalysisReport, style: Style): strin
     if (evidence) lines.push(`    ${paint("dim", `evidence: ${plain(evidence.locator)}${o.evidence.length > 1 ? ` and ${o.evidence.length - 1} more` : ""}`)}`);
     const doubt = doubtAbout(o);
     if (doubt) lines.push(`    ${paint("yellow", "?")} ${oneLine(doubt, 180)}`);
-    const refusal = engineWillRefuse(o);
+    const refusal = engineWillRefuse(o, report.profile.welcomeness.rules.aiPolicy);
     if (refusal) lines.push(`    ${paint("yellow", "!")} ${refusal}`);
     return lines.join("\n");
   });

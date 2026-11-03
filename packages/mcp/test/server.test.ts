@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { type DiscoveryQuery, type DiscoveryResult, type RepoRef, SIGNAL_NAMES } from "@gitgoblin/core";
-import type { AnalysisReport } from "@gitgoblin/intel";
+import { AnalysisReport } from "@gitgoblin/intel";
 import { RateLimitError } from "@gitgoblin/sources";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { buildSearchPlans } from "@gitgoblin/discovery";
@@ -14,7 +14,8 @@ import type { Visibility } from "../src/public.ts";
 import { DATA_NOTICE } from "../src/server.ts";
 import { formatOpportunity } from "../src/format.ts";
 
-const fixtureReport = JSON.parse(readFileSync(new URL("../../intel/fixtures/tenacity.report.json", import.meta.url), "utf8")) as AnalysisReport;
+// Parsed as a saved report is, so fields added since the fixture was recorded take their defaults.
+const fixtureReport = AnalysisReport.parse(JSON.parse(readFileSync(new URL("../../intel/fixtures/tenacity.report.json", import.meta.url), "utf8")));
 
 function sampleResult(overrides: Partial<DiscoveryResult> = {}): DiscoveryResult {
   return {
@@ -233,6 +234,18 @@ describe("server", () => {
   it("names the forge in the contribute command for a repository outside GitHub", () => {
     const report = { ...fixtureReport, profile: { ...fixtureReport.profile, repo: { ...fixtureReport.profile.repo, host: "codeberg.org" } } };
     expect(formatOpportunity(report, report.opportunities[0]!)).toContain("gitgoblin contribute codeberg.org/jd/tenacity --opportunity");
+  });
+
+  it("tells the agent what the project says about AI contributions, in the analysis and the briefing", async () => {
+    const declined = structuredClone(fixtureReport);
+    declined.profile.welcomeness.rules.aiPolicy = { stance: "forbidden", starterIssuesExcluded: false, statements: [{ path: "CONTRIBUTING.md", text: "We do not accept AI-generated patches." }] };
+    const { deps } = fakeDeps({ analyze: async () => declined });
+    const { client } = await connect(deps);
+    const analysis = await client.callTool({ name: "analyze_repository", arguments: { repository: "jd/tenacity" } });
+    expect(textOf(analysis)).toContain("AI policy: the project DECLINES AI-generated contributions; do not prepare one, and tell the person");
+    expect(analysis.structuredContent).toMatchObject({ rules: { ai_policy: { stance: "forbidden" } } });
+    const briefing = await client.callTool({ name: "get_opportunity", arguments: { repository: "jd/tenacity", opportunity_id: declined.opportunities[0]!.id } });
+    expect(textOf(briefing)).toContain('CONTRIBUTING.md: "We do not accept AI-generated patches."');
   });
 
   it("briefs one opportunity from the cached report, by id or issue number", async () => {

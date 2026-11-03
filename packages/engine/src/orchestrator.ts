@@ -259,6 +259,8 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   const setupNotes: string[] = [];
   let lastNotes: ImplementationNotes | undefined;
   let costUsd = 0;
+  // The model that wrote the change, for the pull request's AI disclosure.
+  let model = options.model;
   let workspace: Workspace | undefined;
   let investigation: Investigation | undefined;
   let verification: Verification | undefined;
@@ -299,6 +301,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
     const remainingMs = Math.max(30_000, limits.maxWallClockMs - (Date.now() - started));
     const result = await runner.run({ ...spec, maxBudgetUsd: Math.max(0.5, limits.maxCostUsd - costUsd), timeoutMs: remainingMs });
     costUsd += result.costUsd;
+    if (result.model && spec.name.startsWith("implement")) model = result.model;
     phases.push({ name: spec.name, costUsd: result.costUsd, turns: result.turns, durationMs: result.durationMs, ok: result.ok, denials: result.denials.length });
     journal.event(spec.name, "end", { ok: result.ok, costUsd: result.costUsd, turns: result.turns, errors: result.errors, denials: result.denials });
     for (const d of result.denials) reporter.warn(`${spec.name}: denied ${d.tool}: ${d.reason}`);
@@ -611,7 +614,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
 
     // Deliver: commit locally and write the pull request text. Publishing is a separate, approved step.
     reporter.phase("prepare", "commit and pull request text");
-    delivery = await preparePullRequest({ task, plan, notes: notes!, verification: verification!, review: review!, ...(investigation ? { investigation } : {}), ...(guidance.template ? { template: guidance.template } : {}) }, workspace.path, workspace.baseSha, env);
+    delivery = await preparePullRequest({ task, plan, notes: notes!, verification: verification!, review: review!, ...(investigation ? { investigation } : {}), ...(guidance.template ? { template: guidance.template } : {}), ...(model ? { model } : {}) }, workspace.path, workspace.baseSha, env);
     journal.artifact("delivery", delivery);
     journal.text("pr.md", delivery.prBody);
     journal.text("pr-title.txt", `${delivery.prTitle}\n`);

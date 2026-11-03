@@ -32,6 +32,13 @@ export interface ReportInput {
 }
 
 /** Human-readable summary written at the end of every run, whatever its outcome. */
+const AI_POLICY_WORDS: Record<Task["rules"]["aiPolicy"]["stance"], string> = {
+  forbidden: "The project declines AI-generated contributions.",
+  disclose: "The project takes AI-assisted contributions when AI use is disclosed. The pull request says an AI agent wrote this change; check that it also meets the rule quoted below.",
+  mentioned: "The project says something about AI-generated contributions. Read it before you publish.",
+  not_found: "No policy on AI-generated contributions was found in the project's guides. That does not mean they are welcome; check before you publish.",
+};
+
 export function renderReport(input: ReportInput): string {
   const { result, task, phases } = input;
   const lines = [
@@ -74,6 +81,15 @@ export function renderReport(input: ReportInput): string {
     for (const f of input.review.findings) lines.push(`- [${f.severity}] ${f.file}${f.line ? `:${f.line}` : ""}: ${f.summary}`);
     lines.push("");
   }
+  const ai = task.rules.aiPolicy;
+  lines.push(
+    "## The project's AI policy (for you)",
+    AI_POLICY_WORDS[ai.stance],
+    ...(ai.starterIssuesExcluded ? ["Its good first issues are kept for people, without AI tools."] : []),
+    ...(ai.trailer ? [`It asks AI-assisted commits for an \`${ai.trailer}:\` trailer; the commit has one.`] : []),
+    ...ai.statements.slice(0, 3).map((s) => `- ${s.path}: "${s.text}"`),
+    "",
+  );
   const environment = [...(input.notes?.environmentNotes ?? []), ...(input.notes ? [...input.notes.knownGaps, ...input.notes.deviationsFromPlan].filter((line) => !forMaintainersLine(line)) : [])];
   if (environment.length) {
     lines.push("## Environment notes (for you, not in the pull request)", ...environment.map((e) => `- ${e}`), "");

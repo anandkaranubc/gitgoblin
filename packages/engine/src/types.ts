@@ -71,6 +71,21 @@ export const TaskSchema = z.object({
       requiresChangelog: z.boolean().optional(),
       cla: z.boolean().optional(),
       dco: z.boolean().optional(),
+      /**
+       * What the project says about AI-generated contributions, as intel read it. "not_found" means
+       * nothing was found, not that AI contributions are welcome.
+       */
+      aiPolicy: z
+        .object({
+          stance: z.enum(["forbidden", "disclose", "mentioned", "not_found"]).default("not_found"),
+          /** Good first issues are kept for people, without AI tools. */
+          starterIssuesExcluded: z.boolean().default(false),
+          /** The commit trailer the project asks AI-assisted commits to carry. */
+          trailer: z.enum(["Assisted-by", "Generated-by"]).optional(),
+          /** The project's own sentences, with the file each came from. */
+          statements: z.array(z.object({ path: z.string(), text: z.string() })).default([]),
+        })
+        .prefault({}),
     })
     .prefault({}),
   kind: z.string().default("issue"),

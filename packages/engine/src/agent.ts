@@ -31,6 +31,8 @@ export interface PhaseResult<T> {
   sessionId?: string;
   /** Spend attributable to this phase alone. */
   costUsd: number;
+  /** The model the session ran on, as the SDK reported it. */
+  model?: string;
   turns: number;
   durationMs: number;
   errors: string[];
@@ -143,6 +145,7 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
     const started = Date.now();
     let text = "";
     let sessionId: string | undefined;
+    let model: string | undefined;
     let total = 0;
     let turns = 0;
     const errors: string[] = [];
@@ -153,7 +156,10 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
     try {
       for await (const message of run({ prompt, options })) {
         opts.onMessage?.(spec.name, message);
-        if (message.type === "system" && message.subtype === "init") sessionId = message.session_id;
+        if (message.type === "system" && message.subtype === "init") {
+          sessionId = message.session_id;
+          model = message.model;
+        }
         if (message.type === "assistant" && message.parent_tool_use_id === null) {
           for (const block of message.message.content) {
             if (block.type === "text") text = block.text;
@@ -195,6 +201,7 @@ export function createSdkRunner(opts: SdkRunnerOptions): AgentRunner {
       ...(parsed?.success ? { output: parsed.data } : {}),
       text,
       ...(sessionId ? { sessionId } : {}),
+      ...(model ? { model } : {}),
       costUsd: costs.delta(sessionId, spec.resume, total),
       turns,
       durationMs: Date.now() - started,

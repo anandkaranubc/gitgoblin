@@ -10,7 +10,7 @@ import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/i
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
 import { type HttpCache, MissingTokenError, SqliteCache, defaultCachePath, loadExcludedProjects } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
-import { type PlanContextLike, checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, missingToolchains, onPath, recommendedRank, selectOpportunity, toolchainWarning } from "./contribute.ts";
+import { type PlanContextLike, aiPolicyLines, checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, missingToolchains, onPath, recommendedRank, selectOpportunity, toolchainWarning } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
 import { explainMissingRepository, explainNetworkFailure } from "./errors.ts";
 import { type DiscoverOptions, onGitHub, parseGoal, toQuery } from "./options.ts";
@@ -517,7 +517,8 @@ export function buildProgram(runtime: Runtime): Command {
         const missing = missingToolchains(report.profile, (name) => onPath(name, path));
         if (missing.length > 0) runtime.stdout(toolchainWarning(missing));
       }
-      const refusal = engineWillRefuse(opportunity);
+      for (const line of aiPolicyLines(report.profile.welcomeness.rules.aiPolicy)) runtime.stdout(line);
+      const refusal = engineWillRefuse(opportunity, report.profile.welcomeness.rules.aiPolicy);
       if (refusal) runtime.stdout(`The engine will refuse this one at intake: ${refusal}.`);
 
       // The engine clones the repository, unless the report came from `analyze --local`, in which case it

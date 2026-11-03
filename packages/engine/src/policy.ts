@@ -125,8 +125,21 @@ export function optedOut(repo: Task["repo"], current: readonly string[] = []): s
   return entry ? `the maintainers of ${repo.host}/${repo.owner}/${repo.name} asked gitgoblin to leave the project alone (${entry} in docs/excluded-projects.md)` : undefined;
 }
 
+const STARTER_LABEL = /good[- _]?first[- _]?issue|beginner|first[- _]?timers?|starter/i;
+
+/** Why the project's AI policy rules this task out, quoting the project, or undefined. */
+export function aiPolicyRefusal(task: Task): string | undefined {
+  const ai = task.rules.aiPolicy;
+  const quote = (s: { path: string; text: string } | undefined) => (s ? ` (${s.path}: "${s.text}")` : "");
+  if (ai.stance === "forbidden") return `the project declines AI-generated contributions${quote(ai.statements[0])}`;
+  if (ai.starterIssuesExcluded && task.issue?.labels.some((label) => STARTER_LABEL.test(label))) {
+    return `the project keeps its good first issues for people, without AI tools${quote(ai.statements.find((s) => /first[- ]?(?:issue|timer)|beginner/i.test(s.text)))}`;
+  }
+  return undefined;
+}
+
 export function atIntake(task: Task, excludedProjects: readonly string[] = []): Decision {
-  const excluded = optedOut(task.repo, excludedProjects);
+  const excluded = optedOut(task.repo, excludedProjects) ?? aiPolicyRefusal(task);
   if (excluded) return { action: "stop", reason: excluded };
   if (task.issue?.inFlight) return { action: "stop", reason: `issue #${task.issue.number} already has an assignee or an open pull request` };
   if (task.kind === "triage") return { action: "stop", reason: "this is a communication task (reply on the issue), not a code change" };
