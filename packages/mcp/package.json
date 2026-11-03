@@ -54,7 +54,7 @@
     "@gitgoblin/intel": "0.1.0",
     "@gitgoblin/sources": "0.1.0",
     "@modelcontextprotocol/client": "^2.3.1",
-    "@modelcontextprotocol/server": "^2.3.1",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@types/node": "^24",
     "esbuild": "^0.28.2",
     "typescript": "^5.9.0",
