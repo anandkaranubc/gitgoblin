@@ -28,6 +28,19 @@ code changes. `normalizeHost` expands shorthand like `"github"`.
 language, license (SPDX), stars, forks, open issues, timestamps, archived and
 fork flags. Optional fields mean *unknown*, not *absent*.
 
+## Excluded projects
+
+Maintainers can opt their projects out of gitgoblin ([docs/excluded-projects.md](../../docs/excluded-projects.md) is the list and its source of truth). Every component that ranks, analyzes or contributes checks it:
+
+```ts
+import { EXCLUDED_PROJECTS_URL, excludedEntry, parseExcludedProjects } from "@gitgoblin/core";
+
+excludedEntry(ref);          // the matching entry, or undefined, from the list this release shipped
+excludedEntry(ref, parseExcludedProjects(text)); // the current list, `text` fetched from EXCLUDED_PROJECTS_URL
+```
+
+Entries are `host/owner/name`, or `host/owner` for everything an owner has, compared without case. A test keeps the shipped `EXCLUDED_PROJECTS` equal to the document.
+
 ## Discovery contract
 
 - `Goal`: `contribute`, `learn`, `adopt`, `revive`, `explore`. `GOAL_DESCRIPTIONS` says what each optimizes for.
