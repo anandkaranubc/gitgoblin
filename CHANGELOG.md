@@ -27,7 +27,12 @@ end with a plain AI disclosure that names the model.
   anything is read, run or pushed. The list is read from gitgoblin's repository at most six hours
   old, so a new opt-out applies without a release; offline, the list the release shipped applies.
 
-## @gitgoblin/mcp 0.2.0 - Unreleased
+## @gitgoblin/mcp 0.2.0 - 2026-11-03
+
+Upgrade from 0.1.8 so the agents you use with gitgoblin keep its promises to other projects: the
+server leaves alone projects whose maintainers opted out, and it tells the agent what a project
+says about AI-generated contributions, including when it declines them. Tools that used to answer
+for an opted-out project now return an error that says why.
 
 - `analyze_repository` and `get_opportunity` state the project's policy on AI-generated
   contributions, quoting it (also as `rules.ai_policy`), and tell the agent not to prepare a change
