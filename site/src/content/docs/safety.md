@@ -41,7 +41,7 @@ The full policy is [docs/etiquette.md](https://github.com/anandkaranubc/gitgobli
 
 ## Opting out
 
-If you maintain a project and want gitgoblin to leave it alone, fill in the [maintainer form](https://github.com/anandkaranubc/gitgoblin/issues/new?template=maintainer_report.yml). No reason is needed. The list lives in [docs/excluded-projects.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/excluded-projects.md): listed projects must not receive pull requests, issues or comments from gitgoblin users, and its tools are expected to refuse to.
+If you maintain a project and want gitgoblin to leave it alone, fill in the [maintainer form](https://github.com/anandkaranubc/gitgoblin/issues/new?template=maintainer_report.yml). No reason is needed. The list lives in [docs/excluded-projects.md](https://github.com/anandkaranubc/gitgoblin/blob/main/docs/excluded-projects.md): listed projects must not receive pull requests, issues or comments from gitgoblin users. Discovery leaves them out, and analysis, contributing, publishing and the MCP server refuse them; every install reads the current list, so a new entry applies within six hours.
 
 If a gitgoblin-assisted contribution broke one of the commitments above, open an issue with a link. That is treated as a bug in gitgoblin, whoever was at fault.
 

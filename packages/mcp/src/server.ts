@@ -1,5 +1,5 @@
 import type { DiscoveryFilters, DiscoveryQuery, Goal, RepoRef } from "@gitgoblin/core";
-import { GOAL_DESCRIPTIONS, GOALS, parseRepoRef, repoId } from "@gitgoblin/core";
+import { excludedEntry, GOAL_DESCRIPTIONS, GOALS, parseRepoRef, repoId } from "@gitgoblin/core";
 import type { AnalysisHints, AnalysisReport, ContributionOpportunity } from "@gitgoblin/intel";
 import { MissingTokenError, RateLimitError } from "@gitgoblin/sources";
 import { type CallToolResult, McpServer, type ServerContext } from "@modelcontextprotocol/server";
@@ -241,6 +241,13 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
     return `${ref.host}/${ref.owner}/${ref.name} is not a repository gitgoblin can confirm is public (${visibility.reason}). gitgoblin reads public repositories only.`;
   }
 
+  /** Undefined when gitgoblin may work on the repository; otherwise why it is refused. */
+  async function refuse(ref: RepoRef): Promise<string | undefined> {
+    const entry = excludedEntry(ref, await deps.excludedProjects());
+    if (entry) return `The maintainers of ${ref.host}/${ref.owner}/${ref.name} asked gitgoblin to leave the project alone (${entry} in docs/excluded-projects.md), so gitgoblin does not rank it, analyze it or suggest work there. Do not propose contributions to it.`;
+    return refusePrivate(ref);
+  }
+
   server.registerTool(
     "discover_repositories",
     {
@@ -292,7 +299,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
       if (typeof ref === "string") return failure(ref);
       const goal = args.goal ?? "contribute";
       try {
-        const refusal = await refusePrivate(ref);
+        const refusal = await refuse(ref);
         if (refusal) return failure(refusal);
         const result = await withDiscovery(ctx, (session) => session.explain(ref, goal));
         if (!result) return failure(`${ref.owner}/${ref.name} was not found on ${ref.host}. Check the spelling, or whether it was renamed.`);
@@ -321,7 +328,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
       if (typeof ref === "string") return failure(ref);
       const max = args.max_opportunities ?? 10;
       try {
-        const refusal = await refusePrivate(ref);
+        const refusal = await refuse(ref);
         if (refusal) return failure(refusal);
         const report = await analyze(ref, ctx, {
           maxOpportunities: Math.max(max, 15),
@@ -357,7 +364,7 @@ export function createServer(deps: ServerDeps, options: ServerOptions = {}): Mcp
       const find = (report: AnalysisReport): ContributionOpportunity | undefined =>
         report.opportunities.find((o) => (args.opportunity_id !== undefined && o.id === args.opportunity_id) || (args.issue_number !== undefined && subjectNumber(o) === args.issue_number));
       try {
-        const refusal = await refusePrivate(ref);
+        const refusal = await refuse(ref);
         if (refusal) return failure(refusal);
         // A recent analysis answers, found or not: an unknown id never costs a fresh clone and analysis.
         const report = cachedReport(ref) ?? (await analyze(ref, ctx, { maxOpportunities: 15, checkLinks: false, dependencyChecks: true, goal: "contribute" }));

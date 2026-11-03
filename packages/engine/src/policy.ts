@@ -1,3 +1,4 @@
+import { EXCLUDED_PROJECTS, excludedEntry } from "@gitgoblin/core";
 import type { ChangePlan, DiffStats, Investigation, Review, Task, Verification } from "./types.ts";
 
 /** Hard limits for one run. Every gate in the pipeline consults these. */
@@ -115,7 +116,18 @@ function canonical(value: unknown): unknown {
 }
 
 /** Some opportunities are conversations with maintainers, not patches. The engine only prepares code changes. */
-export function atIntake(task: Task): Decision {
+/**
+ * Why gitgoblin must not work on the repository, when its maintainers opted out (docs/excluded-projects.md).
+ * `current` is the list fetched now; the one this release shipped always applies too.
+ */
+export function optedOut(repo: Task["repo"], current: readonly string[] = []): string | undefined {
+  const entry = excludedEntry(repo, [...EXCLUDED_PROJECTS, ...current]);
+  return entry ? `the maintainers of ${repo.host}/${repo.owner}/${repo.name} asked gitgoblin to leave the project alone (${entry} in docs/excluded-projects.md)` : undefined;
+}
+
+export function atIntake(task: Task, excludedProjects: readonly string[] = []): Decision {
+  const excluded = optedOut(task.repo, excludedProjects);
+  if (excluded) return { action: "stop", reason: excluded };
   if (task.issue?.inFlight) return { action: "stop", reason: `issue #${task.issue.number} already has an assignee or an open pull request` };
   if (task.kind === "triage") return { action: "stop", reason: "this is a communication task (reply on the issue), not a code change" };
   if (task.kind === "stale_pr") {

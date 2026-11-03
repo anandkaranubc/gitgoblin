@@ -96,6 +96,7 @@ function hostileRuntime(workdir: string, answers: string[] = []) {
     },
     openCache: () => new MemoryCache(),
     cachePath: () => "/tmp/unused",
+    excludedProjects: async () => [],
     stdout: (t) => out.push(t),
     stderr: (t) => err.push(t),
     color: false,

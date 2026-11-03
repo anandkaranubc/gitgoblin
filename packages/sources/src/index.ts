@@ -1,4 +1,5 @@
 import { EcosystemsClient } from "./ecosystems/client.ts";
+import { fetchExcludedProjects } from "./excluded.ts";
 import { GitHubClient } from "./github/client.ts";
 import { resolveGitHubToken } from "./github/token.ts";
 import { defaultCachePath, type HttpCache, MemoryCache, SqliteCache } from "./http/cache.ts";
@@ -36,6 +37,7 @@ export {
   STARTER_ISSUE_LABELS,
 } from "./github/client.ts";
 export { resolveGitHubToken } from "./github/token.ts";
+export { EXCLUDED_PROJECTS_TTL_MS } from "./excluded.ts";
 export {
   EcosystemsClient,
   type EcosystemsClientOptions,
@@ -73,6 +75,22 @@ function openCache(options: SourcesOptions): HttpCache {
   } catch (error) {
     options.onEvent?.({ type: "cache-fallback", path, error: error instanceof Error ? error.message : String(error) });
     return new MemoryCache();
+  }
+}
+
+/**
+ * The projects whose maintainers opted out of gitgoblin (docs/excluded-projects.md): the list this
+ * release shipped plus the current one from gitgoblin's repository, so an opt-out applies without a
+ * release. The fetched list can only add entries, and when it cannot be read (offline, an outage)
+ * the shipped list still applies. Without `http`, the default cache is opened for the call.
+ */
+export async function loadExcludedProjects(http?: HttpClient): Promise<string[]> {
+  if (http) return fetchExcludedProjects(http);
+  const cache = openCache({});
+  try {
+    return await fetchExcludedProjects(new HttpClient({ cache }));
+  } finally {
+    cache.close();
   }
 }
 

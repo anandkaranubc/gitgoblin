@@ -5,6 +5,20 @@ What changed in each release of the two packages gitgoblin publishes: the `gitgo
 follow [Semantic Versioning](https://semver.org); before 1.0, a minor version may change behavior.
 [docs/releasing.md](docs/releasing.md) says how a release is made.
 
+## gitgoblin 0.2.0 - Unreleased
+
+- Projects whose maintainers opted out ([docs/excluded-projects.md](docs/excluded-projects.md)) are
+  left alone: `discover` leaves them out and says so (in `warnings` with `--json`), `explain`
+  scores them 0 with the reason, and `analyze`, `contribute` and `publish` refuse them before
+  anything is read, run or pushed. The list is read from gitgoblin's repository at most six hours
+  old, so a new opt-out applies without a release; offline, the list the release shipped applies.
+
+## @gitgoblin/mcp 0.2.0 - Unreleased
+
+- Projects whose maintainers opted out ([docs/excluded-projects.md](docs/excluded-projects.md)) are
+  left out of `discover_repositories` (named in `warnings`), and `explain_repository`,
+  `analyze_repository` and `get_opportunity` refuse them before any work.
+
 ## gitgoblin 0.1.4 - 2026-10-30
 
 Upgrade from any earlier version. In each of them the agent's own shell can write where a

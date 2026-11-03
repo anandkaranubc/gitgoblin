@@ -4,11 +4,11 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { DiscoveryQuery, DiscoveryResult, Goal, RepoRef } from "@gitgoblin/core";
-import { GOAL_DESCRIPTIONS, GOALS, normalizeHost, parseRepoRef, sameRepo } from "@gitgoblin/core";
+import { excludedEntry, GOAL_DESCRIPTIONS, GOALS, normalizeHost, parseRepoRef, sameRepo } from "@gitgoblin/core";
 import type { CheckIsolation, Effort, Reporter, RunOptions } from "@gitgoblin/engine";
 import type { AnalysisOptions, AnalysisReport, RepoRefInput } from "@gitgoblin/intel";
 import { GOAL_PROFILES, type ProgressEvent, createDiscovery } from "@gitgoblin/discovery";
-import { type HttpCache, MissingTokenError, SqliteCache, defaultCachePath } from "@gitgoblin/sources";
+import { type HttpCache, MissingTokenError, SqliteCache, defaultCachePath, loadExcludedProjects } from "@gitgoblin/sources";
 import { Command, InvalidArgumentError } from "commander";
 import { type PlanContextLike, checksLine, describeEnvironment, describeRun, engineWillRefuse, formatOpportunities, formatPlan, issueGap, missingToolchains, onPath, recommendedRank, selectOpportunity, toolchainWarning } from "./contribute.ts";
 import { formatExplanation, formatResults } from "./format.ts";
@@ -29,6 +29,8 @@ export interface Runtime {
   createEngine(options: { onProgress: (event: ProgressEvent) => void }): Promise<{ engine: Engine; close(): void; rateLimits(): string }>;
   openCache(): HttpCache;
   cachePath(): string;
+  /** The projects whose maintainers opted out of gitgoblin (docs/excluded-projects.md): the shipped list plus the current one. */
+  excludedProjects(): Promise<readonly string[]>;
   /** Imports a sibling package that may not be installed; undefined when it is not. */
   loadModule: ModuleLoader;
   /** Asks the person at the terminal a question and returns their answer. */
@@ -67,6 +69,7 @@ const defaultRuntime: Runtime = {
   },
   openCache: () => new SqliteCache(defaultCachePath()),
   cachePath: defaultCachePath,
+  excludedProjects: () => loadExcludedProjects(),
   async loadModule(name) {
     const load = SIBLINGS[name];
     return load ? importSibling(name, load) : undefined;
@@ -202,6 +205,14 @@ function explainFailure(error: unknown, runtime: Runtime): string {
 /** owner/name on GitHub, host/owner/name elsewhere, so a printed command names the same repository. */
 function slug(ref: RepoRef): string {
   return onGitHub(ref) ? `${ref.owner}/${ref.name}` : `${normalizeHost(ref.host)}/${ref.owner}/${ref.name}`;
+}
+
+/** Refuses a project whose maintainers opted out of gitgoblin; otherwise returns the list, for the engine. */
+async function refuseOptedOut(runtime: Runtime, ref: RepoRef, doing: string): Promise<readonly string[]> {
+  const excluded = await runtime.excludedProjects();
+  const entry = excludedEntry(ref, excluded);
+  if (entry) throw new Error(`The maintainers of ${slug(ref)} asked gitgoblin to leave the project alone (${entry} in docs/excluded-projects.md), so gitgoblin does not ${doing} it.`);
+  return excluded;
 }
 
 /** Where the engine keeps runs and clones. One default for every command, so a run started by `contribute` is found by `publish`. */
@@ -410,6 +421,7 @@ export function buildProgram(runtime: Runtime): Command {
     .action(async (ref: RepoRef, options: { goal: Goal; local?: string; max: string; links: boolean; deps: boolean; out?: string; json?: boolean; verbose?: boolean }) => {
       const intel = await loadIntel(runtime.loadModule);
       if (!intel) throw new Error("The @gitgoblin/intel package is not available in this install, so analyze cannot run.");
+      await refuseOptedOut(runtime, ref, "analyze");
       const maxOpportunities = Number(options.max);
       if (!Number.isInteger(maxOpportunities) || maxOpportunities < 1) throw new Error("--max must be a positive integer");
       const hints = await discoveryHints(runtime, ref, options.goal);
@@ -468,6 +480,7 @@ export function buildProgram(runtime: Runtime): Command {
       const maxCostUsd = options.maxCost ?? engine.DEFAULT_LIMITS?.maxCostUsd ?? 10;
       const workdir = resolveWorkdir(runtime, options.workdir);
       if (options.issue !== undefined && options.opportunity !== undefined) throw new Error("Give either --issue or --opportunity, not both.");
+      const excludedProjects = await refuseOptedOut(runtime, ref, "prepare contributions for");
 
       let report: AnalysisReport;
       if (options.report) {
@@ -532,6 +545,7 @@ export function buildProgram(runtime: Runtime): Command {
         {
           workdir,
           limits: { maxCostUsd },
+          excludedProjects,
           ...(options.model ? { model: options.model } : {}),
           ...(options.effort ? { effort: options.effort } : {}),
           ...(options.checkIsolation ? { checkIsolation: options.checkIsolation } : {}),
@@ -572,7 +586,7 @@ export function buildProgram(runtime: Runtime): Command {
         runtime.stdout(`Not published. The change stays in ${result.runDir}.`);
         return;
       }
-      const published = await engine.publishRun(result.runId, { workdir, approved: true, draft: true, log: (line) => runtime.stderr(plain(line)) });
+      const published = await engine.publishRun(result.runId, { workdir, approved: true, draft: true, excludedProjects: await runtime.excludedProjects(), log: (line) => runtime.stderr(plain(line)) });
       runtime.stdout(`Draft pull request: ${plain(published.url)}`);
     });
 
@@ -682,7 +696,7 @@ export function buildProgram(runtime: Runtime): Command {
         runtime.stdout("Not published.");
         return;
       }
-      const published = await engine.publishRun(runId, { workdir, approved: true, draft, log: (line) => runtime.stderr(plain(line)) });
+      const published = await engine.publishRun(runId, { workdir, approved: true, draft, excludedProjects: await runtime.excludedProjects(), log: (line) => runtime.stderr(plain(line)) });
       runtime.stdout(`${draft ? "Draft pull request" : "Pull request"}: ${plain(published.url)}`);
     });
 

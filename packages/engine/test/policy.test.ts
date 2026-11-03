@@ -156,6 +156,12 @@ describe("atIntake", () => {
     expect(atIntake({ ...task, kind: "hygiene", files: [] }).action).toBe("escalate");
     expect(atIntake({ ...task, kind: "hygiene", files: [".editorconfig"] })).toEqual({ action: "continue" });
   });
+  it("stops for a project on the excluded list, a whole owner or one repository, before anything else", () => {
+    const owner = `${task.repo.host}/${task.repo.owner}`.toUpperCase();
+    expect(atIntake({ ...task, kind: "triage" }, [owner])).toMatchObject({ action: "stop", reason: expect.stringContaining("asked gitgoblin to leave the project alone") });
+    expect(atIntake(task, [`${task.repo.host}/${task.repo.owner}/${task.repo.name}`]).action).toBe("stop");
+    expect(atIntake(task, [`${task.repo.host}/${task.repo.owner}/other`])).toEqual({ action: "continue" });
+  });
   it("escalates a dependency bump before any model spend, since the lockfile cannot be regenerated offline", () => {
     const d = atIntake({ ...task, kind: "dependency", files: ["package-lock.json"] });
     expect(d.action).toBe("escalate");

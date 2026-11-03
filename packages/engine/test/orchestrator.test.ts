@@ -105,6 +105,18 @@ describe("runContribution", () => {
     expect(dry.commands.at(-1)).toContain("gh pr create --repo acme/fixture --base main");
     expect(dry.commands.at(-1)).toContain("--draft");
     await expect(publishRun(result.runId, { workdir: wd, approved: false })).rejects.toThrow(/approved/);
+    // The maintainers opted out after the run was prepared.
+    await expect(publishRun(result.runId, { workdir: wd, approved: true, dryRun: true, env, excludedProjects: ["github.com/acme"] })).rejects.toThrow(/asked gitgoblin to leave the project alone/);
+  });
+
+  it("stops at intake, before any model call or clone, for a project whose maintainers opted out", async () => {
+    const repo = await createFixtureRepo();
+    const calls: PhaseSpec<unknown>[] = [];
+    const result = await run(happyPath, calls, { excludedProjects: ["github.com/acme/fixture"] })(repo, workdir());
+    expect(result.status).toBe("stopped");
+    expect(result.reason).toContain("github.com/acme/fixture in docs/excluded-projects.md");
+    expect(calls).toHaveLength(0);
+    expect(result.workspace).toBeUndefined();
   });
 
   it("feeds verification failures back and retries once", async () => {

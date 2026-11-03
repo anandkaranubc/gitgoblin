@@ -61,9 +61,9 @@ const catalogue: RepoFacts[] = [
   facts({ owner: "copy", name: "forked-lib", stars: 10, fork: true }),
 ];
 
-function makeEngine(github = new FakeGitHub(catalogue), ecosystemsSource: EcosystemsSource = new FakeEcosystems()) {
+function makeEngine(github = new FakeGitHub(catalogue), ecosystemsSource: EcosystemsSource = new FakeEcosystems(), excluded: string[] = []) {
   const events: ProgressEvent[] = [];
-  const engine = new DiscoveryEngine({ github, ecosystems: ecosystemsSource, now: () => NOW, onProgress: (e) => events.push(e) });
+  const engine = new DiscoveryEngine({ github, ecosystems: ecosystemsSource, now: () => NOW, onProgress: (e) => events.push(e), excludedProjects: async () => excluded });
   return { engine, events, github };
 }
 
@@ -94,6 +94,16 @@ describe("DiscoveryEngine.discover", () => {
       expect(r.evidence.contributors).toBe(60);
     }
     expect(events.some((e) => e.stage === "enrich")).toBe(true);
+  });
+
+  it("leaves out projects whose maintainers opted out, and says so", async () => {
+    const { engine, events } = makeEngine(new FakeGitHub(catalogue), new FakeEcosystems(), ["github.com/acme", "github.com/solo/tool"]);
+    const results = await engine.discover({ goal: "contribute", limit: 10 });
+    expect(results.map((r) => r.repo.owner)).not.toContain("acme");
+    expect(results.map((r) => r.repo.owner)).not.toContain("solo");
+    const warning = events.find((e) => e.stage === "warning" && e.message.includes("opted out"));
+    expect(warning?.message).toContain("github.com/acme/lib-one");
+    expect(warning?.message).toContain("github.com/solo/tool");
   });
 
   it("keeps going when an enrichment source fails for one repository", async () => {
@@ -158,5 +168,13 @@ describe("DiscoveryEngine.explain", () => {
     expect(result?.score).toBeGreaterThan(0.5);
     expect(result?.signals.usage).toBeGreaterThan(0);
     expect(await engine.explain({ host: "github.com", owner: "none", name: "none" }, "adopt")).toBeUndefined();
+  });
+
+  it("scores an opted-out project zero and says why, without enriching it", async () => {
+    const { engine, events } = makeEngine(new FakeGitHub(catalogue), new FakeEcosystems(), ["github.com/acme/lib-one"]);
+    const result = await engine.explain({ host: "github.com", owner: "ACME", name: "lib-one" }, "contribute");
+    expect(result?.score).toBe(0);
+    expect(result?.reasons[0]).toMatchObject({ signal: "filter", weight: -1, detail: expect.stringContaining("docs/excluded-projects.md") });
+    expect(events.some((e) => e.stage === "enrich")).toBe(false);
   });
 });
