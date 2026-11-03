@@ -8,6 +8,7 @@ export {
   type RepoFacts,
   type RepoRef,
 } from "./repo.ts";
+export { EXCLUDED_PROJECTS, EXCLUDED_PROJECTS_URL, excludedEntry, parseExcludedProjects } from "./excluded.ts";
 export {
   GOAL_DESCRIPTIONS,
   GOALS,
