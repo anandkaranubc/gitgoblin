@@ -23,6 +23,7 @@ import {
   DEFAULT_LIMITS,
   failureSignature,
   findSecrets,
+  optedOut,
   packageJsonControlChanged,
   type Decision,
   type Limits,
@@ -128,6 +129,11 @@ export interface RunOptions {
    * (REGISTRY_HOSTS), for example a private registry. Entries starting with "." match subdomains.
    */
   installHosts?: string[];
+  /**
+   * The current list of projects whose maintainers opted out of gitgoblin (docs/excluded-projects.md).
+   * The list this release shipped always applies; a run for a listed project stops at intake.
+   */
+  excludedProjects?: readonly string[];
   /** Replaces the Claude Agent SDK runner; tests use a scripted one. */
   runnerFactory?: (ctx: RunnerContext) => AgentRunner;
 }
@@ -305,7 +311,7 @@ export async function runContribution(input: RunInput, options: RunOptions = {})
   };
 
   try {
-    decide("intake", atIntake(task));
+    decide("intake", atIntake(task, options.excludedProjects));
 
     // Workspace, dependencies, guidance, baseline. Install and checks run on the host (setup phase),
     // with a credential-free environment; the agent's own commands run in the sandbox.
@@ -677,6 +683,8 @@ export interface PublishRunOptions {
   dryRun?: boolean;
   env?: Record<string, string>;
   log?: (line: string) => void;
+  /** As in RunOptions: a project that opted out after the run was prepared is refused here. */
+  excludedProjects?: readonly string[];
 }
 
 /** Pushes a prepared run's branch and opens the pull request. Refuses without explicit approval. */
@@ -692,6 +700,8 @@ export async function publishRun(runId: string, options: PublishRunOptions): Pro
   // These files sat on disk since the run; parse them again rather than trust their shape.
   const task = TaskSchema.parse(rawTask);
   const delivery: PreparedDelivery = PreparedDeliverySchema.parse(rawDelivery);
+  const excluded = optedOut(task.repo, options.excludedProjects);
+  if (excluded) throw new Error(`run ${runId} cannot be published: ${excluded}`);
   if (typeof workspace.path !== "string" || !existsSync(path.join(workspace.path, ".git"))) throw new Error(`run ${runId}: workspace ${String(workspace.path)} is not a git checkout`);
   const published = await publishPullRequest({
     task,

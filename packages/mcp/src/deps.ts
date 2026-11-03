@@ -4,7 +4,7 @@ import { basename, dirname, join } from "node:path";
 import type { DiscoveryQuery, DiscoveryResult, Goal, RepoRef } from "@gitgoblin/core";
 import { createDiscovery } from "@gitgoblin/discovery";
 import { type AnalysisOptions, type AnalysisReport, analyzeRepository, cloneDirFor } from "@gitgoblin/intel";
-import { defaultCacheDir, resolveGitHubToken } from "@gitgoblin/sources";
+import { defaultCacheDir, loadExcludedProjects, resolveGitHubToken } from "@gitgoblin/sources";
 import type { AnalyzeTask } from "./child.ts";
 import { runInChild, Semaphore } from "./isolate.ts";
 import { createPublicChecker, type Visibility } from "./public.ts";
@@ -152,6 +152,8 @@ export interface ServerDeps {
   analyze(ref: RepoRef, options: AnalyzeOptions): Promise<AnalysisReport>;
   /** Confirms, without credentials, that the repository is public. */
   isPublic(ref: RepoRef): Promise<Visibility>;
+  /** The projects whose maintainers opted out of gitgoblin (docs/excluded-projects.md). */
+  excludedProjects(): Promise<readonly string[]>;
   now?: (() => number) | undefined;
 }
 
@@ -175,6 +177,7 @@ export function defaultDeps(childEntry?: string): ServerDeps {
       };
     },
     isPublic: createPublicChecker(),
+    excludedProjects: () => loadExcludedProjects(),
     analyze: (ref, options) => {
       const cacheDir = mcpCacheDir();
       // The lock is taken outside the gate, so an analysis waiting for the same repository holds no slot.

@@ -45,7 +45,7 @@ function sampleResult(overrides: Partial<DiscoveryResult> = {}): DiscoveryResult
   };
 }
 
-function fakeRuntime(engine: Partial<Engine> = {}, extra: { modules?: Record<string, Record<string, unknown>>; answers?: string[]; canPrompt?: boolean; isInteractive?: boolean } = {}) {
+function fakeRuntime(engine: Partial<Engine> = {}, extra: { modules?: Record<string, Record<string, unknown>>; answers?: string[]; canPrompt?: boolean; isInteractive?: boolean; excluded?: string[] } = {}) {
   const out: string[] = [];
   const err: string[] = [];
   const asked: string[] = [];
@@ -70,6 +70,7 @@ function fakeRuntime(engine: Partial<Engine> = {}, extra: { modules?: Record<str
     },
     openCache: () => cache,
     cachePath: () => "/tmp/gitgoblin-test/http-cache.sqlite",
+    excludedProjects: async () => extra.excluded ?? [],
     stdout: (t) => out.push(t),
     stderr: (t) => err.push(t),
     color: false,
@@ -360,6 +361,26 @@ describe("analyze", () => {
     const empty = fakeRuntime({}, { modules: fakeSiblings({ report: sampleReport([]) }).modules });
     expect(await run(["analyze", "acme/widget"], empty.runtime)).toBe(0);
     expect(empty.err.join("\n")).not.toContain("gitgoblin contribute");
+  });
+});
+
+describe("projects whose maintainers opted out", () => {
+  it("are refused by analyze and contribute before anything is read or run", async () => {
+    for (const argv of [["analyze", "acme/widget"], ["contribute", "Acme/Widget", "--issue", "42"]]) {
+      const siblings = fakeSiblings();
+      const { runtime, err } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "publish"], excluded: ["github.com/acme"] });
+      expect(await run(argv, runtime)).toBe(1);
+      expect(err.join("\n")).toContain("asked gitgoblin to leave the project alone (github.com/acme in docs/excluded-projects.md)");
+      expect(siblings.calls).toEqual([]);
+    }
+  });
+
+  it("are handed to the engine, which checks them again at intake and before publishing", async () => {
+    const siblings = fakeSiblings();
+    const { runtime } = fakeRuntime({}, { modules: siblings.modules, answers: ["y", "y", "publish"], excluded: ["github.com/someone-else"] });
+    expect(await run(["contribute", "acme/widget", "--issue", "42", "--workdir", siblings.workdir], runtime)).toBe(0);
+    expect(siblings.calls[1]?.args[1]).toMatchObject({ excludedProjects: ["github.com/someone-else"] });
+    expect(siblings.calls[2]?.args[1]).toMatchObject({ excludedProjects: ["github.com/someone-else"] });
   });
 });
 

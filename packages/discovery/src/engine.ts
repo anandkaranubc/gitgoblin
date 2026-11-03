@@ -1,5 +1,5 @@
 import type { Discoverer, DiscoveryQuery, DiscoveryResult, Goal, RepoFacts, RepoRef } from "@gitgoblin/core";
-import { GOALS, isGoal, repoId, sameRepo } from "@gitgoblin/core";
+import { EXCLUDED_PROJECTS, excludedEntry, GOALS, isGoal, repoId, sameRepo } from "@gitgoblin/core";
 import { seededRandom } from "./math.ts";
 import { GOAL_PROFILES } from "./profiles.ts";
 import { buildSearchPlans, prefilter } from "./queries.ts";
@@ -22,7 +22,11 @@ export interface DiscoveryEngineOptions {
   maxPerOwner?: number | undefined;
   /** Upper bound on candidates enriched with ecosyste.ms and GraphQL data, and so on results. Default 48. */
   maxEnriched?: number | undefined;
+  /** The projects whose maintainers opted out of gitgoblin. Default: the list this release shipped. */
+  excludedProjects?: (() => Promise<readonly string[]>) | undefined;
 }
+
+const OPTED_OUT = "its maintainers asked gitgoblin to leave it alone (docs/excluded-projects.md)";
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
@@ -39,6 +43,8 @@ export class DiscoveryEngine implements Discoverer {
   readonly #progress: (event: ProgressEvent) => void;
   readonly #maxPerOwner: number;
   readonly #maxEnriched: number;
+  readonly #loadExcluded: () => Promise<readonly string[]>;
+  #excluded: Promise<readonly string[]> | undefined;
 
   constructor(options: DiscoveryEngineOptions) {
     this.#github = options.github;
@@ -47,6 +53,7 @@ export class DiscoveryEngine implements Discoverer {
     this.#progress = options.onProgress ?? (() => {});
     this.#maxPerOwner = options.maxPerOwner ?? 2;
     this.#maxEnriched = options.maxEnriched ?? 48;
+    this.#loadExcluded = options.excludedProjects ?? (async () => EXCLUDED_PROJECTS);
   }
 
   async discover(query: DiscoveryQuery): Promise<DiscoveryResult[]> {
@@ -63,7 +70,11 @@ export class DiscoveryEngine implements Discoverer {
     if (query.seed && !seedFacts) throw new Error(`Seed repository ${repoId(query.seed)} was not found.`);
     const seedKeywords = seedFacts && seedFacts.topics.length < 2 ? await this.#seedKeywords(seedFacts) : [];
 
-    const candidates = await this.#search(query, { now, seedFacts, seedKeywords, random });
+    const excluded = await this.#excludedProjects();
+    const found = await this.#search(query, { now, seedFacts, seedKeywords, random });
+    const optedOut = found.filter((facts) => excludedEntry(facts, excluded));
+    const candidates = found.filter((facts) => !optedOut.includes(facts));
+    if (optedOut.length > 0) this.#progress({ stage: "warning", message: `left out because their maintainers opted out of gitgoblin (docs/excluded-projects.md): ${optedOut.map(repoId).join(", ")}` });
 
     // Stage one: facts-only ranking decides who deserves the expensive lookups.
     const preliminary = candidates
@@ -90,10 +101,21 @@ export class DiscoveryEngine implements Discoverer {
   async explain(ref: RepoRef, goal: Goal): Promise<DiscoveryResult | undefined> {
     const facts = await this.#github.getRepository(ref);
     if (!facts) return undefined;
+    // An opted-out project is not looked up any further, and nothing recommends it.
+    if (excludedEntry(facts, await this.#excludedProjects())) {
+      const scored = scoreRepo({ facts }, goal, { now: this.#now() });
+      return toResult({ facts }, goal, { ...scored, score: 0, reasons: [{ signal: "filter", weight: -1, detail: OPTED_OUT }, ...scored.reasons] });
+    }
     const [repo] = await this.#enrich([facts], "adopt");
     if (!repo) return undefined;
     const scored = scoreRepo(repo, goal, { now: this.#now() });
     return toResult(repo, goal, scored);
+  }
+
+  /** Loaded once per engine; the loader caches across engines. */
+  #excludedProjects(): Promise<readonly string[]> {
+    this.#excluded ??= this.#loadExcluded();
+    return this.#excluded;
   }
 
   /** Registry keywords of the seed's most-used package, for seeds without GitHub topics. */

@@ -1,4 +1,4 @@
-import { createSources, type Sources, type SourcesOptions } from "@gitgoblin/sources";
+import { createSources, loadExcludedProjects, type Sources, type SourcesOptions } from "@gitgoblin/sources";
 import { DiscoveryEngine, type DiscoveryEngineOptions } from "./engine.ts";
 
 export { DiscoveryEngine, type DiscoveryEngineOptions, type ProgressEvent } from "./engine.ts";
@@ -16,6 +16,6 @@ export type CreateDiscoveryOptions = SourcesOptions & Pick<DiscoveryEngineOption
 export async function createDiscovery(options: CreateDiscoveryOptions = {}): Promise<{ engine: DiscoveryEngine; sources: Sources }> {
   const { now, onProgress, maxPerOwner, maxEnriched, ...sourceOptions } = options;
   const sources = await createSources(sourceOptions);
-  const engine = new DiscoveryEngine({ github: sources.github, ecosystems: sources.ecosystems, now, onProgress, maxPerOwner, maxEnriched });
+  const engine = new DiscoveryEngine({ github: sources.github, ecosystems: sources.ecosystems, now, onProgress, maxPerOwner, maxEnriched, excludedProjects: () => loadExcludedProjects(sources.http) });
   return { engine, sources };
 }

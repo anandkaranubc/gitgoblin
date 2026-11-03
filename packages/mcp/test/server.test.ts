@@ -57,7 +57,7 @@ interface Recorded {
   checked: RepoRef[];
 }
 
-function fakeDeps(overrides: { discover?: (q: DiscoveryQuery) => Promise<DiscoveryResult[]>; explain?: (ref: RepoRef) => Promise<DiscoveryResult | undefined>; analyze?: ServerDeps["analyze"]; now?: () => number; isPublic?: (ref: RepoRef) => Promise<Visibility> } = {}) {
+function fakeDeps(overrides: { discover?: (q: DiscoveryQuery) => Promise<DiscoveryResult[]>; explain?: (ref: RepoRef) => Promise<DiscoveryResult | undefined>; analyze?: ServerDeps["analyze"]; now?: () => number; isPublic?: (ref: RepoRef) => Promise<Visibility>; excluded?: string[] } = {}) {
   const recorded: Recorded = { queries: [], explained: [], analyzed: [], closed: 0, checked: [] };
   const deps: ServerDeps = {
     now: overrides.now,
@@ -86,6 +86,7 @@ function fakeDeps(overrides: { discover?: (q: DiscoveryQuery) => Promise<Discove
       recorded.checked.push(ref);
       return overrides.isPublic ? overrides.isPublic(ref) : { public: true };
     },
+    excludedProjects: async () => overrides.excluded ?? [],
   };
   return { deps, recorded };
 }
@@ -412,6 +413,21 @@ describe("stuck analyses", () => {
     const result = await stuck;
     expect(result.isError).toBe(true);
     expect(textOf(result)).toMatch(/Analysis of acme\/widget stopped after/);
+  });
+});
+
+describe("projects whose maintainers opted out", () => {
+  it("are refused by explain, analyze and get_opportunity before any work", async () => {
+    const { deps, recorded } = fakeDeps({ excluded: ["github.com/acme/widget"] });
+    const { client } = await connect(deps);
+    for (const name of ["analyze_repository", "explain_repository", "get_opportunity"]) {
+      const result = await client.callTool({ name, arguments: { repository: "Acme/Widget", opportunity_id: "opp-x" } });
+      expect(result.isError, name).toBe(true);
+      expect(textOf(result)).toContain("asked gitgoblin to leave the project alone (github.com/acme/widget in docs/excluded-projects.md)");
+    }
+    expect(recorded.analyzed).toHaveLength(0);
+    expect(recorded.explained).toHaveLength(0);
+    expect(recorded.checked).toHaveLength(0);
   });
 });
 

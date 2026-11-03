@@ -4,7 +4,7 @@ gitgoblin explores public repositories and helps people contribute to them. The 
 
 It is written for three readers: maintainers who have received a gitgoblin-assisted contribution, people using gitgoblin, and people building it.
 
-> **Where this stands (October 2026).** gitgoblin is in preview. The contribution engine enforces the first commitment in code: it publishes nothing until a person confirms at a terminal, and it runs the model in a sandbox without network access. It reads a project's contributing guide and templates and quotes them to the model, and it skips an issue someone is already working on (an assignee, an open pull request, or a comment claiming it). Two things are not built yet: detecting a project's policy on AI-generated contributions ([#79](https://github.com/anandkaranubc/gitgoblin/issues/79)), and refusing projects on the excluded list automatically ([#78](https://github.com/anandkaranubc/gitgoblin/issues/78)). Until they are, the person approving a contribution checks both by hand.
+> **Where this stands (November 2026).** gitgoblin is in preview. The contribution engine enforces the first commitment in code: it publishes nothing until a person confirms at a terminal, and it runs the model in a sandbox without network access. It reads a project's contributing guide and templates and quotes them to the model, and it skips an issue someone is already working on (an assignee, an open pull request, or a comment claiming it). Projects on the [excluded list](excluded-projects.md) are refused in code too: discovery leaves them out, and analysis, the MCP server and the engine refuse them. One thing is not built yet: detecting a project's policy on AI-generated contributions ([#79](https://github.com/anandkaranubc/gitgoblin/issues/79)). Until it is, the person approving a contribution checks it by hand.
 
 ## Commitments
 
@@ -39,7 +39,7 @@ You can:
 
 - **Review it like any other pull request**, including declining it. You owe it nothing extra.
 - **Ask the author** how the change was made. They should be able to answer.
-- **Opt your project out.** Fill in the [maintainer form](https://github.com/anandkaranubc/gitgoblin/issues/new?template=maintainer_report.yml) and we will add your project to the [excluded projects list](excluded-projects.md). You do not need to give a reason. People keep that list today; making discovery and the engine refuse excluded projects automatically is planned, and the file will stay the source of truth.
+- **Opt your project out.** Fill in the [maintainer form](https://github.com/anandkaranubc/gitgoblin/issues/new?template=maintainer_report.yml) and we will add your project to the [excluded projects list](excluded-projects.md). You do not need to give a reason. Once your project is on the list, discovery leaves it out, and `analyze`, `contribute`, `publish` and the MCP server's tools refuse it. Every gitgoblin install reads the current list, so this applies within six hours, without waiting for a release.
 - **Report a bad experience.** If a gitgoblin-assisted contribution broke one of the commitments above, use the same form with a link. We treat that as a bug in gitgoblin, whether the fault was the tool's or the user's.
 
 ## If you build gitgoblin
