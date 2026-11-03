@@ -19,7 +19,7 @@
     "analyze": "node src/cli.ts analyze"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.1.0",
+    "@anthropic-ai/sdk": "^1.3.0",
     "@gitgoblin/sources": "0.1.0",
     "smol-toml": "^1.9.1",
     "yaml": "^2.9.1",
