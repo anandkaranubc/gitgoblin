@@ -77,7 +77,7 @@ export function sampleReport(opportunities: ContributionOpportunity[] = defaultO
         score: 0.7,
         level: "open",
         signals: [],
-        rules: { contributingPath: "CONTRIBUTING.md", requiresIssueFirst: false, cla: false, dco: false, issueTemplates: true, pullRequestTemplate: false, requiresTests: true, requiresChangelog: false, helpLabels: ["good first issue"], rejectedChanges: [], dependencyBot: false },
+        rules: { contributingPath: "CONTRIBUTING.md", requiresIssueFirst: false, cla: false, dco: false, issueTemplates: true, pullRequestTemplate: false, requiresTests: true, requiresChangelog: false, helpLabels: ["good first issue"], rejectedChanges: [], dependencyBot: false, aiPolicy: { stance: "not_found", starterIssuesExcluded: false, statements: [] } },
       },
       conventions: { commitStyle: "conventional", recentCommitSubjects: ["fix: a", "feat: b"], testFramework: "cargo test" },
       hotFiles: [],

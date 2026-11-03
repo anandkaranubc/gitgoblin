@@ -27,6 +27,7 @@ import { applySetupCfg, applySetupPy, parseRequirements } from "../src/manifests
 import type { PythonManifest } from "../src/manifests/types.ts";
 import { goTargets, jsTargets, pythonTargets, rustTargets } from "../src/profile/imports.ts";
 import { licenseFromText } from "../src/profile/license.ts";
+import { findAiPolicy } from "../src/profile/ai-policy.ts";
 import { earlyClosedReason, extractRules, findDeprecationNotice, findRefusal } from "../src/profile/welcomeness.ts";
 import { maskCodeLiterals } from "../src/util/mask.ts";
 import { inline, stripControl } from "../src/util/text.ts";
@@ -39,7 +40,7 @@ const UNITS = [
   " ", "\t", "\n", "<", ">", "[", "]", "(", ")", "!", "#", "`", "~", "*", "_", "-", ".", "/", ":", "a", "1", "@", "\\", "'", '"', "|", "{", "=", "&", "%",
   "a ", "<!--", "![", "](", "[x](", "```\n", "# ", "#\n", "- [ ] ", "http://", "https://a", "a.", "a/", "a-", "a_", "a.b", "TODO ", "# TODO ", "// TODO(",
   "it.skip(", 'File "', '  File "a", line 1, in f\n', "    at ", ">>> ", "fixes #1 ", "see #", ".. _a: ", "`a <", "{: #", '<a href="', "github.com/a/b/blob/",
-  "\\(", "a@", "we are not ", "not accepting ", "deprecated ", "issue ", "uses: a@", "run: ", "${{ ", "import ", "from . import ", "use crate::", "mod a;",
+  "\\(", "a@", "we are not ", "not accepting ", "AI ", "not ", "do not ", "without ", "deprecated ", "issue ", "uses: a@", "run: ", "${{ ", "import ", "from . import ", "use crate::", "mod a;",
   "def a(", "export ", '"""', "'''", "/*", "*/", "\\\\", "a\\", "--", "-- a", "a=1&", "v1.2.", "1.2.3.", ">=1,", "; python_version", "#!", "​", "😀",
 ];
 
@@ -102,6 +103,7 @@ export const FUNCTIONS: [string, (t: string) => unknown][] = [
   ["findRefusal", (t) => findRefusal(t)],
   ["findDeprecationNotice", (t) => findDeprecationNotice(t, t.slice(0, 350))],
   ["earlyClosedReason", (t) => earlyClosedReason({ archived: false, disabled: false, description: t.slice(0, 350) }, t, t)],
+  ["findAiPolicy", (t) => findAiPolicy([{ path: "CONTRIBUTING.md", text: t }, { path: "AI_POLICY.md", text: t }])],
   ["licenseFromText", licenseFromText],
   ["findDebtMarkers py", (t) => findDebtMarkers("a.py", t)],
   ["findDebtMarkers ts", (t) => findDebtMarkers("a.ts", t)],
@@ -163,5 +165,6 @@ export const FILE_CASES: [string, (t: string) => unknown, string][] = [
   ["cliFlagsInCode cobra", cliFlagsInCode, "Flags().a("],
   ["matchCiRules python-version", (t) => matchCiRules(".github/workflows/ci.yml", t), "python-version:"],
   ["findSkippedTests xfail", (t) => findSkippedTests("test_a.py", `@pytest.mark.skip ${t}`), "xfail("],
+  ["findAiPolicy sentences", (t) => findAiPolicy([{ path: "AI_POLICY.md", text: t }]), "AI must not be used. "],
   ["extractRules PR template", (t) => extractRules({ inventory: { files: [], byPath: new Map(), totalCount: 0, truncated: false }, docs: { prTemplate: t }, samples: undefined }), "[ ] "],
 ];

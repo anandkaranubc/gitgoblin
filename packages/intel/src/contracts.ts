@@ -302,6 +302,22 @@ export const WelcomenessSignal = z.object({
 });
 export type WelcomenessSignal = z.infer<typeof WelcomenessSignal>;
 
+export const AiPolicy = z.object({
+  /**
+   * "forbidden": the project declines AI-generated contributions. "disclose": it takes them when AI
+   * use is disclosed. "mentioned": it says something about AI a person should read. "not_found":
+   * nothing was found, which is not the same as AI contributions being welcome.
+   */
+  stance: z.enum(["forbidden", "disclose", "mentioned", "not_found"]),
+  /** The project keeps "good first issue" issues for people, with no AI tools. */
+  starterIssuesExcluded: z.boolean().default(false),
+  /** Commit trailer the project asks AI-assisted commits to carry, such as "Assisted-by". */
+  trailer: z.string().optional(),
+  /** The sentences the stance rests on, refusals first, quoted with the file they came from. */
+  statements: z.array(z.object({ path: z.string(), text: z.string() })).default([]),
+});
+export type AiPolicy = z.infer<typeof AiPolicy>;
+
 export const ContributionRules = z.object({
   contributingPath: z.string().optional(),
   codeOfConductPath: z.string().optional(),
@@ -322,6 +338,8 @@ export const ContributionRules = z.object({
   rejectedChanges: z.array(z.string()),
   /** A bot already handles dependency updates (Dependabot, Renovate). */
   dependencyBot: z.boolean(),
+  /** What the project says about AI-generated contributions. */
+  aiPolicy: AiPolicy.default({ stance: "not_found", starterIssuesExcluded: false, statements: [] }),
 });
 export type ContributionRules = z.infer<typeof ContributionRules>;
 

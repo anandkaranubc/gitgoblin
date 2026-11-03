@@ -5,6 +5,13 @@ import { inline } from "../util/text.ts";
 const t = (text: string, max = 400): string => inline(text, max);
 const code = (text: string): string => `\`${inline(text, 200)}\``;
 
+const AI_STANCE: Record<AnalysisReport["profile"]["welcomeness"]["rules"]["aiPolicy"]["stance"], string> = {
+  forbidden: "the project declines them",
+  disclose: "accepted when AI use is disclosed",
+  mentioned: "the project says something about them; read it",
+  not_found: "no policy found (that does not mean they are welcome)",
+};
+
 /** Human-readable report. */
 export function renderMarkdown(report: AnalysisReport): string {
   const p = report.profile;
@@ -25,6 +32,12 @@ export function renderMarkdown(report: AnalysisReport): string {
   if (ruleBits.length || rules.rejectedChanges.length) {
     out.push("", `**Rules:** ${ruleBits.join(", ") || "none stated"}`);
     for (const r of rules.rejectedChanges.slice(0, 3)) out.push(`- rejects: "${t(r, 200)}"`);
+  }
+  // A report saved before AI policies were read, and rendered without parsing, has none.
+  const ai = rules.aiPolicy as typeof rules.aiPolicy | undefined;
+  if (ai) {
+    out.push("", `**AI-generated contributions:** ${AI_STANCE[ai.stance]}${ai.starterIssuesExcluded ? "; good first issues are kept for people" : ""}${ai.trailer ? `; commits carry an \`${t(ai.trailer, 40)}:\` trailer` : ""}`);
+    for (const s of ai.statements.slice(0, 3)) out.push(`- ${t(s.path, 80)}: "${t(s.text, 200)}"`);
   }
   if (p.ecosystems.length) {
     out.push("", "**How to work on it:**");

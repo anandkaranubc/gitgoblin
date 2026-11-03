@@ -9,7 +9,7 @@ export function profileWith(over: Partial<RepositoryProfile> = {}): RepositoryPr
     topics: [], stars: 100, forks: 10, archived: false, isFork: false, nature: "library", natureReason: "test", languages: [], ecosystems: [],
     ci: { provider: "none", workflows: [] }, structure: { fileCount: 1, analyzedFileCount: 1, sourceDirs: [], testDirs: [], docsDirs: [], entryPoints: [], centralFiles: [] },
     activity: { commits90d: 1, commits365d: 1, authors90d: 1, authors365d: 1, busFactor: 1, openIssues: 0, openPullRequests: 0, sampleSizes: { issues: 0, pullRequests: 0, externalPullRequests: 0 } },
-    welcomeness: { score: 0.6, level: "open", signals: [], rules: { requiresIssueFirst: false, cla: false, dco: false, issueTemplates: false, pullRequestTemplate: false, helpLabels: [], rejectedChanges: [], dependencyBot: false, requiresTests: false, requiresChangelog: false } },
+    welcomeness: { score: 0.6, level: "open", signals: [], rules: { requiresIssueFirst: false, cla: false, dco: false, issueTemplates: false, pullRequestTemplate: false, helpLabels: [], rejectedChanges: [], dependencyBot: false, requiresTests: false, requiresChangelog: false, aiPolicy: { stance: "not_found", starterIssuesExcluded: false, statements: [] } } },
     conventions: { commitStyle: "unknown", recentCommitSubjects: [] }, hotFiles: [], instructionFiles: [], notes: [], ...over,
   };
 }
