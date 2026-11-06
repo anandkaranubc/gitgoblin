@@ -229,6 +229,15 @@ data/               committed derived tables, named by experiment and date
   feeds discovery's newcomer-friendliness signal and the starter baselines.
 - Author association is the current one; a newcomer who became a
   collaborator since T is counted as a maintainer and dropped.
+- In the committed 2025-10-15 (Go, TypeScript), 2026-02-15 (TypeScript)
+  and 2026-06-20 (Go) datasets, GitHub's repository-details request failed
+  for the whole language at fetch time (fixed in #195 after the fetch).
+  Those rows have no `enriched.details`, so `starterIssuesAtT` is 0 for every
+  repository, the starter-issue ranking is alphabetical, and discovery's
+  score ran without starter issues, issue templates or the issues-enabled
+  check. Starter-issue results are valid on the other eight cells only.
+- Pull requests still open at the end of the window are left out of the
+  newcomer merge share.
 - Repositories with more pull requests than the fetch cap in the two years
   around T have partial newcomer detection and are flagged.
 - "Excerpt gone" is not "fixed"; the hand-read sample calibrates it.

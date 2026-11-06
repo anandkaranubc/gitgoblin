@@ -34,8 +34,8 @@ export const RANKING_LABELS: Record<Ranking, string> = {
   stars: "most stars",
   starterIssues: "most open starter issues",
   recency: "most recent commit",
-  priorNewcomers: "newcomer merge rate in the prior year",
-  priorOutsiders: "outside-contributor merge rate in the prior year",
+  priorNewcomers: "newcomer merge rate x log(1 + merged) in the prior year",
+  priorOutsiders: "outside-contributor merge rate x log(1 + merged) in the prior year",
   random: "random",
 };
 
