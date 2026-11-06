@@ -42,10 +42,13 @@ describe("evaluate", () => {
   });
 
   it("drops rows whose history does not reach back to T", () => {
-    const late = { ...rows[0]!, id: "late", historyStart: "2026-07-01T00:00:00Z" };
+    const late = { ...rows[0]!, id: "late", historyStart: "2026-07-01T00:00:00Z", prsTruncated: true };
     const ev = evaluate({ rows: [...rows, late], asOf: "2026-06-01T00:00:00Z" }, { k: 3, iterations: 10 });
     expect(ev.uncovered).toBe(1);
     expect(ev.pools.find((p) => p.language === "ts")?.candidates).toBe(5);
+    // A complete history whose first pull request came after T is covered.
+    const quiet = { ...late, id: "quiet", prsTruncated: false };
+    expect(evaluate({ rows: [...rows, quiet], asOf: "2026-06-01T00:00:00Z" }, { k: 3, iterations: 10 }).uncovered).toBe(0);
     const all = evaluate({ rows: [...rows, late], asOf: "2026-06-01T00:00:00Z" }, { k: 3, iterations: 10, includeUncovered: true });
     expect(all.uncovered).toBe(0);
     expect(all.pools.find((p) => p.language === "ts")?.candidates).toBe(6);

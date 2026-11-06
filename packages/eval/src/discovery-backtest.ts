@@ -179,9 +179,12 @@ export async function fetchDataset(options: FetchOptions): Promise<BacktestDatas
   return final;
 }
 
-/** Rows whose fetched history reaches back to T, so the outcome window is fully covered. */
+/**
+ * Rows whose outcome window is fully covered: the fetched history reaches back to T, or it is complete
+ * (paging stopped before the cap). A small repository whose first pull request came after T is covered.
+ */
 export function covered(row: BacktestRow, asOf: string): boolean {
-  return row.historyStart === undefined || row.historyStart <= asOf;
+  return row.historyStart === undefined || row.historyStart <= asOf || !row.prsTruncated;
 }
 
 export function toCandidate(row: BacktestRow): Candidate {
